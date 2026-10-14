@@ -1,0 +1,22 @@
+NimbyGiveTake is a fork of Give&Take.
+
+Original work: Give&Take, Steam Workshop item 2903112334
+  https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334
+Author: affenb3rt (contact listed on the Workshop page as Discord)
+Credited contributor (from the mod's config): Wardog
+Original build: PBO version 23040119, packed with Mikero DePbo 8.07; Workshop last updated April 1, 2023.
+Imported: October 14, 2026, from the copy recorded in
+  logs/Copy-WorkshopItem-2903112334-20261014-153144.log
+  (GiveAndTake.pbo sha256 EDBC6A285C15511CCF53FFFE2E3A3EF98C09759C00707B202496FF264C671574)
+
+Permission: the original ships no license file. The Workshop description, read October 14, 2026,
+grants permission to repack, reupload, modify, and redistribute the mod. Keep a capture of that page
+with this fork; if the author changes the terms, re-check before the next release.
+
+Import notes:
+- Scripts, inputs.xml, and languagecore/stringtable.csv are byte-for-byte copies.
+- config.cpp is the original config.bin decoded to text; values are unchanged.
+- logo.paa and Texheaders.bin were not imported; the NIMBY pack supplies its own mod presentation.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+(none yet - this commit is the verbatim import)
