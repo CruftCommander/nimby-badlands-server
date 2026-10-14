@@ -1,0 +1,24 @@
+# Secrets and local overrides - never commit
+.env
+*.env
+secrets/
+*.local.cfg
+*.local.json
+
+# Server runtime output pulled down for inspection
+logs/
+*.RPT
+*.ADM
+*.log
+storage_*/
+
+# Workshop downloads and tooling caches
+steamcmd/
+workshop-cache/
+*.bikey.tmp
+
+# OS and editor
+Thumbs.db
+.DS_Store
+.vs/
+.vscode/
