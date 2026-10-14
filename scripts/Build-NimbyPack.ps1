@@ -11,7 +11,10 @@
          is inside the PBO.
     DayZ Tools Addon Builder is not used: its DayZ build ignores command-line arguments and
     opens its window (observed October 14, 2026).
-    Then copies the public key into @NIMBY\keys, writes mod.cpp, and (unless -SkipBootCheck)
+    Then copies the public key into @NIMBY\keys, writes mod.cpp, and verifies every signature with
+    DayZ Tools DSCheckSignatures. The checker is calibrated on each run against a copy of a PBO
+    with no signature: if it does not flag that copy, its verdict on the real build is not trusted
+    and the result is UNKNOWN. Then (unless -SkipBootCheck)
     starts a local DayZ server with @NIMBY, scans its logs for script errors, and stops it.
 
     Reads   : pack.json, the addon folders, DayZ Tools (DsUtils), a local DayZ Server install,
@@ -198,6 +201,31 @@ function Read-ServerLogText {
     return $builder.ToString()
 }
 
+function Get-SignatureVerdict {
+    # Combines the checker's result on the real build with its result on a deliberately
+    # unsigned copy. A checker that cannot tell the two apart proves nothing (UNKNOWN).
+    param(
+        [Parameter(Mandatory)][int]$RealExit,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$RealOutput,
+        [Parameter(Mandatory)][int]$NegativeExit,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$NegativeOutput
+    )
+
+    $failurePattern = '(?im)^.*\b(not signed|unsigned|missing|invalid|wrong|corrupt|mismatch|fail\w*|error\w*)\b.*$'
+    $negativeFlagged = ($NegativeExit -ne 0) -or ($NegativeOutput -match $failurePattern)
+    if (-not $negativeFlagged) {
+        return [PSCustomObject]@{ Verdict = 'UNKNOWN'; Evidence = "checker did not flag an unsigned PBO (exit $NegativeExit)" }
+    }
+
+    $match = [regex]::Match($RealOutput, $failurePattern)
+    if ($RealExit -ne 0 -or $match.Success) {
+        $evidence = "exit $RealExit"
+        if ($match.Success) { $evidence = "exit $RealExit; $($match.Value.Trim())" }
+        return [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = $evidence }
+    }
+    return [PSCustomObject]@{ Verdict = 'PASS'; Evidence = "exit $RealExit; unsigned control flagged (exit $NegativeExit)" }
+}
+
 function Invoke-Native {
     # Runs a native tool, sends its output to a log file, and returns the exit code.
     param(
@@ -249,6 +277,7 @@ try {
 
     $createKey = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSCreateKey.exe')
     $signFile = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSSignFile.exe')
+    $checkSignatures = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSCheckSignatures.exe')
     if ($null -eq $signFile) { throw "DSSignFile.exe not found under '$DayZToolsPath\Bin\DsUtils'." }
     Write-Manifest -LogPath $manifest -Line "TOOL DSSignFile $signFile"
 
@@ -341,6 +370,32 @@ try {
         throw "$failures addon(s) failed to build or verify."
     }
 
+    # Signature check -------------------------------------------------------
+    $signatureUnknown = $false
+    if ($null -eq $checkSignatures) {
+        Write-Manifest -LogPath $manifest -Line 'SIGN UNKNOWN DSCheckSignatures.exe not found'
+        $signatureUnknown = $true
+    }
+    else {
+        $realLog = Join-Path $logDir 'DSCheckSignatures-build.log'
+        $realExit = Invoke-Native -FilePath $checkSignatures -ArgumentList @($addonsOut, $keysOut) -LogPath $realLog
+
+        $negativeDir = Join-Path $logDir 'sigcheck-unsigned-control'
+        New-Item -ItemType Directory -Path $negativeDir -Force | Out-Null
+        $firstPbo = Get-ChildItem -LiteralPath $addonsOut -Filter '*.pbo' | Select-Object -First 1
+        Copy-Item -LiteralPath $firstPbo.FullName -Destination $negativeDir
+        $negativeLog = Join-Path $logDir 'DSCheckSignatures-control.log'
+        $negativeExit = Invoke-Native -FilePath $checkSignatures -ArgumentList @($negativeDir, $keysOut) -LogPath $negativeLog
+
+        # [string] turns an empty log (Get-Content returns $null) into an empty string.
+        $realOutput = [string](Get-Content -LiteralPath $realLog -Raw -Encoding utf8)
+        $negativeOutput = [string](Get-Content -LiteralPath $negativeLog -Raw -Encoding utf8)
+        $signatureResult = Get-SignatureVerdict -RealExit ([int]$realExit) -RealOutput $realOutput -NegativeExit ([int]$negativeExit) -NegativeOutput $negativeOutput
+        Write-Manifest -LogPath $manifest -Line ("SIGN {0} {1}" -f $signatureResult.Verdict, $signatureResult.Evidence)
+        if ($signatureResult.Verdict -eq 'FAIL') { throw "Signature check failed: $($signatureResult.Evidence)" }
+        if ($signatureResult.Verdict -eq 'UNKNOWN') { $signatureUnknown = $true }
+    }
+
     # Boot check ------------------------------------------------------------
     if ($SkipBootCheck) {
         Write-Manifest -LogPath $manifest -Line 'BOOT SKIPPED by -SkipBootCheck'
@@ -405,6 +460,11 @@ try {
                 }
             }
         }
+    }
+
+    if ($exitCode -eq 0 -and $signatureUnknown) {
+        Write-Manifest -LogPath $manifest -Line 'SUMMARY downgraded to UNKNOWN: signatures not proven'
+        $exitCode = 2
     }
 
     $verdictWord = @{ 0 = 'PASS'; 1 = 'FAIL'; 2 = 'UNKNOWN' }[$exitCode]
