@@ -10,5 +10,12 @@
         <input name="UANimbyOfferRequestItem">
             <btn name="kO" />
         </input>
+        <!-- Hold Left Shift, press O. Nested btn = hold outer, press inner; same form vanilla uses
+             for hold Left Control + X (UABuldUndo) while X alone is bound elsewhere. -->
+        <input name="UANimbyTogglePocketAccess">
+            <btn name="kLShift">
+                <btn name="kO" />
+            </btn>
+        </input>
     </preset>
 </modded_inputs>
