@@ -41,11 +41,11 @@ Output goes to `build/@NIMBY-<timestamp>/` and logs to `logs/build-<timestamp>/b
 
 ## Test plan
 
-Each addon passes these before the pack ships, on a local DayZ server first, then on the private HostHavoc instance:
+Each addon passes these before the pack ships, on a local DayZ server first, then on the private HostHavoc instance. For the local run, `scripts/Start-NimbyTestServer.ps1` starts the server with the newest build, installs the key, and summarizes every `[NIMBY]` log line when you press Enter:
 
 1. The server boots with `@NIMBY` and the RPT has zero `SCRIPT (E)` and zero `Can't compile` lines naming a Nimby addon.
 2. A client joins with signature verification on and is not kicked.
-3. Autorun: the toggle starts and stops autorun; each interrupt input stops it; stamina drains and speed drops from sprint to run at zero stamina; getting into a vehicle stops it.
+3. Autorun: numpad + starts and stops autorun; W, S, A, D, fire, raise, and lean each stop it; stamina drains and speed drops from sprint to run at zero stamina; getting into a vehicle stops it. Review CR-008: get knocked unconscious (or restrained, or into a vehicle) while autorunning, then recover - the player must stand still, not resume running.
 4. Autorun security: a second client cannot start or stop the first client's autorun. The server log shows a `[NIMBY][Autorun] Rejected request` line when this is attempted.
 5. Give n Take, with two clients (two Steam accounts) on the local server:
    1. Offer (hold O) and Take: the item moves from A's hands to B's inventory. Server script log shows `REQUESTED` then `OK`.

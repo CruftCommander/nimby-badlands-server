@@ -3,17 +3,52 @@
     "modName": "NIMBY",
     "author": "Jeff Fabish",
     "keyAuthority": "nimby",
-    "includePatterns": [ "*.c", "*.cpp", "*.h", "*.hpp", "*.xml", "*.csv", "*.json", "*.txt", "LICENSE", "NOTICE" ],
+    "includePatterns": [
+        "*.c",
+        "*.cpp",
+        "*.h",
+        "*.hpp",
+        "*.xml",
+        "*.csv",
+        "*.json",
+        "*.txt",
+        "LICENSE",
+        "NOTICE"
+    ],
     "addons": [
-        { "folder": "NimbyAutorun", "pboName": "NimbyAutorun", "prefix": "NimbyAutorun" },
-        { "folder": "NimbyGiveTake", "pboName": "NimbyGiveTake", "prefix": "NimbyGiveTake" }
+        {
+            "folder": "NimbyAutorun",
+            "pboName": "NimbyAutorun",
+            "prefix": "NimbyAutorun"
+        },
+        {
+            "folder": "NimbyGiveTake",
+            "pboName": "NimbyGiveTake",
+            "prefix": "NimbyGiveTake"
+        }
     ],
     "bootCheck": {
         "mission": "dayzOffline.chernarusplus",
         "port": 2402,
         "instanceId": 999,
         "timeoutSeconds": 240,
-        "failurePatterns": [ "SCRIPT\\s*\\(E\\)", "Can't compile", "Cannot open file", "Unknown type", "Undefined function" ],
-        "readyPatterns": [ "Init sequence finished", "Mission read" ]
+        "failurePatterns": [
+            "SCRIPT\\s*\\(E\\)",
+            "Can't compile",
+            "Cannot open file",
+            "Unknown type",
+            "Undefined function"
+        ],
+        "readyPatterns": [
+            "Init sequence finished",
+            "Mission read"
+        ]
+    },
+    "testServer": {
+        "mission": "dayzOffline.chernarusplus",
+        "port": 2302,
+        "instanceId": 998,
+        "maxPlayers": 4,
+        "hostname": "NIMBY local test - not public"
     }
 }
