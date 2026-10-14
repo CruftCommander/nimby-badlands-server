@@ -1,6 +1,6 @@
 # Rigged ADA feasibility
 
-Draft v0.3, October 14, 2026. Roadmap phase 4. Owner: Jeff Fabish. Status: design decisions made by Jeff on October 14, 2026 (see Decisions); hooks still to be re-verified on 1.30.
+Draft v0.4, October 14, 2026. Roadmap phase 4. Owner: Jeff Fabish. Status: design decisions made by Jeff on October 14, 2026 (see Decisions); hooks still to be re-verified on 1.30.
 
 The rigged ADA is feasible as a small client-and-server mod built entirely on vanilla hooks: a player wires plastic explosive into an ADA 4x4 or any other base-game car, the vehicle's display name changes while the rig is armed, and the charge goes off when the horn sounds or when a paired remote detonator fires. Every hook this design depends on exists in the vanilla 1.29 scripts (Scripts Rev. 125372, August 12, 2026). Badlands ships as 1.30, so each hook gets re-checked against the 1.30 scripts before code is written.
 
@@ -10,7 +10,7 @@ The rigged ADA is feasible as a small client-and-server mod built entirely on va
 - Not a rule. The server has no PvP or PvE zones; the mechanic is balanced by cost, noise, time, and counterplay, never by a rule that Jay has to enforce.
 - Not an admin tool. Admins get logs, not a remote kill switch.
 - Not limited to one name. The armed-state display name is Jeff's string, held in one constant. This document never writes it.
-- Not open to every vehicle. Only classes on a configured allowlist can be rigged. The default list holds every base-game car; modded vehicles, such as a future helicopter mod, are excluded until added. The ADA keeps the name as the signature, not as a limit.
+- Not open to every vehicle. Only classes on a configured allowlist can be rigged. The default list holds every base-game car and the 1.30 motorbikes; modded vehicles, such as a future helicopter mod, are excluded until added. The ADA keeps the name as the signature, not as a limit.
 
 ## How it plays
 
@@ -161,7 +161,7 @@ Made by Jeff on October 14, 2026.
 | Trigger modes | Horn, remote, or both, chosen at arming | Remote car bombs play as a weapon rather than a trap |
 | Who sees the name | Anyone who opens the car's inventory | The tell proves too strong and rigs never land |
 | Persistence | Armed rigs persist across restarts | Abandoned traps pile up |
-| Vehicle scope | Every base-game car, through the config allowlist | A car class behaves badly when rigged; remove it from the list |
+| Vehicle scope | Every base-game car plus the 1.30 motorbikes (Jana 50, Bitrak 682), through the config allowlist | A class behaves badly when rigged; remove it from the list |
 | Visible charge | Generic charge model in v1, reusing the vanilla plastic explosive model, per-class offsets in config | Placement cost outweighs the counterplay value |
 | Disarm | Three paths: rigger with the paired remote, anyone with a tool, anyone before arming. See Disarm | Tool disarm is too safe or too deadly; tune `disarmRateMultiplier` |
 | Remote range | Server-enforced flat radius, `remoteRangeMeters` default 100 | Remote rigs feel too safe for the rigger; shrink it, or add radio attenuation |
@@ -171,6 +171,7 @@ Made by Jeff on October 14, 2026.
 | Risk | Check | When |
 | --- | --- | --- |
 | Which base-game cars spawn on Nasdara | Search the 1.30 Nasdara `types.xml` for each class in the hooks table; tune their offsets first | October 15 |
+| The 1.30 motorbikes do not derive from `CarScript`, or have no horn | Read the 1.30 bike classes. If they are not `CarScript`, the rename and synced flag move to a shared base the bikes do inherit; if they have no horn, horn mode is unavailable on bikes and only remote mode is offered there | When 1.30 scripts publish |
 | Server-attached charge model does not show on clients | Rig a car on the private instance and look from a second client | First build |
 | A hook changed in 1.30 | Diff the files in the hooks table between the 1.29 and 1.30 scripts | When 1.30 scripts publish |
 | Another mod overrides `NameOverride` or `SetCarHornState` on cars | Grep the final client mod list for both | When the mod list is final |

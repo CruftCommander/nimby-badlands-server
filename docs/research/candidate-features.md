@@ -1,6 +1,6 @@
 # Candidate features and mods
 
-Research v0.1, October 14, 2026, the day before Badlands (update 1.30) releases. Covers roadmap phases 3 and 4 plus the two quality-of-life mods in the launch set. Owner: Jeff Fabish. Nothing here is decided; each recommendation waits for Jeff.
+Research v0.2, October 14, 2026, the day before Badlands (update 1.30) releases. Covers roadmap phases 3 and 4 plus the two quality-of-life mods in the launch set. Owner: Jeff Fabish. Jeff ruled on five decisions on October 14, 2026 (see Decisions); everything else waits for him.
 
 Every Workshop mod below was last tested by its author on 1.29 or earlier, and no author has said anything about 1.30. Bohemia warns that 1.30 changes the animation graph, the navmesh format, and the mod filesystem, and that animation-related mods may break. Treat every row as "re-check on October 15".
 
@@ -33,7 +33,7 @@ Each recommendation names one of four paths. The license decides which paths are
 | Helicopters | Not announced | Assume absent |
 | Which cars spawn on Nasdara | No spawn data published | Unknown until October 15 |
 
-The motorbikes matter to the rigged-vehicle mod: its allowlist holds base-game cars, and whether the bikes derive from `CarScript` is unchecked. They stay off the list until Jeff decides.
+The motorbikes matter to the rigged-vehicle mod: Jeff put them on its allowlist (see Decisions), and whether they derive from `CarScript` and have a horn is checked when the 1.30 scripts publish.
 
 ## Recommendations by category
 
@@ -70,13 +70,17 @@ Zens Zippo and Zens Music share the Zens Core dependency ([3702420204](https://s
 
 Pick after both publish 1.30 builds; phase 4 has no date pressure.
 
-## Decisions this research sets up for Jeff
+## Decisions
 
-1. Whether the launch QoL pair (autorun, Give n Take) becomes our own forked NIMBY pack.
-2. Whether the Zen ecosystem (Zens Core, Zippo, Music) is acceptable as a Workshop dependency.
-3. Whether smoking (cigarettes, joints, hookah) is one own-build system.
-4. Whether cannabis growing is in scope at all.
-5. Whether the new motorbikes can be rigged.
+Made by Jeff on October 14, 2026.
+
+| Decision | Choice | Consequence |
+| --- | --- | --- |
+| Launch QoL pair | Fork Schana's autorun and Give&Take into one signed NIMBY client pack | The October 15 readiness check tests our fork on 1.30, not an author's update. Credit both authors in the pack description; keep Schana's Apache-2.0 notice |
+| Zen ecosystem | Repack Zens Core, Zens Zippo Lighter, and Zens Music into the NIMBY pack for theme drop 1 | We pick up Zen updates by rebuilding the pack. Credit Zenarchist; the Zippo model is CC BY-NC, so the pack is never sold or monetized in a way that sells the model |
+| Smoking | One own-build smoking system: cigarettes, joints, and hookah on a shared smokable base, lit by the Zippo | Largest build item in theme drop 1 |
+| Cannabis growing | In scope as a later own build on vanilla gardening, after the smoking system ships | Joints come from loot and crafting until then |
+| Rig the 1.30 motorbikes | Yes; Jana 50 and Bitrak 682 join the rigged-vehicle allowlist once the 1.30 hooks are confirmed | See the rigged-vehicle design for the condition on horn mode |
 
 ## Sources
 
