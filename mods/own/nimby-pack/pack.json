@@ -6,7 +6,7 @@
     "includePatterns": [ "*.c", "*.cpp", "*.h", "*.hpp", "*.xml", "*.csv", "*.json", "*.txt", "LICENSE", "NOTICE" ],
     "addons": [
         { "folder": "NimbyAutorun", "pboName": "NimbyAutorun", "prefix": "NimbyAutorun" },
-        { "folder": "NimbyGiveTake", "pboName": "NimbyGiveTake", "prefix": "GiveAndTake\\Scripts" }
+        { "folder": "NimbyGiveTake", "pboName": "NimbyGiveTake", "prefix": "NimbyGiveTake" }
     ],
     "bootCheck": {
         "mission": "dayzOffline.chernarusplus",

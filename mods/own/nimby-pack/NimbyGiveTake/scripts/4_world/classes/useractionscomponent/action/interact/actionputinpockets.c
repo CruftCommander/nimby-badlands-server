@@ -1,4 +1,4 @@
-class ActionPutItemInHandsInPlayersPocketsCB extends ActionContinuousBaseCB
+class NimbyActionPutInPocketsCB extends ActionContinuousBaseCB
 {
     static const float TIME = 2.0;
 
@@ -8,15 +8,15 @@ class ActionPutItemInHandsInPlayersPocketsCB extends ActionContinuousBaseCB
     }
 }
 
-class ActionPutItemInHandsInPlayersPockets extends ActionContinuousBase
+class NimbyActionPutInPockets extends ActionContinuousBase
 {
-    void ActionPutItemInHandsInPlayersPockets()
+    void NimbyActionPutInPockets()
     {
-        m_CallbackClass = ActionPutItemInHandsInPlayersPocketsCB;
+        m_CallbackClass = NimbyActionPutInPocketsCB;
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
         m_FullBody = true;
         m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
-        m_Text = "#STR_PUT_IN_POCKETS";
+        m_Text = "#STR_NIMBY_GT_PUT_IN_POCKETS";
     }
 
     override void CreateConditionComponents()
@@ -33,7 +33,7 @@ class ActionPutItemInHandsInPlayersPockets extends ActionContinuousBase
     override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item )
     {
         PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
-        if ( !tgt_player.GetAllowsPutInPockets() )
+        if ( !tgt_player.NimbyGetAllowsPocketAccess() )
         {
             return false;
         }
@@ -48,7 +48,7 @@ class ActionPutItemInHandsInPlayersPockets extends ActionContinuousBase
             return false;
         }
 
-        if ( !item.CanBeGiven() )
+        if ( !item.NimbyCanBeGiven() )
         {
             return false;
         }
@@ -61,7 +61,7 @@ class ActionPutItemInHandsInPlayersPockets extends ActionContinuousBase
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        MoveItemToPlayer move = new MoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT, ClassName() );
         move.Execute();
     }
 }

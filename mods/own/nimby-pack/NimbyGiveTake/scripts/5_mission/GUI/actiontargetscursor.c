@@ -1,8 +1,8 @@
 modded class ActionTargetsCursor
 {
-    static const float GIVE_AND_TAKE_MAX_DISTANCE = UAMaxDistances.DEFAULT * UAMaxDistances.DEFAULT;
+    static const float NIMBY_GIVE_TAKE_MAX_DISTANCE_SQ = UAMaxDistances.DEFAULT * UAMaxDistances.DEFAULT;
 
-    protected bool CanShowGiveInformation( out ItemBase item )
+    protected bool NimbyCanShowGiveInformation( out ItemBase item )
     {
         PlayerBase tgt_player;
         if ( !PlayerBase.CastTo( tgt_player, m_Target.GetObject() ) )
@@ -10,7 +10,7 @@ modded class ActionTargetsCursor
             return false;
         }
 
-        if ( tgt_player.GetGiveOrTakeState() != eGiveOrTake.GIVE )
+        if ( tgt_player.NimbyGetGiveOrTakeState() != ENimbyGiveOrTake.GIVE )
         {
             return false;
         }
@@ -26,7 +26,7 @@ modded class ActionTargetsCursor
         }
 
         float distance = vector.DistanceSq( tgt_player.GetPosition(), GetGame().GetPlayer().GetPosition() );
-        if ( distance >= GIVE_AND_TAKE_MAX_DISTANCE )
+        if ( distance >= NIMBY_GIVE_TAKE_MAX_DISTANCE_SQ )
         {
             return false;
         }
@@ -44,7 +44,7 @@ modded class ActionTargetsCursor
     override string GetItemDesc( ActionBase action )
     {
         ItemBase item;
-        if ( CanShowGiveInformation( item ) )
+        if ( NimbyCanShowGiveInformation( item ) )
         {
             return item.GetDisplayName();
         }
@@ -58,7 +58,7 @@ modded class ActionTargetsCursor
     override int GetItemHealth()
     {
         ItemBase item;
-        if ( CanShowGiveInformation( item ) )
+        if ( NimbyCanShowGiveInformation( item ) )
         {
             return item.GetHealthLevel();
         }
@@ -72,7 +72,7 @@ modded class ActionTargetsCursor
     override void GetItemCargoCount( out int cargoCount )
     {
         ItemBase item;
-        if ( CanShowGiveInformation( item ) )
+        if ( NimbyCanShowGiveInformation( item ) )
         {
             cargoCount = AttachmentsWithInventoryOrCargoCount( item.GetInventory() );
         }

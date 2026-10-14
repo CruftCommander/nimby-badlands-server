@@ -1,9 +1,9 @@
-class ActionTakeItemFromPlayerBase extends ActionInteractBase
+class NimbyActionTakeItemBase extends ActionInteractBase
 {
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTManGiveOrTake( UAMaxDistances.DEFAULT, true, eGiveOrTake.GIVE );
+        m_ConditionTarget = new NimbyCCTManGiveOrTake( UAMaxDistances.DEFAULT, true, ENimbyGiveOrTake.GIVE );
     }
 
     override bool HasProneException()
@@ -55,20 +55,20 @@ class ActionTakeItemFromPlayerBase extends ActionInteractBase
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        MoveItemToPlayer move = new MoveItemToPlayer( action_data.m_Player, tgt_player.GetItemInHands(), GetTargetLocations() );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( action_data.m_Player, tgt_player.GetItemInHands(), GetTargetLocations(), ClassName() );
         if ( move.Execute() )
         {
 #ifdef DIAG
             // debug purpose
-            tgt_player.SetGiveOrTakeState( eGiveOrTake.TAKE );
+            tgt_player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.TAKE );
 #endif
         }
     }
 }
 
-class ActionTakeItemFromPlayer extends ActionTakeItemFromPlayerBase
+class NimbyActionTakeItem extends NimbyActionTakeItemBase
 {
-    void ActionTakeItemFromPlayer()
+    void NimbyActionTakeItem()
     {
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_PICKUP_INVENTORY;
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONFB_PICKUP_INVENTORY;
@@ -81,9 +81,9 @@ class ActionTakeItemFromPlayer extends ActionTakeItemFromPlayerBase
     }
 }
 
-class ActionTakeItemFromPlayerToHands extends ActionTakeItemFromPlayerBase
+class NimbyActionTakeItemToHands extends NimbyActionTakeItemBase
 {
-    void ActionTakeItemFromPlayerToHands()
+    void NimbyActionTakeItemToHands()
     {
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_PICKUP_HANDS;
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONMOD_PICKUP_HANDS;

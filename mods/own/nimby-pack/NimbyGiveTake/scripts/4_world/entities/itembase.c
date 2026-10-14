@@ -1,11 +1,11 @@
 modded class ItemBase
 {
-    bool CanBeOffered()
+    bool NimbyCanBeOffered()
     {
         return !IsHeavyBehaviour();
     }
 
-    bool CanBeGiven()
+    bool NimbyCanBeGiven()
     {
         return !IsHeavyBehaviour();
     }

@@ -1,8 +1,9 @@
 // Decoded from the original rapified config.bin of Give&Take (Workshop 2903112334) on 2026-10-14.
-// Content unchanged; only the binary form was converted to text.
+// Changed since import: logo entries removed; addon, CfgMods class, and paths renamed to
+// NimbyGiveTake (see NOTICE). Original author credits kept.
 class CfgPatches
 {
-    class GiveAndTake
+    class NimbyGiveTake
     {
         units[] = {};
         weapons[] = {};
@@ -12,35 +13,35 @@ class CfgPatches
 };
 class CfgMods
 {
-    class GiveAndTake
+    class NimbyGiveTake
     {
-        name = "GiveAndTake";
-        dir = "GiveAndTake/Scripts";
+        name = "NimbyGiveTake";
+        dir = "NimbyGiveTake";
         author = "affenb3rt";
         credits = "Wardog";
         type = "mod";
         hideName = 0;
         hidePicture = 0;
-        tooltip = "GiveAndTake";
-        overview = "GiveAndTake";
-        inputs = "GiveAndTake/Scripts/inputs.xml";
+        tooltip = "NimbyGiveTake";
+        overview = "NimbyGiveTake";
+        inputs = "NimbyGiveTake/inputs.xml";
         dependencies[] = {"Game", "World", "Mission"};
         class defs
         {
             class gameScriptModule
             {
                 value = "";
-                files[] = {"GiveAndTake/Scripts/scripts/3_Game"};
+                files[] = {"NimbyGiveTake/scripts/3_game"};
             };
             class worldScriptModule
             {
                 value = "";
-                files[] = {"GiveAndTake/Scripts/scripts/4_World"};
+                files[] = {"NimbyGiveTake/scripts/4_world"};
             };
             class missionScriptModule
             {
                 value = "";
-                files[] = {"GiveAndTake/Scripts/scripts/5_Mission"};
+                files[] = {"NimbyGiveTake/scripts/5_mission"};
             };
         };
     };

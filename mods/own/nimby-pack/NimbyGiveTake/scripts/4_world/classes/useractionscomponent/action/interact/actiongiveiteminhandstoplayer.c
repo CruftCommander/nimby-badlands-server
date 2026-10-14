@@ -1,16 +1,16 @@
-class ActionGiveItemInHandsToPlayer extends ActionInteractBase
+class NimbyActionGiveItemInHands extends ActionInteractBase
 {
-    void ActionGiveItemInHandsToPlayer()
+    void NimbyActionGiveItemInHands()
     {
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_DROPITEM_HANDS;
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONMOD_DROPITEM_HANDS;
-        m_Text = "#STR_GIVE";
+        m_Text = "#STR_NIMBY_GT_GIVE";
     }
 
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTManGiveOrTake( UAMaxDistances.DEFAULT, true, eGiveOrTake.TAKE );
+        m_ConditionTarget = new NimbyCCTManGiveOrTake( UAMaxDistances.DEFAULT, true, ENimbyGiveOrTake.TAKE );
     }
 
     override bool HasProneException()
@@ -26,7 +26,7 @@ class ActionGiveItemInHandsToPlayer extends ActionInteractBase
             return false;
         }
 
-        if ( !src_entity.CanBeGiven() )
+        if ( !src_entity.NimbyCanBeGiven() )
         {
             return false;
         }
@@ -39,12 +39,12 @@ class ActionGiveItemInHandsToPlayer extends ActionInteractBase
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        MoveItemToPlayer move = new MoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.HANDS );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.HANDS, ClassName() );
         if ( move.Execute() )
         {
 #ifdef DIAG
             // debug purpose
-            tgt_player.SetGiveOrTakeState( eGiveOrTake.GIVE );
+            tgt_player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.GIVE );
 #endif
         }
     }

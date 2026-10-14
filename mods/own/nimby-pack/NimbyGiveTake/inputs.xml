@@ -2,12 +2,12 @@
 <modded_inputs>
     <inputs>
         <actions>
-            <input name="UAOfferRequestItem" loc="#STR_OFFER_REQUEST_ITEM" />
-            <input name="UAToggelAllowPutInPockets" loc="#STR_TOGGLE_ALLOW_PUT_IN_POCKETS" />
+            <input name="UANimbyOfferRequestItem" loc="#STR_NIMBY_GT_OFFER_REQUEST_ITEM" />
+            <input name="UANimbyTogglePocketAccess" loc="#STR_NIMBY_GT_TOGGLE_ALLOW_PUT_IN_POCKETS" />
         </actions>
     </inputs>
     <preset>
-        <input name="UAOfferRequestItem">
+        <input name="UANimbyOfferRequestItem">
             <btn name="kO" />
         </input>
     </preset>

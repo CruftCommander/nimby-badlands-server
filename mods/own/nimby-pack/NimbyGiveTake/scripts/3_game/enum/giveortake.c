@@ -1,4 +1,4 @@
-enum eGiveOrTake
+enum ENimbyGiveOrTake
 {
     NONE,
     GIVE,

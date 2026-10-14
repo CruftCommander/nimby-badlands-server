@@ -1,4 +1,4 @@
-class ActionRequestItemFromPlayerCB : ActionContinuousBaseCB
+class NimbyActionRequestItemCB : ActionContinuousBaseCB
 {
     override void CreateActionComponent()
     {
@@ -6,11 +6,11 @@ class ActionRequestItemFromPlayerCB : ActionContinuousBaseCB
     }
 }
 
-class ActionRequestItemFromPlayer extends ActionContinuousBase
+class NimbyActionRequestItem extends ActionContinuousBase
 {
-    void ActionRequestItemFromPlayer()
+    void NimbyActionRequestItem()
     {
-        m_CallbackClass = ActionRequestItemFromPlayerCB;
+        m_CallbackClass = NimbyActionRequestItemCB;
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_GIVER;
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONFB_GIVER;
     }
@@ -23,7 +23,7 @@ class ActionRequestItemFromPlayer extends ActionContinuousBase
 
     override typename GetInputType()
     {
-        return ContinuousOfferOrRequestItemActionInput;
+        return NimbyOfferOrRequestActionInput;
     }
 
     override bool InventoryReservation( ActionData action_data )
@@ -53,11 +53,11 @@ class ActionRequestItemFromPlayer extends ActionContinuousBase
 
     override void OnExecuteServer( ActionData action_data )
     {
-        action_data.m_Player.SetGiveOrTakeState( eGiveOrTake.TAKE );
+        action_data.m_Player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.TAKE );
     }
 
     override void OnEndServer( ActionData action_data )
     {
-        action_data.m_Player.SetGiveOrTakeState( eGiveOrTake.NONE );
+        action_data.m_Player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.NONE );
     }
 }

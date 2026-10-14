@@ -1,18 +1,18 @@
-class ContinuousOfferOrRequestItemActionInput extends ContinuousDefaultActionInput
+class NimbyOfferOrRequestActionInput extends ContinuousDefaultActionInput
 {
-    void ContinuousOfferOrRequestItemActionInput( PlayerBase player )
+    void NimbyOfferOrRequestActionInput( PlayerBase player )
     {
-        SetInput( "UAOfferRequestItem" );
+        SetInput( "UANimbyOfferRequestItem" );
         m_InputType = ActionInputType.AIT_CLICKCONTINUOUS;
         m_DetectFromItem = false;
     }
 }
 
-class ToggleAllowPutInPocketsActionInput extends StandardActionInput
+class NimbyTogglePocketAccessActionInput extends StandardActionInput
 {
-    void ToggleAllowPutInPocketsActionInput( PlayerBase player )
+    void NimbyTogglePocketAccessActionInput( PlayerBase player )
     {
-        SetInput( "UAToggelAllowPutInPockets" );
+        SetInput( "UANimbyTogglePocketAccess" );
         m_InputType = ActionInputType.AIT_SINGLE;
         m_DetectFromItem = false;
     }

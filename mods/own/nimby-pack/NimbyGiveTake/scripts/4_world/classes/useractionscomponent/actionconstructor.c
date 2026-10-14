@@ -4,14 +4,14 @@ modded class ActionConstructor
     {
         super.RegisterActions( actions );
 
-        actions.Insert( ActionOfferItemToPlayer );
-        actions.Insert( ActionTakeItemFromPlayer );
-        actions.Insert( ActionTakeItemFromPlayerToHands );
+        actions.Insert( NimbyActionOfferItem );
+        actions.Insert( NimbyActionTakeItem );
+        actions.Insert( NimbyActionTakeItemToHands );
 
-        actions.Insert( ActionRequestItemFromPlayer );
-        actions.Insert( ActionGiveItemInHandsToPlayer );
+        actions.Insert( NimbyActionRequestItem );
+        actions.Insert( NimbyActionGiveItemInHands );
 
-        actions.Insert( ActionToggleAllowPutInPockets );
-        actions.Insert( ActionPutItemInHandsInPlayersPockets );
+        actions.Insert( NimbyActionTogglePocketAccess );
+        actions.Insert( NimbyActionPutInPockets );
     }
 }

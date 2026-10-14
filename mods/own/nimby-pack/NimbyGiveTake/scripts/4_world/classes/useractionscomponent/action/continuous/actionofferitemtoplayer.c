@@ -1,4 +1,4 @@
-class ActionOfferItemToPlayerCB : ActionContinuousBaseCB
+class NimbyActionOfferItemCB : ActionContinuousBaseCB
 {
     override void CreateActionComponent()
     {
@@ -6,11 +6,11 @@ class ActionOfferItemToPlayerCB : ActionContinuousBaseCB
     }
 }
 
-class ActionOfferItemToPlayer extends ActionContinuousBase
+class NimbyActionOfferItem extends ActionContinuousBase
 {
-    void ActionOfferItemToPlayer()
+    void NimbyActionOfferItem()
     {
-        m_CallbackClass = ActionOfferItemToPlayerCB;
+        m_CallbackClass = NimbyActionOfferItemCB;
         m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_GIVER;
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONFB_GIVER;
     }
@@ -23,7 +23,7 @@ class ActionOfferItemToPlayer extends ActionContinuousBase
 
     override typename GetInputType()
     {
-        return ContinuousOfferOrRequestItemActionInput;
+        return NimbyOfferOrRequestActionInput;
     }
 
     override bool HasTarget()
@@ -48,7 +48,7 @@ class ActionOfferItemToPlayer extends ActionContinuousBase
             return false;
         }
 
-        if( !item.CanBeOffered() )
+        if( !item.NimbyCanBeOffered() )
         {
             return false;
         }
@@ -63,11 +63,11 @@ class ActionOfferItemToPlayer extends ActionContinuousBase
 
     override void OnExecuteServer( ActionData action_data )
     {
-        action_data.m_Player.SetGiveOrTakeState( eGiveOrTake.GIVE );
+        action_data.m_Player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.GIVE );
     }
 
     override void OnEndServer( ActionData action_data )
     {
-        action_data.m_Player.SetGiveOrTakeState( eGiveOrTake.NONE );
+        action_data.m_Player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.NONE );
     }
 }

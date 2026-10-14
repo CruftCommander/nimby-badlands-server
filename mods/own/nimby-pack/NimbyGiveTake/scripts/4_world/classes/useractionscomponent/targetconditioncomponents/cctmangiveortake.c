@@ -1,8 +1,8 @@
-class CCTManGiveOrTake extends CCTMan
+class NimbyCCTManGiveOrTake extends CCTMan
 {
-    protected eGiveOrTake m_State;
+    protected ENimbyGiveOrTake m_State;
 
-    void CCTManGiveOrTake( float maximal_target_distance = UAMaxDistances.DEFAULT, bool must_be_alive = true, eGiveOrTake state = -1 )
+    void NimbyCCTManGiveOrTake( float maximal_target_distance = UAMaxDistances.DEFAULT, bool must_be_alive = true, ENimbyGiveOrTake state = -1 )
     {
         m_State = state;
     }
@@ -20,6 +20,6 @@ class CCTManGiveOrTake extends CCTMan
             return false;
         }
 
-        return tgt_player.GetGiveOrTakeState() == m_State && tgt_player.IsFacingTarget( player );
+        return tgt_player.NimbyGetGiveOrTakeState() == m_State && tgt_player.IsFacingTarget( player );
     }
 }

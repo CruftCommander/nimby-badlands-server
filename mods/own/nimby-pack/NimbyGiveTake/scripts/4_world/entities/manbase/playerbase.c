@@ -1,56 +1,56 @@
 modded class PlayerBase
 {
-    protected eGiveOrTake m_GiveOrTakeState = eGiveOrTake.NONE;
-    protected bool m_AllowsPutInPockets = false;
+    protected ENimbyGiveOrTake m_NimbyGiveOrTakeState = ENimbyGiveOrTake.NONE;
+    protected bool m_NimbyAllowsPocketAccess = false;
 
     override void Init()
     {
         super.Init();
 
-        RegisterNetSyncVariableInt( "m_GiveOrTakeState", eGiveOrTake.NONE, eGiveOrTake.TAKE );
-        RegisterNetSyncVariableBool( "m_AllowsPutInPockets" );
+        RegisterNetSyncVariableInt( "m_NimbyGiveOrTakeState", ENimbyGiveOrTake.NONE, ENimbyGiveOrTake.TAKE );
+        RegisterNetSyncVariableBool( "m_NimbyAllowsPocketAccess" );
     }
 
-    void SetGiveOrTakeState( eGiveOrTake state )
+    void NimbySetGiveOrTakeState( ENimbyGiveOrTake state )
     {
-        m_GiveOrTakeState = state;
+        m_NimbyGiveOrTakeState = state;
 
         SetSynchDirty();
     }
 
-    eGiveOrTake GetGiveOrTakeState()
+    ENimbyGiveOrTake NimbyGetGiveOrTakeState()
     {
-        return m_GiveOrTakeState;
+        return m_NimbyGiveOrTakeState;
     }
 
-    void SetAllowsPutInPockets( bool allows )
+    void NimbySetAllowsPocketAccess( bool allows )
     {
-        m_AllowsPutInPockets = allows;
+        m_NimbyAllowsPocketAccess = allows;
 
         SetSynchDirty();
     }
 
-    bool GetAllowsPutInPockets()
+    bool NimbyGetAllowsPocketAccess()
     {
-        return m_AllowsPutInPockets;
+        return m_NimbyAllowsPocketAccess;
     }
 
     override void SetActions( out TInputActionMap InputActionMap )
     {
         super.SetActions( InputActionMap );
 
-        AddAction( ActionOfferItemToPlayer, InputActionMap );
-        AddAction( ActionRequestItemFromPlayer, InputActionMap );
-        AddAction( ActionToggleAllowPutInPockets, InputActionMap );
+        AddAction( NimbyActionOfferItem, InputActionMap );
+        AddAction( NimbyActionRequestItem, InputActionMap );
+        AddAction( NimbyActionTogglePocketAccess, InputActionMap );
     }
 
     override void SetActionsRemoteTarget( out TInputActionMap InputActionMap )
     {
         // register new actions first to make take/give action appear before "check pulse"
-        AddAction( ActionTakeItemFromPlayer, InputActionMap );
-        AddAction( ActionTakeItemFromPlayerToHands, InputActionMap );
-        AddAction( ActionGiveItemInHandsToPlayer, InputActionMap );
-        AddAction( ActionPutItemInHandsInPlayersPockets, InputActionMap );
+        AddAction( NimbyActionTakeItem, InputActionMap );
+        AddAction( NimbyActionTakeItemToHands, InputActionMap );
+        AddAction( NimbyActionGiveItemInHands, InputActionMap );
+        AddAction( NimbyActionPutInPockets, InputActionMap );
 
         super.SetActionsRemoteTarget( InputActionMap );
     }

@@ -1,6 +1,6 @@
 modded class PlayerBaseClient
 {
-    protected bool m_LastAllowsPutInPockets = false;
+    protected bool m_NimbyLastAllowsPocketAccess = false;
 
     override void OnVariablesSynchronized()
     {
@@ -11,17 +11,17 @@ modded class PlayerBaseClient
             return;
         }
 
-        if ( m_AllowsPutInPockets != m_LastAllowsPutInPockets )
+        if ( m_NimbyAllowsPocketAccess != m_NimbyLastAllowsPocketAccess )
         {
-            m_LastAllowsPutInPockets = m_AllowsPutInPockets;
+            m_NimbyLastAllowsPocketAccess = m_NimbyAllowsPocketAccess;
 
-            if ( GetAllowsPutInPockets() )
+            if ( NimbyGetAllowsPocketAccess() )
             {
-                NotificationSystem.AddNotificationExtended( GameConstants.POCKTS_OPEN_CLOSE_NOTIFICATION_TIME, "#STR_POCKETS_OPEN", "#STR_POCKETS_OPEN_DETAIL", "set:dayz_gui image:icon_lock" );
+                NotificationSystem.AddNotificationExtended( NimbyGiveTakeConstants.POCKET_NOTIFICATION_TIME, "#STR_NIMBY_GT_POCKETS_OPEN", "#STR_NIMBY_GT_POCKETS_OPEN_DETAIL", "set:dayz_gui image:icon_lock" );
             }
             else
             {
-                NotificationSystem.AddNotificationExtended( GameConstants.POCKTS_OPEN_CLOSE_NOTIFICATION_TIME, "#STR_POCKETS_CLOSED", "#STR_POCKETS_CLOSED_DETAIL", "set:dayz_gui image:icon_lock" );
+                NotificationSystem.AddNotificationExtended( NimbyGiveTakeConstants.POCKET_NOTIFICATION_TIME, "#STR_NIMBY_GT_POCKETS_CLOSED", "#STR_NIMBY_GT_POCKETS_CLOSED_DETAIL", "set:dayz_gui image:icon_lock" );
             }
         }
     }

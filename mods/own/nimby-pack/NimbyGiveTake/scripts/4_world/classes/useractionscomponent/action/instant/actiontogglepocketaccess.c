@@ -1,4 +1,4 @@
-class ActionToggleAllowPutInPockets extends ActionInstantBase
+class NimbyActionTogglePocketAccess extends ActionInstantBase
 {
     override void CreateConditionComponents()
     {
@@ -48,13 +48,13 @@ class ActionToggleAllowPutInPockets extends ActionInstantBase
 
     override typename GetInputType()
     {
-        return ToggleAllowPutInPocketsActionInput;
+        return NimbyTogglePocketAccessActionInput;
     }
 
     override void OnStartServer( ActionData action_data )
     {
         PlayerBase player = action_data.m_Player;
 
-        player.SetAllowsPutInPockets( !player.GetAllowsPutInPockets() );
+        player.NimbySetAllowsPocketAccess( !player.NimbyGetAllowsPocketAccess() );
     }
 }
