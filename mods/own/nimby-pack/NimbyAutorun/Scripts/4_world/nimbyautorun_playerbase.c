@@ -89,9 +89,8 @@ modded class PlayerBase extends ManBase
 
     protected bool NimbyAutorunIsValidMovement(int movementIdx)
     {
-        return movementIdx == DayZPlayerConstants.MOVEMENTIDX_WALK
-            || movementIdx == DayZPlayerConstants.MOVEMENTIDX_RUN
-            || movementIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT;
+        // Enforce Script does not continue an expression across lines; keep it on one line.
+        return movementIdx == DayZPlayerConstants.MOVEMENTIDX_WALK || movementIdx == DayZPlayerConstants.MOVEMENTIDX_RUN || movementIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT;
     }
 
     protected void NimbyAutorunReject(PlayerIdentity sender, string reason)
