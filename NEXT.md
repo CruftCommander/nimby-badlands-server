@@ -7,5 +7,5 @@
 5. October 15: run the readiness procedure, record the outcome in the hub, choose client-mod policy B or A, and set the mission `template`.
 6. Jeff, with approval: order the HostHavoc server (Chicago, 40 slots).
 7. Claude: Discord setup-automation script (spec and builder).
-8. Jeff: review `docs/design/rigged-ada-feasibility.md` and rule on its five open decisions.
+8. Rigged-vehicle mod: re-verify the hooks on the 1.30 scripts, then build in the order in `docs/design/rigged-ada-feasibility.md` (decisions made October 14, 2026).
 9. Claude: candidate-feature research for phases 3 and 4.
