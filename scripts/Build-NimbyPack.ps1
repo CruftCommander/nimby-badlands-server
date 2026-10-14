@@ -202,28 +202,47 @@ function Read-ServerLogText {
 }
 
 function Get-SignatureVerdict {
-    # Combines the checker's result on the real build with its result on a deliberately
-    # unsigned copy. A checker that cannot tell the two apart proves nothing (UNKNOWN).
+    # Judges DSCheckSignatures output by its observed format (DayZ Tools, October 14, 2026):
+    #   good:    "Signature <path>\<name>.pbo.<authority>.bisign is OK"
+    #   missing: "No signature found for <path>\<name>.pbo"
+    # PASS needs an OK line for every expected PBO, no other non-empty line, and exit 0 on the
+    # real build; and the unsigned control must produce at least one non-OK line or a nonzero
+    # exit, proving the checker can fail. Anything unrecognized fails closed.
     param(
         [Parameter(Mandatory)][int]$RealExit,
         [Parameter(Mandatory)][AllowEmptyString()][string]$RealOutput,
         [Parameter(Mandatory)][int]$NegativeExit,
-        [Parameter(Mandatory)][AllowEmptyString()][string]$NegativeOutput
+        [Parameter(Mandatory)][AllowEmptyString()][string]$NegativeOutput,
+        [Parameter(Mandatory)][string[]]$ExpectedPbo
     )
 
-    $failurePattern = '(?im)^.*\b(not signed|unsigned|missing|invalid|wrong|corrupt|mismatch|fail\w*|error\w*)\b.*$'
-    $negativeFlagged = ($NegativeExit -ne 0) -or ($NegativeOutput -match $failurePattern)
-    if (-not $negativeFlagged) {
-        return [PSCustomObject]@{ Verdict = 'UNKNOWN'; Evidence = "checker did not flag an unsigned PBO (exit $NegativeExit)" }
+    $okPattern = '^Signature\s+(?<path>.+?)\s+is OK\s*$'
+
+    $negativeBad = @(($NegativeOutput -split "\r?\n") | Where-Object { $_.Trim() -and $_ -notmatch $okPattern })
+    if ($NegativeExit -eq 0 -and $negativeBad.Count -eq 0) {
+        return [PSCustomObject]@{ Verdict = 'UNKNOWN'; Evidence = "checker did not flag the unsigned control (exit $NegativeExit)" }
     }
 
-    $match = [regex]::Match($RealOutput, $failurePattern)
-    if ($RealExit -ne 0 -or $match.Success) {
+    $lines = @(($RealOutput -split "\r?\n") | Where-Object { $_.Trim() })
+    $bad = @($lines | Where-Object { $_ -notmatch $okPattern })
+    if ($RealExit -ne 0 -or $bad.Count -gt 0) {
         $evidence = "exit $RealExit"
-        if ($match.Success) { $evidence = "exit $RealExit; $($match.Value.Trim())" }
+        if ($bad.Count -gt 0) { $evidence = "exit $RealExit; $($bad[0].Trim())" }
         return [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = $evidence }
     }
-    return [PSCustomObject]@{ Verdict = 'PASS'; Evidence = "exit $RealExit; unsigned control flagged (exit $NegativeExit)" }
+
+    $signedPbo = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($line in $lines) {
+        $leaf = ($line -replace $okPattern, '${path}') -split '[\\/]' | Select-Object -Last 1
+        [void]$signedPbo.Add(($leaf -replace '\.pbo\..*$', '.pbo'))
+    }
+    $unsigned = @($ExpectedPbo | Where-Object { -not $signedPbo.Contains($_) })
+    if ($unsigned.Count -gt 0) {
+        return [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = "no OK line for: $($unsigned -join ', ')" }
+    }
+    $control = "exit $NegativeExit"
+    if ($negativeBad.Count -gt 0) { $control = $negativeBad[0].Trim() }
+    return [PSCustomObject]@{ Verdict = 'PASS'; Evidence = ("{0} of {0} signatures OK; unsigned control flagged: {1}" -f $ExpectedPbo.Count, $control) }
 }
 
 function Invoke-Native {
@@ -380,7 +399,8 @@ try {
         $realLog = Join-Path $logDir 'DSCheckSignatures-build.log'
         $realExit = Invoke-Native -FilePath $checkSignatures -ArgumentList @($addonsOut, $keysOut) -LogPath $realLog
 
-        $negativeDir = Join-Path $logDir 'sigcheck-unsigned-control'
+        # Folder name avoids failure-sounding words so it cannot leak into a verdict.
+        $negativeDir = Join-Path $logDir 'sigcheck-control'
         New-Item -ItemType Directory -Path $negativeDir -Force | Out-Null
         $firstPbo = Get-ChildItem -LiteralPath $addonsOut -Filter '*.pbo' | Select-Object -First 1
         Copy-Item -LiteralPath $firstPbo.FullName -Destination $negativeDir
@@ -390,7 +410,8 @@ try {
         # [string] turns an empty log (Get-Content returns $null) into an empty string.
         $realOutput = [string](Get-Content -LiteralPath $realLog -Raw -Encoding utf8)
         $negativeOutput = [string](Get-Content -LiteralPath $negativeLog -Raw -Encoding utf8)
-        $signatureResult = Get-SignatureVerdict -RealExit ([int]$realExit) -RealOutput $realOutput -NegativeExit ([int]$negativeExit) -NegativeOutput $negativeOutput
+        $expectedPbo = @(Get-ChildItem -LiteralPath $addonsOut -Filter '*.pbo' | ForEach-Object { $_.Name })
+        $signatureResult = Get-SignatureVerdict -RealExit ([int]$realExit) -RealOutput $realOutput -NegativeExit ([int]$negativeExit) -NegativeOutput $negativeOutput -ExpectedPbo $expectedPbo
         Write-Manifest -LogPath $manifest -Line ("SIGN {0} {1}" -f $signatureResult.Verdict, $signatureResult.Evidence)
         if ($signatureResult.Verdict -eq 'FAIL') { throw "Signature check failed: $($signatureResult.Evidence)" }
         if ($signatureResult.Verdict -eq 'UNKNOWN') { $signatureUnknown = $true }
