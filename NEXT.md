@@ -8,4 +8,4 @@
 6. Jeff, with approval: order the HostHavoc server (Chicago, 40 slots).
 7. Claude: Discord setup-automation script (spec and builder).
 8. Rigged-vehicle mod: re-verify the hooks on the 1.30 scripts, then build in the order in `docs/design/rigged-ada-feasibility.md` (decisions made October 14, 2026).
-9. Claude: candidate-feature research for phases 3 and 4.
+9. Jeff: rule on the five decisions at the end of `docs/research/candidate-features.md` (QoL fork pack, Zen ecosystem, own smoking system, cannabis scope, rigging motorbikes).

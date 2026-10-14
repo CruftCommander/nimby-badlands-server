@@ -1,0 +1,89 @@
+# Candidate features and mods
+
+Research v0.1, October 14, 2026, the day before Badlands (update 1.30) releases. Covers roadmap phases 3 and 4 plus the two quality-of-life mods in the launch set. Owner: Jeff Fabish. Nothing here is decided; each recommendation waits for Jeff.
+
+Every Workshop mod below was last tested by its author on 1.29 or earlier, and no author has said anything about 1.30. Bohemia warns that 1.30 changes the animation graph, the navmesh format, and the mod filesystem, and that animation-related mods may break. Treat every row as "re-check on October 15".
+
+## What this is not
+
+- Not a mod list. The final list waits for the October 15 readiness check and Jeff's call on how each mod is included.
+- Not a license opinion. The terms below are quoted or summarized from each Workshop page; read the page before relying on them.
+- Not a performance test. Nothing here has run on a server yet.
+
+## How a mod can be included
+
+Each recommendation names one of four paths. The license decides which paths are open.
+
+| Path | Meaning | Needs |
+| --- | --- | --- |
+| Workshop dependency | Players subscribe to the author's Workshop item; we ship nothing | Author keeps it working on new builds |
+| Repack | We bundle the author's files into our own NIMBY pack | Terms that allow repacking |
+| Fork | We take the source, maintain our own copy, and fix it on new builds ourselves | Source plus terms that allow modification |
+| Own build | We write it from scratch | Our time; for models, 3D work |
+
+## What 1.30 ships natively
+
+| Item | Finding | Status |
+| --- | --- | --- |
+| Regional clothing | "New regional firearms, clothing, and loot"; FNO uniform in night desert camouflage | Confirmed (Bohemia dev blog recap, September 22, 2026) |
+| Shemagh | Already vanilla in four colors | Confirmed (vanilla) |
+| Keffiyeh, turban, pakol, shalwar, sandals | Named by third-party sites and listed as upcoming on the community wiki | Reported, not official |
+| Thobe, long beards, hookah, cigarettes, lighters, music | Not found anywhere | Unknown; assume absent |
+| Jana 50 moped, Bitrak 682 dirt bike | New motorbikes on all maps | Confirmed (1.30 experimental change log) |
+| Helicopters | Not announced | Assume absent |
+| Which cars spawn on Nasdara | No spawn data published | Unknown until October 15 |
+
+The motorbikes matter to the rigged-vehicle mod: its allowlist holds base-game cars, and whether the bikes derive from `CarScript` is unchecked. They stay off the list until Jeff decides.
+
+## Recommendations by category
+
+### Launch quality of life
+
+| Feature | Recommended | Path | Why | Alternative |
+| --- | --- | --- | --- | --- |
+| Autorun | Schana's autorun ([GitHub](https://github.com/schana/dayz-mod-autorun), Apache-2.0) | Fork into the NIMBY pack | Tiny feature, permissive license, and we own the 1.30 fix instead of waiting on an author | Carim ([3468061029](https://steamcommunity.com/sharedfiles/filedetails/?id=3468061029), Apache-2.0, updated July 2026) as a Workshop dependency, but it also adds nametags, a compass, and a map, which conflict with hardcore unless they can be turned off (unverified) |
+| Give n Take | Give&Take ([2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334)) | Fork | Author allows repack, modification, and redistribution; last updated April 2023, so a fork is the only way it works on 1.30. No source published, so the fork starts from the PBO | Give&Take (Fixed) ([3314183971](https://steamcommunity.com/sharedfiles/filedetails/?id=3314183971)) is also stale and has bug reports |
+
+Both forks are small and share one NIMBY client pack. They are also the two mods the October 15 readiness check depends on, so this changes that check: the question becomes "does our fork compile on 1.30" rather than "did the author update".
+
+### Theme drop 1 (phase 3)
+
+| Feature | Recommended | Path | Why | Alternative |
+| --- | --- | --- | --- | --- |
+| Zippo lighter | Zens Zippo Lighter ([3170285574](https://steamcommunity.com/sharedfiles/filedetails/?id=3170285574)) | Workshop dependency, or repack | Maintained (January 2026), refuels with gasoline, repack allowed. The 3D model is CC BY-NC, so never sell it. Whether it lights cigarettes is unverified | Build our own if it cannot light our smokables |
+| Tapes | Zens Music ([3412251200](https://steamcommunity.com/sharedfiles/filedetails/?id=3412251200)) | Workshop dependency, or repack | Maintained (April 2026), cassettes, walkman, boombox, and car play synced to all players; repack allowed; custom cassettes through `types.xml`. Load only music we have the rights to | FoXyRadio ([3075855922](https://steamcommunity.com/sharedfiles/filedetails/?id=3075855922)), no edits or reuploads |
+| Cigarettes, joints, and hookah | One unified smoking system | Own build | No maintained smoking mod allows repacking; the smoking mods use custom animations, which 1.30 puts at risk; and no DayZ hookah mod exists, so hookah is an own build regardless. One shared "smokable" base covers all three | Adopt Smoking_A_Cigarette ([3279662973](https://steamcommunity.com/sharedfiles/filedetails/?id=3279662973), no repacks) for cigarettes if drop 1 cannot wait |
+| Cannabis growing | Defer | - | The only maintained option is IceBlade's stack (CannabisPlus [1932611410](https://steamcommunity.com/sharedfiles/filedetails/?id=1932611410), DrugsPLUS [2170927235](https://steamcommunity.com/sharedfiles/filedetails/?id=2170927235), AgricultureCore [3690289718](https://steamcommunity.com/sharedfiles/filedetails/?id=3690289718)): three or four mods, no repacks, and the author warns it can wreck a server economy. Joints come from the smoking system | Adopt the IceBlade stack if growing becomes a goal |
+| Regional clothing | Wait for vanilla 1.30 | - | Badlands brings regional clothing; inventory what ships on October 15 before adding anything | - |
+| Thobe | Own build, after the vanilla inventory | Own build | No DayZ thobe mod found | - |
+| Long beards | Own build | Own build | No DayZ long-beard mod found; this is new character-model work and the most expensive item on the list | StartWithBeard ([2981585492](https://steamcommunity.com/sharedfiles/filedetails/?id=2981585492), server-only, permissive) only gives spawn beards from vanilla |
+
+Zens Zippo and Zens Music share the Zens Core dependency ([3702420204](https://steamcommunity.com/sharedfiles/filedetails/?id=3702420204)), so adopting one makes the second cheaper.
+
+### Vehicles (phase 4)
+
+| Option | Status | Notes |
+| --- | --- | --- |
+| RedFalcon Flight System Heliz ([2692979668](https://steamcommunity.com/sharedfiles/filedetails/?id=2692979668)) | **Drop** | Description says no longer supported as of 1.29 |
+| DayZ Expansion Vehicles ([2291785437](https://steamcommunity.com/workshop/filedetails/?id=2291785437)) | Leading candidate | Actively developed (flight-model work May-August 2026, 1.29 animation graph update). Requires CF, Dabs Framework, Expansion Core, and Expansion Licensed. Licensed content is non-commercial and cannot be reposted, so Workshop dependency only |
+| LM's Helicopter Flight Systems ([3624740747](https://steamcommunity.com/workshop/filedetails/?id=3624740747)) | Lighter alternative | No dependencies, updated July 2026, no derivatives and no repacks |
+
+Pick after both publish 1.30 builds; phase 4 has no date pressure.
+
+## Decisions this research sets up for Jeff
+
+1. Whether the launch QoL pair (autorun, Give n Take) becomes our own forked NIMBY pack.
+2. Whether the Zen ecosystem (Zens Core, Zippo, Music) is acceptable as a Workshop dependency.
+3. Whether smoking (cigarettes, joints, hookah) is one own-build system.
+4. Whether cannabis growing is in scope at all.
+5. Whether the new motorbikes can be rigged.
+
+## Sources
+
+- [Bohemia dev blog recap (2), SteamDB copy](https://steamdb.info/patchnotes/25456423/)
+- [Experimental update 1.30 change log, Patchbot mirror](https://patchbot.io/games/dayz/articles/1445-experimental-update-130-change-log)
+- [DayZ Badlands, community wiki](https://dayz.wiki.gg/wiki/DayZ_Badlands)
+- [low.ms: DayZ Badlands, everything we know](https://low.ms/blog/dayz-badlands-expansion-everything-we-know)
+- [PlayFront: Badlands heat and survival mechanics](https://playfront.de/en/dayz-badlands-setzt-auf-extreme-hitze-und-neue-ueberlebensmechaniken/)
+- [Expansion Licensed terms](https://steamcommunity.com/workshop/filedetails/?id=2116157322)
+- Each Workshop item linked in the tables above, read October 14, 2026.
