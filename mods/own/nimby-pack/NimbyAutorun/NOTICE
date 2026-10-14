@@ -16,3 +16,5 @@ Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 14, 2026:
   index and angle must be in range, sprint is refused when the player cannot sprint, and the
   request is refused while the player is in a vehicle, unconscious, restrained, or dead.
 - Rejected requests are logged to the server script log, rate-limited per player.
+- The client sends an autorun update only when the running state or speed changes. The original sent
+  a guaranteed RPC every frame while the player could not sprint (review CR-004, October 14, 2026).

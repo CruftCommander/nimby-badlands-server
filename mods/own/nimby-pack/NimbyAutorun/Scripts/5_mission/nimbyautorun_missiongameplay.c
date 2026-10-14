@@ -11,6 +11,15 @@ modded class MissionGameplay extends MissionBase
 {
     ref array<string> m_NimbyAutorunInterruptInputs;
 
+    // Last state sent to the server. NimbyAutorunGetUpdatedSpeed returns RUN every frame while
+    // the player cannot sprint, so without this the client sent one guaranteed RPC per frame
+    // (review CR-004). Only changes are sent now.
+    protected bool m_NimbyAutorunLastSentRunning;
+    protected int m_NimbyAutorunLastSentIdx = -1;
+    // The player the last-sent state belongs to. A respawn creates a new player object, so the
+    // remembered state is reset rather than suppressing the new player's first request.
+    protected PlayerBase m_NimbyAutorunLastSentPlayer;
+
     override void OnInit()
     {
         super.OnInit();
@@ -122,6 +131,14 @@ modded class MissionGameplay extends MissionBase
 
     protected void NimbyAutorunSync(PlayerBase player, bool isRunning, int movementIdx, int angle)
     {
+        if (player == m_NimbyAutorunLastSentPlayer && isRunning == m_NimbyAutorunLastSentRunning && movementIdx == m_NimbyAutorunLastSentIdx)
+        {
+            return;
+        }
+        m_NimbyAutorunLastSentPlayer = player;
+        m_NimbyAutorunLastSentRunning = isRunning;
+        m_NimbyAutorunLastSentIdx = movementIdx;
+
         player.NimbySetAutorunning(isRunning);
         player.GetInputController().OverrideMovementSpeed(isRunning, movementIdx);
         player.GetInputController().OverrideMovementAngle(isRunning, angle);

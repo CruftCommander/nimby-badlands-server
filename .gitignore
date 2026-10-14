@@ -28,3 +28,6 @@ vendor/
 
 # Signing keys - private keys never enter the repo
 *.biprivatekey
+
+# Built mod output - rebuilt from source, never committed
+build/

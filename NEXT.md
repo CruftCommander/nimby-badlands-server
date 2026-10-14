@@ -8,4 +8,4 @@
 6. Jeff, with approval: order the HostHavoc server (Chicago, 40 slots).
 7. Claude: Discord setup-automation script (spec and builder).
 8. Rigged-vehicle mod: re-verify the hooks on the 1.30 scripts, then build in the order in `docs/design/rigged-ada-feasibility.md` (decisions made October 14, 2026).
-9. NIMBY client pack (`mods/own/nimby-pack/`): autorun fork written; Jeff subscribes to Give&Take (2903112334) and runs `scripts/Copy-WorkshopItem.ps1 -WorkshopId 2903112334`; Claude then extracts and forks it, and writes the pack build script.
+9. NIMBY client pack (`mods/own/nimby-pack/`): Jeff runs `scripts/Build-NimbyPack.ps1` once DayZ Tools and the local DayZ Server are installed; Claude continues the review fixes in order - Give&Take prefix and logging (CR-005, CR-006, CR-003), then the transfer routine (CR-001). Review: `D:\GitHub\_reviews\nimby-badlands-server-review-2026-10-14.md`.

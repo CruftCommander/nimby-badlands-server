@@ -11,8 +11,8 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 | Addon | Origin | License | Status |
 | --- | --- | --- | --- |
-| `NimbyAutorun` | Fork of [SchanaModAutorun](https://github.com/schana/dayz-mod-autorun) (commit 1048f71) | Apache-2.0; see `NimbyAutorun/LICENSE` and `NimbyAutorun/NOTICE` | Source forked October 14, 2026; server-side RPC validation added. Not yet built or tested |
-| `NimbyGiveTake` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; re-confirm before release) | Waiting on the Workshop files; see `scripts/Copy-WorkshopItem.ps1` |
+| `NimbyAutorun` | Fork of [SchanaModAutorun](https://github.com/schana/dayz-mod-autorun) (commit 1048f71) | Apache-2.0; see `NimbyAutorun/LICENSE` and `NimbyAutorun/NOTICE` | Source forked October 14, 2026; server-side RPC validation added; per-frame RPC fixed (review CR-004). Not yet built or tested in game |
+| `NimbyGiveTake` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; re-confirm before release) | Imported verbatim October 14, 2026 (see `NimbyGiveTake/NOTICE`). Review fixes CR-001, CR-003, CR-005, CR-006 pending |
 | Zens Core, Zens Zippo Lighter, Zens Music | Repack of Zenarchist's Workshop items | Author permits repacking; Zippo model is CC BY-NC | Theme drop 1; not started |
 
 ## Layout when built
@@ -31,7 +31,13 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 ## Build and sign
 
-The build script is not written yet. It will pack each addon folder with the DayZ Tools Addon Builder, sign each PBO with Jeff's private key, write a log to `logs/`, and run on Windows PowerShell 5.1 and PowerShell 7.
+`scripts/Build-NimbyPack.ps1` builds the pack from `pack.json`:
+
+1. Packs each addon with DayZ Tools Addon Builder and signs it with the key in `D:\Keys\nimby` (created on first run; the private key never leaves that folder).
+2. Verifies each PBO: signature present, prefix matches `pack.json`, and every source file matching `includePatterns` is inside.
+3. Boot check: starts the local DayZ Server with the built mod on port 2402, instance 999, and fails on any script error in the RPT or script log.
+
+Output goes to `build/@NIMBY-<timestamp>/` and logs to `logs/build-<timestamp>/build.log`; both folders are git-ignored. Exit code 0 is PASS, 1 is FAIL, 2 is UNKNOWN (built and verified, boot check skipped or inconclusive). Add an addon by adding a row to `pack.json`; the script needs no change.
 
 ## Test plan
 

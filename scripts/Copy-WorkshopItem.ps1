@@ -39,65 +39,7 @@ $ErrorActionPreference = 'Stop'
 
 $DayZAppId = '221100'
 
-function Get-SteamRootPath {
-    # Returns the Steam install folder, or $null when none can be found.
-    param([string[]]$Candidates = @())
-
-    $found = @()
-    $regKey = 'HKCU:\Software\Valve\Steam'
-    if (Test-Path -LiteralPath $regKey) {
-        $value = (Get-ItemProperty -LiteralPath $regKey -Name 'SteamPath' -ErrorAction SilentlyContinue)
-        if ($null -ne $value -and $value.SteamPath) {
-            $found += ($value.SteamPath -replace '/', '\')
-        }
-    }
-    $found += $Candidates
-
-    foreach ($path in $found) {
-        if ($path -and (Test-Path -LiteralPath (Join-Path $path 'steamapps'))) {
-            return $path
-        }
-    }
-    return $null
-}
-
-function Get-SteamLibraryPath {
-    # Returns every Steam library folder listed in libraryfolders.vdf, plus the Steam root.
-    param([Parameter(Mandatory)][string]$SteamRoot)
-
-    $libraries = New-Object System.Collections.Generic.List[string]
-    $libraries.Add($SteamRoot)
-
-    $vdf = Join-Path $SteamRoot 'steamapps\libraryfolders.vdf'
-    if (Test-Path -LiteralPath $vdf) {
-        $content = Get-Content -LiteralPath $vdf -Raw -Encoding utf8
-        foreach ($match in [regex]::Matches($content, '"path"\s+"([^"]+)"')) {
-            # VDF escapes backslashes as \\.
-            $path = $match.Groups[1].Value -replace '\\\\', '\'
-            if (-not $libraries.Contains($path)) {
-                $libraries.Add($path)
-            }
-        }
-    }
-    return $libraries.ToArray()
-}
-
-function Find-WorkshopItemPath {
-    # Returns the first library path that holds the item, or $null.
-    param(
-        [Parameter(Mandatory)][string[]]$LibraryPaths,
-        [Parameter(Mandatory)][string]$AppId,
-        [Parameter(Mandatory)][string]$ItemId
-    )
-
-    foreach ($library in $LibraryPaths) {
-        $candidate = Join-Path $library ("steamapps\workshop\content\{0}\{1}" -f $AppId, $ItemId)
-        if (Test-Path -LiteralPath $candidate -PathType Container) {
-            return $candidate
-        }
-    }
-    return $null
-}
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbySteam.psm1') -Force
 
 function Write-Manifest {
     # Appends one UTF-8 line to the manifest log.
