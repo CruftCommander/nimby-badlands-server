@@ -5,13 +5,16 @@
 
 .DESCRIPTION
     For each addon listed in mods\own\nimby-pack\pack.json:
-      1. Packs the addon folder into a PBO with DayZ Tools Addon Builder and signs it.
-      2. Confirms the PBO and its .bisign exist, the PBO prefix matches pack.json, and every
-         source file matching includePatterns is inside the PBO.
+      1. Packs the files matching includePatterns into an uncompressed PBO with the pack's
+         own packer (NimbyPbo.psm1), then signs it with DayZ Tools DSSignFile.
+      2. Confirms the PBO checksum, the .bisign, the PBO prefix, and that every source file
+         is inside the PBO.
+    DayZ Tools Addon Builder is not used: its DayZ build ignores command-line arguments and
+    opens its window (observed October 14, 2026).
     Then copies the public key into @NIMBY\keys, writes mod.cpp, and (unless -SkipBootCheck)
     starts a local DayZ server with @NIMBY, scans its logs for script errors, and stops it.
 
-    Reads   : pack.json, the addon folders, DayZ Tools, a local DayZ Server install,
+    Reads   : pack.json, the addon folders, DayZ Tools (DsUtils), a local DayZ Server install,
               the private key in -KeyDirectory.
     Writes  : <repo>\build\@NIMBY-<stamp>\ (the built mod), <repo>\logs\build-<stamp>\ (manifest,
               tool logs, server profile and logs), and the key pair in -KeyDirectory on first run.
@@ -92,27 +95,6 @@ function Get-PackDefinition {
     return $pack
 }
 
-function Get-IncludedSourceFile {
-    # Returns paths relative to $Folder for files whose name matches any include pattern.
-    param(
-        [Parameter(Mandatory)][string]$Folder,
-        [Parameter(Mandatory)][string[]]$Patterns
-    )
-
-    $root = (Resolve-Path -LiteralPath $Folder).ProviderPath.TrimEnd('\', '/')
-    $result = @()
-    foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File) {
-        $matched = $false
-        foreach ($pattern in $Patterns) {
-            if ($file.Name -like $pattern) { $matched = $true; break }
-        }
-        if ($matched) {
-            $result += $file.FullName.Substring($root.Length).TrimStart('\', '/')
-        }
-    }
-    return $result
-}
-
 function Resolve-ToolPath {
     # Returns the first existing candidate path, or $null.
     param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Candidates)
@@ -121,28 +103,6 @@ function Resolve-ToolPath {
         if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
     }
     return $null
-}
-
-function Get-AddonBuilderArgument {
-    # Builds the Addon Builder argument list. Addon Builder arguments are case-sensitive.
-    param(
-        [Parameter(Mandatory)][string]$Source,
-        [Parameter(Mandatory)][string]$Destination,
-        [Parameter(Mandatory)][string]$Prefix,
-        [Parameter(Mandatory)][string]$PrivateKey,
-        [Parameter(Mandatory)][string]$IncludeFile,
-        [Parameter(Mandatory)][string]$TempFolder
-    )
-
-    $argv = New-Object System.Collections.Generic.List[string]
-    $argv.Add($Source)
-    $argv.Add($Destination)
-    $argv.Add('-packonly')
-    $argv.Add("-prefix=$Prefix")
-    $argv.Add("-sign=$PrivateKey")
-    $argv.Add("-include=$IncludeFile")
-    $argv.Add("-temp=$TempFolder")
-    return $argv.ToArray()
 }
 
 function Get-ServerArgument {
@@ -287,10 +247,10 @@ try {
     }
     if (-not $DayZToolsPath) { throw 'DayZ Tools not found. Install it from Steam (app 830720) or pass -DayZToolsPath.' }
 
-    $addonBuilder = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\AddonBuilder\AddonBuilder.exe')
     $createKey = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSCreateKey.exe')
-    if ($null -eq $addonBuilder) { throw "AddonBuilder.exe not found under '$DayZToolsPath\Bin\AddonBuilder'." }
-    Write-Manifest -LogPath $manifest -Line "TOOL AddonBuilder $addonBuilder"
+    $signFile = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSSignFile.exe')
+    if ($null -eq $signFile) { throw "DSSignFile.exe not found under '$DayZToolsPath\Bin\DsUtils'." }
+    Write-Manifest -LogPath $manifest -Line "TOOL DSSignFile $signFile"
 
     # Key -------------------------------------------------------------------
     $privateKey = Join-Path $KeyDirectory ("{0}.biprivatekey" -f $pack.keyAuthority)
@@ -315,11 +275,6 @@ try {
     $keysOut = Join-Path $modRoot 'keys'
     New-Item -ItemType Directory -Path $addonsOut, $keysOut -Force | Out-Null
 
-    $includeFile = Join-Path $logDir 'include.txt'
-    Set-Content -LiteralPath $includeFile -Value ($pack.includePatterns -join ';') -Encoding ascii
-    $tempFolder = Join-Path $logDir 'addonbuilder-temp'
-    New-Item -ItemType Directory -Path $tempFolder -Force | Out-Null
-
     $failures = 0
     foreach ($addon in $pack.addons) {
         $source = Join-Path $packRoot $addon.folder
@@ -329,26 +284,32 @@ try {
             continue
         }
 
-        $argv = Get-AddonBuilderArgument -Source $source -Destination $addonsOut -Prefix $addon.prefix -PrivateKey $privateKey -IncludeFile $includeFile -TempFolder $tempFolder
-        $code = Invoke-Native -FilePath $addonBuilder -ArgumentList $argv -LogPath (Join-Path $logDir ("AddonBuilder-{0}.log" -f $addon.pboName))
-
-        # Addon Builder names the PBO after the source folder.
-        $pbo = Join-Path $addonsOut ("{0}.pbo" -f $addon.folder)
-        $signature = Join-Path $addonsOut ("{0}.pbo.{1}.bisign" -f $addon.folder, $pack.keyAuthority)
-        if (-not (Test-Path -LiteralPath $pbo)) {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) exit=$code no PBO produced"
+        $pbo = Join-Path $addonsOut ("{0}.pbo" -f $addon.pboName)
+        try {
+            $written = @(Build-PboArchive -SourceFolder $source -Destination $pbo -Prefix $addon.prefix -Patterns $pack.includePatterns)
+        }
+        catch {
+            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) pack error: $($_.Exception.Message)"
             $failures++
             continue
         }
+
+        $code = Invoke-Native -FilePath $signFile -ArgumentList @($privateKey, $pbo) -LogPath (Join-Path $logDir ("DSSignFile-{0}.log" -f $addon.pboName)) -WorkingDirectory $addonsOut
+        $signature = Join-Path $addonsOut ("{0}.pbo.{1}.bisign" -f $addon.pboName, $pack.keyAuthority)
         if (-not (Test-Path -LiteralPath $signature)) {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) exit=$code no signature at $signature"
+            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) DSSignFile exit=$code no signature at $signature"
             $failures++
             continue
         }
 
         $content = Get-PboContent -Path $pbo
-        $expected = @(Get-IncludedSourceFile -Folder $source -Patterns $pack.includePatterns)
+        $expected = @(Get-PboSourceFile -Folder $source -Patterns $pack.includePatterns)
         $missing = @(Compare-PboToSource -SourceRelativePaths $expected -PboEntries $content.Entries)
+        if (-not (Test-PboChecksum -Path $pbo)) {
+            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) checksum does not match"
+            $failures++
+            continue
+        }
         if ($content.Prefix -ne $addon.prefix) {
             Write-Manifest -LogPath $manifest -Line ("ADDON FAIL {0} prefix '{1}' expected '{2}'" -f $addon.pboName, $content.Prefix, $addon.prefix)
             $failures++
@@ -360,7 +321,10 @@ try {
             continue
         }
         $hash = (Get-FileHash -LiteralPath $pbo -Algorithm SHA256).Hash
-        Write-Manifest -LogPath $manifest -Line ("ADDON OK {0} exit={1} entries={2} sources={3} sha256={4}" -f $addon.pboName, $code, $content.Entries.Count, $expected.Count, $hash)
+        Write-Manifest -LogPath $manifest -Line ("ADDON OK {0} entries={1} sources={2} signexit={3} sha256={4}" -f $addon.pboName, $content.Entries.Count, $written.Count, $code, $hash)
+        foreach ($entry in $written) {
+            Write-Manifest -LogPath $manifest -Line ("  ENTRY {0}\{1}" -f $addon.pboName, $entry)
+        }
     }
 
     Copy-Item -LiteralPath $publicKey -Destination $keysOut

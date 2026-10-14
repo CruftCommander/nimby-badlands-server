@@ -21,10 +21,6 @@ class CfgMods
         type = "mod";
         hideName = 0;
         hidePicture = 0;
-        picture = "GiveAndTake/Scripts/logo.paa";
-        logoSmall = "GiveAndTake/Scripts/logo.paa";
-        logo = "GiveAndTake/Scripts/logo.paa";
-        logoOver = "GiveAndTake/Scripts/logo.paa";
         tooltip = "GiveAndTake";
         overview = "GiveAndTake";
         inputs = "GiveAndTake/Scripts/inputs.xml";

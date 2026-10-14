@@ -33,8 +33,8 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 `scripts/Build-NimbyPack.ps1` builds the pack from `pack.json`:
 
-1. Packs each addon with DayZ Tools Addon Builder and signs it with the key in `D:\Keys\nimby` (created on first run; the private key never leaves that folder).
-2. Verifies each PBO: signature present, prefix matches `pack.json`, and every source file matching `includePatterns` is inside.
+1. Packs each addon into an uncompressed PBO with the pack's own packer (`scripts/modules/NimbyPbo.psm1`) and signs it with DayZ Tools `DSSignFile` using the key in `D:\Keys\nimby` (created on first run; the private key never leaves that folder). DayZ Tools Addon Builder is not used: its DayZ build ignores command-line arguments and opens its window.
+2. Verifies each PBO: checksum, signature present, prefix matches `pack.json`, and every source file matching `includePatterns` is inside.
 3. Boot check: starts the local DayZ Server with the built mod on port 2402, instance 999, and fails on any script error in the RPT or script log.
 
 Output goes to `build/@NIMBY-<timestamp>/` and logs to `logs/build-<timestamp>/build.log`; both folders are git-ignored. Exit code 0 is PASS, 1 is FAIL, 2 is UNKNOWN (built and verified, boot check skipped or inconclusive). Add an addon by adding a row to `pack.json`; the script needs no change.

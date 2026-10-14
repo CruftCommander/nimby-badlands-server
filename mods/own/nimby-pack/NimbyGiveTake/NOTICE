@@ -19,4 +19,5 @@ Import notes:
 - logo.paa and Texheaders.bin were not imported; the NIMBY pack supplies its own mod presentation.
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
-(none yet - this commit is the verbatim import)
+- October 14, 2026: removed the four CfgMods picture and logo entries that point at logo.paa,
+  which is not imported. Without this, the game logs a missing-file error for the image.
