@@ -1,21 +1,44 @@
+// -----------------------------------------------------------------------------
+// NimbyMoveItemToPlayer - moves an item from one player's hands into another
+// player's inventory (cargo or an attachment slot, never hands).
+//
+// Rewritten October 14, 2026 (review CR-001). The original deleted the item's
+// network state, moved it natively, and injected fake hand events on both
+// players; one failure path left both players' hand state machines wrong while
+// the item had already moved. This version uses the vanilla server path:
+// Man.ServerTakeToDst on the player holding the item, which routes a
+// HandEventMoveTo through that player's own hand state machine
+// (HumanInventory.RedirectToHandEvent). Because the item never lands in the
+// receiver's hands, no second hand state machine has to be updated - the same
+// way vanilla moves an item from hands into a container.
+//
+// The hand event is processed later by the holder's inventory (it is deferred),
+// so Execute only reports whether the request was accepted. The receiver checks
+// where the item actually ended up after VERIFY_DELAY_MS and logs the outcome
+// (PlayerBase.NimbyVerifyTransfer).
+// -----------------------------------------------------------------------------
+
 class NimbyMoveItemToPlayer
 {
-    protected DayZPlayerImplement m_DstPlayer;
+    // Milliseconds before the outcome is checked; long enough for a deferred hand event.
+    static const int VERIFY_DELAY_MS = 1000;
+
+    // Destinations a transfer may use. Hands are excluded on purpose (see header). A function
+    // rather than a static const: vanilla has no example of a const built from enum flags.
+    static int DestinationFlags()
+    {
+        return FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT;
+    }
+
+    protected PlayerBase m_DstPlayer;
     protected EntityAI m_Item;
-    protected FindInventoryLocationType m_InventoryLocationFindType;
-
-    protected ref InventoryLocation m_SrcLocation;
-    protected ref InventoryLocation m_DstLocation;
-
-    // Logging context: the action that requested the move and the player who held the item.
     protected string m_ActionName;
     protected Man m_SrcPlayer;
 
-    void NimbyMoveItemToPlayer( DayZPlayerImplement dst_player, EntityAI item, FindInventoryLocationType find_type = FindInventoryLocationType.ANY, string action_name = "unknown" )
+    void NimbyMoveItemToPlayer( PlayerBase dst_player, EntityAI item, string action_name )
     {
         m_DstPlayer = dst_player;
         m_Item = item;
-        m_InventoryLocationFindType = find_type;
         m_ActionName = action_name;
         if ( item )
         {
@@ -23,173 +46,86 @@ class NimbyMoveItemToPlayer
         }
     }
 
+    // True when the receiver has room for the item outside their hands. Used by action
+    // conditions so the prompt only shows when the transfer can succeed.
+    static bool ReceiverHasSpace( PlayerBase receiver, EntityAI item )
+    {
+        if ( !receiver || !item )
+        {
+            return false;
+        }
+        InventoryLocation dst = new InventoryLocation;
+        return receiver.GetInventory().FindFreeLocationFor( item, DestinationFlags(), dst );
+    }
+
     protected void LogTransfer( string result, string detail )
     {
         NimbyGiveTakeLog.Transfer( m_ActionName, result, m_SrcPlayer, m_DstPlayer, m_Item, detail );
     }
 
-    protected bool PrepareExecution()
+    // Requests the move. Returns true when the request was accepted; the final outcome is
+    // logged by the receiver after VERIFY_DELAY_MS.
+    bool Execute()
     {
-        // also works in singleplayer!
         if ( GetGame().IsClient() )
         {
-            Error( "[inv] NimbyMoveItemToPlayer : Can not be executed on client!" );
+            // A client calling this is a programming error, not a player outcome.
+            Error( "[NIMBY][GiveTake] NimbyMoveItemToPlayer can only run on the server" );
             return false;
         }
 
-        // Missing target or item happens when two players act on the same offer at once;
-        // it is an expected outcome, so it is logged, not raised as an error.
+        // Missing receiver or item happens when two players act on one offer at once;
+        // it is an expected outcome, so it is logged rather than raised.
         if ( !m_DstPlayer )
         {
-            LogTransfer( "REFUSED", "no target player" );
+            LogTransfer( "REFUSED", "no receiver" );
             return false;
         }
-
         if ( !m_Item )
         {
             LogTransfer( "REFUSED", "no item" );
             return false;
         }
 
-        // get current item location
-        m_SrcLocation = new InventoryLocation;
-        if ( !m_Item.GetInventory().GetCurrentInventoryLocation( m_SrcLocation ) )
+        InventoryLocation src = new InventoryLocation;
+        if ( !m_Item.GetInventory().GetCurrentInventoryLocation( src ) )
         {
             LogTransfer( "REFUSED", "item location unavailable" );
             return false;
         }
-#ifdef DIAG
-        Print( "[inv] NimbyMoveItemToPlayer : src = " + InventoryLocation.DumpToStringNullSafe( m_SrcLocation ) );
-#endif
-
-        // find and check target location
-        m_DstLocation = new InventoryLocation;
-        if ( !m_DstPlayer.GetInventory().FindFreeLocationFor( m_Item, m_InventoryLocationFindType, m_DstLocation ) )
+        if ( src.GetType() != InventoryLocationType.HANDS )
         {
-            LogTransfer( "REFUSED", "no space at destination" );
+            LogTransfer( "REFUSED", "item is not in a player's hands" );
             return false;
         }
-#ifdef DIAG
-        Print( "[inv] NimbyMoveItemToPlayer : dst = " + InventoryLocation.DumpToStringNullSafe( m_DstLocation ) );
-#endif
 
+        Man holder = Man.Cast( src.GetParent() );
+        if ( !holder )
+        {
+            LogTransfer( "REFUSED", "item holder is not a player" );
+            return false;
+        }
+        if ( holder == m_DstPlayer )
+        {
+            LogTransfer( "REFUSED", "giver and receiver are the same player" );
+            return false;
+        }
+
+        InventoryLocation dst = new InventoryLocation;
+        if ( !m_DstPlayer.GetInventory().FindFreeLocationFor( m_Item, DestinationFlags(), dst ) )
+        {
+            LogTransfer( "REFUSED", "no space in receiver inventory" );
+            return false;
+        }
+
+        if ( !holder.ServerTakeToDst( src, dst ) )
+        {
+            LogTransfer( "FAILED", "server move rejected" );
+            return false;
+        }
+
+        LogTransfer( "REQUESTED", "dst=" + InventoryLocation.DumpToStringNullSafe( dst ) );
+        GetGame().GetCallQueue( CALL_CATEGORY_GAMEPLAY ).CallLater( m_DstPlayer.NimbyVerifyTransfer, VERIFY_DELAY_MS, false, m_ActionName, holder, m_Item );
         return true;
-    }
-
-    protected void CheckAndCancelHandEvent( DayZPlayerImplement player, HandEventID id )
-    {
-        DayZPlayerInventory inv = player.GetDayZPlayerInventory();
-        if ( inv )
-        {
-            DeferredHandEvent e = DeferredHandEvent.Cast( inv.m_DeferredEvent );
-            if ( e && e.m_event.GetEventID() == id )
-            {
-                // dequeue the event
-                inv.m_DeferredEvent = null;
-            }
-        }
-    }
-
-    bool Execute()
-    {
-        if ( !PrepareExecution() )
-        {
-            return false;
-        }
-
-        /*
-         * We have to be a bit tricky here!
-         * It is not possible to "just move" the entity directly without potentially causing desync issues
-         * depending on where the item is coming from or going to.
-         *
-         * If the src location or dst location is in a players hands additional syncronization means have to
-         * be fullfiled.
-         */
-        bool released_on_src = false;
-        bool received_on_dst = true;
-
-        // delete network information to move entity without clients noticing
-        GetGame().RemoteObjectTreeDelete( m_Item );
-
-        // check if entity can be moved
-        if ( GameInventory.LocationCanMoveEntity( m_SrcLocation, m_DstLocation ) )
-        {
-            if ( GameInventory.LocationSyncMoveEntity( m_SrcLocation, m_DstLocation ) )
-            {
-                DayZPlayerImplement src_player = null;
-
-                // if item is moved out of a players hands we have to take care of hand synchronization
-                released_on_src = m_SrcLocation.GetType() != InventoryLocationType.HANDS;
-                if ( !released_on_src )
-                {
-                    src_player = DayZPlayerImplement.Cast ( m_SrcLocation.GetParent().GetHierarchyRootPlayer() );
-                    if ( src_player )
-                    {
-                        // simulate deletion. necessary to keep server in sync
-                        released_on_src = src_player.GetHumanInventory().HandEvent( InventoryMode.LOCAL, new HandEventDestroyed( src_player ) );
-                    }
-                }
-
-                received_on_dst = m_DstLocation.GetType() != InventoryLocationType.HANDS;
-                if ( released_on_src && !received_on_dst )
-                {
-                    // simulate creation. necessary to keep server in sync
-                    received_on_dst = m_DstPlayer.GetHumanInventory().HandEvent( InventoryMode.LOCAL, new HandEventCreated( m_DstPlayer, m_DstLocation ) );
-                }
-
-                if ( released_on_src && !received_on_dst )
-                {
-                    LogTransfer( "REVERTED", "receiver hand event refused; moving back to source" );
-
-                    // first try to move item back to its original location
-                    if ( GameInventory.LocationSyncMoveEntity( m_DstLocation, m_SrcLocation ) )
-                    {
-                        // cancle already set up HandEventDestroyed event
-                        if ( src_player )
-                        {
-                            CheckAndCancelHandEvent( src_player, HandEventID.DESTROYED );
-                        }
-                    }
-                    else
-                    {
-                        LogTransfer( "GROUND", "revert failed; placing on ground" );
-                        InventoryLocation gnd_loc = new InventoryLocation;
-                        if ( m_SrcLocation.GetParent() )
-                        {
-                            GameInventory.SetGroundPosByOwner( m_SrcLocation.GetParent(), m_Item, gnd_loc );
-                        }
-                        else
-                        {
-                            GameInventory.SetGroundPosByOwner( m_DstPlayer, m_Item, gnd_loc );
-                        }
-                        GameInventory.LocationSyncMoveEntity( m_DstLocation, gnd_loc );
-                    }
-                }
-            }
-        }
-
-        // recreate network information after move is complete
-        GetGame().RemoteObjectTreeCreate( m_Item );
-
-        if ( released_on_src && received_on_dst )
-        {
-            OnMoveSuccessful();
-        }
-        else
-        {
-            OnMoveFailed();
-        }
-
-        return released_on_src && received_on_dst;
-    }
-
-    protected void OnMoveSuccessful()
-    {
-        LogTransfer( "OK", "" );
-    }
-
-    protected void OnMoveFailed()
-    {
-        LogTransfer( "FAILED", "move not completed" );
     }
 }

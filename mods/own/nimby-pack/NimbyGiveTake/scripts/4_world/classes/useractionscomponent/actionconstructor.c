@@ -6,7 +6,6 @@ modded class ActionConstructor
 
         actions.Insert( NimbyActionOfferItem );
         actions.Insert( NimbyActionTakeItem );
-        actions.Insert( NimbyActionTakeItemToHands );
 
         actions.Insert( NimbyActionRequestItem );
         actions.Insert( NimbyActionGiveItemInHands );

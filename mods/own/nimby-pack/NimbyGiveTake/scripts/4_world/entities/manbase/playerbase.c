@@ -48,10 +48,34 @@ modded class PlayerBase
     {
         // register new actions first to make take/give action appear before "check pulse"
         AddAction( NimbyActionTakeItem, InputActionMap );
-        AddAction( NimbyActionTakeItemToHands, InputActionMap );
         AddAction( NimbyActionGiveItemInHands, InputActionMap );
         AddAction( NimbyActionPutInPockets, InputActionMap );
 
         super.SetActionsRemoteTarget( InputActionMap );
+    }
+
+    // Called on the receiver VERIFY_DELAY_MS after a transfer request (NimbyMoveItemToPlayer).
+    // Logs where the item actually ended up, because the hand event is processed later.
+    void NimbyVerifyTransfer( string action, Man giver, EntityAI item )
+    {
+        if ( !item )
+        {
+            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item no longer exists" );
+            return;
+        }
+
+        Man holder = item.GetHierarchyRootPlayer();
+        if ( holder == this )
+        {
+            NimbyGiveTakeLog.Transfer( action, "OK", giver, this, item, "item is in receiver inventory" );
+        }
+        else if ( holder == giver )
+        {
+            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item still with giver; the giver's inventory refused the move" );
+        }
+        else
+        {
+            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item ended up elsewhere" );
+        }
     }
 }

@@ -19,8 +19,8 @@ class NimbyActionTakeItemBase extends ActionInteractBase
             return false;
         }
 
-        InventoryLocation il = new InventoryLocation;
-        if ( !player.GetHumanInventory().FindFreeLocationFor( tgt_entity, GetTargetLocations(), il ) )
+        // The item lands in the taker's inventory, never their hands (review CR-001).
+        if ( !NimbyMoveItemToPlayer.ReceiverHasSpace( player, tgt_entity ) )
         {
             return false;
         }
@@ -45,17 +45,12 @@ class NimbyActionTakeItemBase extends ActionInteractBase
         return true;
     }
 
-    FindInventoryLocationType GetTargetLocations()
-    {
-        return FindInventoryLocationType.ANY;
-    }
-
     override void OnExecuteServer( ActionData action_data )
     {
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( action_data.m_Player, tgt_player.GetItemInHands(), GetTargetLocations(), ClassName() );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( action_data.m_Player, tgt_player.GetItemInHands(), ClassName() );
         if ( move.Execute() )
         {
 #ifdef DIAG
@@ -74,29 +69,6 @@ class NimbyActionTakeItem extends NimbyActionTakeItemBase
         m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONFB_PICKUP_INVENTORY;
         m_Text = "#take";
     }
-
-    override FindInventoryLocationType GetTargetLocations()
-    {
-        return FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT;
-    }
 }
 
-class NimbyActionTakeItemToHands extends NimbyActionTakeItemBase
-{
-    void NimbyActionTakeItemToHands()
-    {
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONMOD_PICKUP_HANDS;
-        m_CommandUIDProne = DayZPlayerConstants.CMD_ACTIONMOD_PICKUP_HANDS;
-        m_Text = "#take_to_hands";
-    }
-
-    override FindInventoryLocationType GetTargetLocations()
-    {
-        return FindInventoryLocationType.HANDS;
-    }
-
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
-    }
-}
+// NimbyActionTakeItemToHands was removed in the CR-001 rewrite: transfers never land in hands.

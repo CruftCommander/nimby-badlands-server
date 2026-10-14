@@ -19,6 +19,13 @@ Import notes:
 - logo.paa and Texheaders.bin were not imported; the NIMBY pack supplies its own mod presentation.
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 14, 2026 (review CR-001): rewrote the transfer routine (NimbyMoveItemToPlayer). It now
+  asks the player holding the item to move it with the vanilla server path (ServerTakeToDst), which
+  runs through that player's own hand state machine, instead of deleting the item's network state
+  and injecting fake hand events on both players. Transfers land in the receiver's inventory
+  (cargo or an attachment slot), never their hands; Give now delivers to inventory and the
+  "take to hands" action was removed. Each transfer logs REQUESTED, then OK or FAILED once the
+  receiver has checked where the item ended up.
 - October 14, 2026 (review CR-005, CR-006, CR-003):
   - Renamed every class, input action, string key, and member with a Nimby prefix so the fork
     cannot collide with the original or another mod; fixed misspellings (Pocktes, Toggel, Cancle)

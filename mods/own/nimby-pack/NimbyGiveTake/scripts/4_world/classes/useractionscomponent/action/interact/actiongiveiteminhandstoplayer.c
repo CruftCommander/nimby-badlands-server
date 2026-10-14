@@ -31,6 +31,13 @@ class NimbyActionGiveItemInHands extends ActionInteractBase
             return false;
         }
 
+        // The item lands in the receiver's inventory, never their hands (review CR-001).
+        PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
+        if ( !NimbyMoveItemToPlayer.ReceiverHasSpace( tgt_player, src_entity ) )
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -39,7 +46,7 @@ class NimbyActionGiveItemInHands extends ActionInteractBase
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.HANDS, ClassName() );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName() );
         if ( move.Execute() )
         {
 #ifdef DIAG

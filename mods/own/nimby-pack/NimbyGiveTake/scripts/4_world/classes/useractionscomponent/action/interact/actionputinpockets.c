@@ -61,7 +61,7 @@ class NimbyActionPutInPockets extends ActionContinuousBase
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
 
         // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT, ClassName() );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName() );
         move.Execute();
     }
 }
