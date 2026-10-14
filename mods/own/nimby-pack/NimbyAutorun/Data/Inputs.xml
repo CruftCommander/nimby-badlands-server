@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyAutorunToggle" loc="Autorun Toggle" />
+        </actions>
+    </inputs>
+    <preset>
+        <!-- Default binding: numpad plus. Players can rebind under Controls. -->
+        <input name="UANimbyAutorunToggle">
+            <btn name="kAdd" />
+        </input>
+    </preset>
+</modded_inputs>

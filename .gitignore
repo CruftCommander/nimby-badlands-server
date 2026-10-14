@@ -22,3 +22,9 @@ Thumbs.db
 .DS_Store
 .vs/
 .vscode/
+
+# Third-party Workshop downloads copied for extraction - never committed
+vendor/
+
+# Signing keys - private keys never enter the repo
+*.biprivatekey

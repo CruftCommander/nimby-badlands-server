@@ -8,4 +8,4 @@
 6. Jeff, with approval: order the HostHavoc server (Chicago, 40 slots).
 7. Claude: Discord setup-automation script (spec and builder).
 8. Rigged-vehicle mod: re-verify the hooks on the 1.30 scripts, then build in the order in `docs/design/rigged-ada-feasibility.md` (decisions made October 14, 2026).
-9. Claude: build the NIMBY client pack - fork Schana's autorun and Give&Take, verify both on 1.30 (decided October 14, 2026).
+9. NIMBY client pack (`mods/own/nimby-pack/`): autorun fork written; Jeff subscribes to Give&Take (2903112334) and runs `scripts/Copy-WorkshopItem.ps1 -WorkshopId 2903112334`; Claude then extracts and forks it, and writes the pack build script.
