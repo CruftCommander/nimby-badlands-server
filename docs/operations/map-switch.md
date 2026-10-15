@@ -45,7 +45,7 @@ Chernarus test instance to Nasdara and re-applies every per-mission setting. Exp
    with the repo file. Save.
 7. **Gameplay overrides.** Open `mpmissions/<nasdara>/cfggameplay.json`. Keep the file as
    shipped and set only the keys in `server/mission-overrides/cfggameplay.patch.json`
-   (personal light off, `lightingConfig` 1, hit direction off, stamina 5 kg / 2.0, the two
+   (personal light off, hit direction off, stamina 5 kg / 2.0, the two
    building checks). Do not copy Chernarus's file: Nasdara has its own temperatures. Save.
    If the mission has no `cfggameplay.json`, stop and ask; do not create one from Chernarus.
 8. **Start the server.** Click **Start** (the first click sometimes does nothing; check the

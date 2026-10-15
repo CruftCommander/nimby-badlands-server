@@ -20,7 +20,7 @@
     <message>
         <delay>0</delay>
         <onConnect>1</onConnect>
-        <text>Server location: Chicago, IL (US Central). Last wipe: October 14, 2026.</text>
+        <text>Server location: Chicago, IL (US Central). Last wipe: October 15, 2026.</text>
     </message>
     <!-- Every hour: Discord. -->
     <message>

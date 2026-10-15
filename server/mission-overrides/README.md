@@ -13,7 +13,7 @@ Files here are applied to the active mission folder on the server
 | Setting | Value | Vanilla | Why |
 | --- | --- | --- | --- |
 | `disablePersonalLight` | `true` | `false` | Hardcore profile; matches `serverDZ.cfg` so neither file can undo the other |
-| `lightingConfig` | `1` | `0` | Hardcore profile (dark nights); matches `serverDZ.cfg` |
+| `lightingConfig` | not patched on Nasdara (stock `3`) | `0` on Chernarus, `3` on Nasdara | Chernarus used `1` (dark nights). Nasdara ships an undocumented `3`, likely a map-specific profile; kept stock on 2026-10-15 pending a night check in game. |
 | Hit direction indicator | off (`hitDirectionOverrideEnabled = true`, `hitDirectionBehaviour = 0`) | static splash | Locate fire by sound; the red-flash hit effect stays on |
 | `staminaWeightLimitThreshold` | `5000` (5 kg) | `6000` | Slightly harsher weight penalty |
 | `staminaKgToStaminaPercentPenalty` | `2.0` | `1.75` | At 15 kg carried: 80% max stamina vs 84.25% vanilla |
