@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "NIMBY overrides for the mission's cfggameplay.json (decided 2026-10-14).",
+    "Apply onto the STOCK cfggameplay.json of the active mission; never copy a whole file between maps,",
+    "because temperatures and other world values are map-specific. Keys not listed stay at Bohemia's values.",
+    "serverDZ.cfg must keep enableCfgGameplayFile = 1, or none of this loads."
+  ],
+  "PlayerData": {
+    "disablePersonalLight": true,
+    "StaminaData": {
+      "staminaWeightLimitThreshold": 5000.0,
+      "staminaKgToStaminaPercentPenalty": 2.0
+    }
+  },
+  "WorldsData": {
+    "lightingConfig": 1
+  },
+  "UIData": {
+    "HitIndicationData": {
+      "hitDirectionOverrideEnabled": true,
+      "hitDirectionBehaviour": 0,
+      "hitIndicationPostProcessEnabled": true
+    }
+  },
+  "BaseBuildingData": {
+    "HologramData": {
+      "disableIsCollidingAngleCheck": true,
+      "disableIsCollidingBBoxCheck": true
+    }
+  }
+}
