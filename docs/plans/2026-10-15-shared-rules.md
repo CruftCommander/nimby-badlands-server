@@ -97,6 +97,8 @@ No two mods share a default binding, and none shadows a vanilla 1.30 default. "V
 
 Before any session writes code, the orchestrator unpacks the 1.30 `scripts.pbo` (DayZ Tools or `D:\GitHub\DayZExtract`) to one read-only folder that all three sessions grep, and records the build number and archive hashes in `docs/baselines/`. No vanilla API is used without a file:line from that folder, and a declaration is not proof of behavior: each plan's Phase 0 exercises the API in game.
 
+Done October 15, 2026: the reference is `vendor/dayz-1.30-scripts/` (read-only, git-ignored), recorded in `docs/baselines/2026-10-15-dayz-1.30-scripts-reference.md` with build `1.30.164078.38` and the `scripts.pbo` hash. There is no `inputs.xml` in 1.30; where a plan says `inputs.xml`, read `bin/preset_X1MouseKey.xml` (PC default bindings) and `bin/constants.xml` (action and button names).
+
 ## 8. Test tooling
 
 The tooling below is Plan 0 - shared tooling, owned by the orchestrator and merged to `main` before any worktree branches. Every mod plan's Phase 0 depends on it.
