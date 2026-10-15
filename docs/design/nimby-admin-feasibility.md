@@ -2,7 +2,7 @@
 
 Draft v0.1, October 15, 2026. Owner: Jeff Fabish. Status: scope decided by Jeff on October 15, 2026 (see Decisions); awaiting go/no-go on the Phase 0 spike.
 
-Building our own admin tool is feasible and costs no extra money. The work is about 5-6 weeks at Jeff's 10+ hours per week, which is about 60-70 hours of Jeff's time; Claude writes the code, tests, and build changes. The tool ships as a new `NimbyAdmin` addon inside the `@NIMBY` pack, depends on nothing but vanilla DayZ, and never writes to world saves, so adding, updating, or removing it cannot repeat the October 15 corruption.
+Building our own admin tool is feasible and costs no extra money. The work is about 5-6 weeks at Jeff's 10+ hours per week, which is about 55-70 hours of Jeff's time; Claude writes the code, tests, and build changes. The tool ships as a new `NimbyAdmin` addon inside the `@NIMBY` pack, depends on nothing but vanilla DayZ, and never writes to world saves, so adding, updating, or removing it cannot repeat the October 15 corruption.
 
 Go/no-go gate: a 3-5 day Phase 0 spike proves the risky plumbing (server-checked commands, permissions, the menu shell, audit log, and one action end to end) before any feature work is committed.
 
@@ -18,7 +18,7 @@ Go/no-go gate: a 3-5 day Phase 0 spike proves the risky plumbing (server-checked
 
 | Problem with COT/VPP | Effect on NIMBY | How NimbyAdmin avoids it |
 | --- | --- | --- |
-| Both depend on CF | Removing CF on October 15 logged 89,618 "Scripted variables corrupted" warnings at the next boot; saved items came back wrong or not at all | No CF; no changes to entity save or load; admin state lives in the tool's own JSON files |
+| Both depend on CF | Removing CF and COT on October 15 (10:31 AM CT) logged 89,618 "Scripted variables corrupted" warnings on the first full boot without them, each one an entity the server reported it would not load correctly | No CF; no changes to entity save or load; admin state lives in the tool's own JSON files |
 | Release cadence set by others | COT had no 1.30 release on launch day, and Workshop comments reported crashes; NIMBY ran with no admin tool | We update it the day a DayZ patch lands, in the same pipeline as the rest of `@NIMBY` |
 | Large surface | Thousands of lines of features we never use, each a possible break on update | Only the features Jeff and Jay use |
 | Extra downloads | Players download CF and COT on top of `@NIMBY` | Rides in the pack players already have |
@@ -61,7 +61,7 @@ No new money is required. Jeff's time is the real cost.
 | Claude | $0 extra on current plans | Code, tests, layouts, docs. Heavy weeks can hit usage limits, which slows the pace rather than adding cost |
 | Discord webhook | $0 | Built into Discord |
 | Optional staging server | About $18.50/month | A second 20-slot HostHavoc service for a two-client test with Jay before live rollout. Skippable: the local server plus a low-population live window covers most of it |
-| Jeff's time, build | About 60-70 hours over 5-6 weeks | In-game testing, screenshots, decisions, approvals |
+| Jeff's time, build | About 55-70 hours over 5-6 weeks (10-12 hours a week) | In-game testing, screenshots, decisions, approvals |
 | Jay's time | About 3-5 hours | Two-client tests and menu usability feedback |
 | Jeff's time, upkeep | About 2-6 hours per DayZ major update | Compatibility check, rebuild, boot test; 2-4 major updates a year |
 
@@ -102,7 +102,7 @@ Durations assume Jeff's 10+ hours per week. Each phase ends with a build, a loca
 | 4. Hardening and rollout | Abuse tests (forged requests, spam, bad arguments); permission edge cases; docs and an admin quick-reference for Jay; live rollout | Live at a scheduled restart with no `SCRIPT (E)`; Jay signs off | 4-5 days |
 | Later (not committed) | Map click-to-teleport; player inventory view; saved teleport points; spawn presets | - | - |
 
-Total: about 22-31 working days, or 5-6 weeks.
+Total: about 22-31 Claude working days, or 5-6 calendar weeks at Jeff's 10-12 hours a week of testing.
 
 ## Risks
 
@@ -117,4 +117,4 @@ Total: about 22-31 working days, or 5-6 weeks.
 
 ## Recommendation
 
-Proceed with Phase 0 as a time-boxed spike. If it passes its exit test within 5 days, commit to Phases 1-4. If it fails on the menu or the command plumbing, stop and wait for a COT 1.30 release under the re-add criteria decided on October 15.
+Proceed with Phase 0 as a time-boxed spike. If it passes its exit test within 5 days, commit to Phases 1-4. If it fails on the menu or the command plumbing, stop and wait for COT under the re-add criteria Jeff decided on October 15, 2026: COT publishes 1.30 compatibility notes, and a test boot with `-mod=@CF;@Community-Online-Tools` shows 0 `SCRIPT (E)` and no crash in the first hour.
