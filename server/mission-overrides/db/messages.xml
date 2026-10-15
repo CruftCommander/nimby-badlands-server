@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  messages.xml - NIMBY Badlands | Enhanced Vanilla | RP | 1PP
+  Deploy to: mpmissions/<active mission>/db/messages.xml (copy again on every map change).
+  Units: delay, repeat and deadline are MINUTES. text is capped at 160 characters.
+  #name expands to the hostname in serverDZ.cfg.
+  Restart warnings are NOT here: the HostHavoc scheduled tasks send them over RCON
+  (15/5/1 min plus #lock at T-5). Do not add a shutdown countdown here, or players
+  get two sets of warnings that drift apart.
+  Wipe procedure: update "Last wipe" below on every wipe.
+-->
+<messages>
+    <!-- On join: who we are and the restart cadence. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Welcome to #name. Restarts every 12 hours at 12 AM and 12 PM Central (US).</text>
+    </message>
+    <!-- On join: location and last wipe. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Server location: Chicago, IL (US Central). Last wipe: October 14, 2026.</text>
+    </message>
+    <!-- Every hour: Discord. -->
+    <message>
+        <repeat>60</repeat>
+        <text>Join our Discord: https://discord.gg/kH3eJ5mdEv</text>
+    </message>
+</messages>
