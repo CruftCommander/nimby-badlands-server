@@ -35,13 +35,13 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 1. Packs each addon into an uncompressed PBO with the pack's own packer (`scripts/modules/NimbyPbo.psm1`) and signs it with DayZ Tools `DSSignFile` using the key in `D:\Keys\nimby` (created on first run; the private key never leaves that folder). DayZ Tools Addon Builder is not used: its DayZ build ignores command-line arguments and opens its window.
 2. Verifies each PBO: checksum, signature present, prefix matches `pack.json`, and every source file matching `includePatterns` is inside.
-3. Boot check: starts the local DayZ Server with the built mod on port 2402, instance 999, and fails on any script error in the RPT or script log.
+3. Boot check: starts the local DayZ Server with the built mod on Nasdara, port 2402, instance 999, creates `<profile>\<Prefix>\selftest` for every addon, and fails on any script error, any `Scripted variables corrupted` line, or any `[SelfTest] FAIL` line in the RPT or script log. `-Qualification` boots with `storageAutoFix = 0`; the default quick check keeps `1`.
 
-Output goes to `build/@NIMBY-<timestamp>/` and logs to `logs/build-<timestamp>/build.log`; both folders are git-ignored. Exit code 0 is PASS, 1 is FAIL, 2 is UNKNOWN (built and verified, boot check skipped or inconclusive). Add an addon by adding a row to `pack.json`; the script needs no change.
+Output goes to `build/@NIMBY-<timestamp>/` and logs to `logs/build-<timestamp>/build.log`; both folders are git-ignored. Exit code 0 is PASS, 1 is FAIL, 2 is UNKNOWN (built and verified, boot check skipped or inconclusive). Add an addon by adding a row to `pack.json`; the script needs no change. A row with `"serverOnly": true` builds unsigned to `build/@NIMBY-Server-<timestamp>/` for `-servermod=` and never enters the Workshop output. `-Dev` also builds the harness named in `pack.json` `dev` to `build/@NIMBY-Dev-<timestamp>/` with the separate `nimby_dev` key (shared rules, section 8).
 
 ## Test plan
 
-Each addon passes these before the pack ships, on a local DayZ server first, then on the private HostHavoc instance. For the local run, `scripts/Start-NimbyTestServer.ps1` starts the server with the newest build, installs the key, and summarizes every `[NIMBY]` log line when you press Enter:
+Each addon passes these before the pack ships, on a local DayZ server first, then on the private HostHavoc instance. For the local run, `scripts/Start-NimbyTestServer.ps1` starts the server with the newest build whose `build.log` records `SUMMARY PASS` (or the one given with `-BuildPath`), installs the key, boots with `BattlEye = 1` and `storageAutoFix = 0`, stops the server with an RCON `#shutdown` when you press Enter, and summarizes every `[NIMBY]` log line. `-ProfileName <name>` reuses `profiles/<name>/` between runs.
 
 1. The server boots with `@NIMBY` and the RPT has zero `SCRIPT (E)` and zero `Can't compile` lines naming a Nimby addon.
 2. A client joins with signature verification on and is not kicked.

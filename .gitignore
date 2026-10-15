@@ -31,3 +31,6 @@ vendor/
 
 # Built mod output - rebuilt from source, never committed
 build/
+
+# Reusable local test-server profiles (Start-NimbyTestServer.ps1 -ProfileName) - runtime state, never committed
+profiles/

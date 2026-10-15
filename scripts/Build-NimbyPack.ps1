@@ -17,14 +17,27 @@
     and the result is UNKNOWN. Then (unless -SkipBootCheck)
     starts a local DayZ server with @NIMBY, scans its logs for script errors, and stops it.
 
+    Three outputs can exist for one build stamp (shared rules, section 8):
+      build\@NIMBY-<stamp>\         client PBOs, signed with the release key. The Workshop item.
+      build\@NIMBY-Server-<stamp>\  addons marked "serverOnly" in pack.json, unsigned, loaded with
+                                    -servermod=. Written only when such an addon exists.
+      build\@NIMBY-Dev-<stamp>\     the dev harness from pack.json "dev", signed with the separate
+                                    dev key. Written only with -Dev. Never listed in "addons".
+    The client output is byte-identical with or without -Dev.
+
+    Self-test: before the boot check the script creates <profile>\<Prefix>\selftest for every
+    addon it built. Each addon runs its engine-free validators at mission start when that flag
+    exists and prints "[NIMBY][<Log prefix>][SelfTest] PASS|FAIL <case>". Any FAIL line fails
+    the boot check; the counts land in build.log.
+
     Reads   : pack.json, the addon folders, DayZ Tools (DsUtils), a local DayZ Server install,
-              the private key in -KeyDirectory.
-    Writes  : <repo>\build\@NIMBY-<stamp>\ (the built mod), <repo>\logs\build-<stamp>\ (manifest,
-              tool logs, server profile and logs), and the key pair in -KeyDirectory on first run.
-              The boot check writes the server's persistence to
-              <server>\mpmissions\<mission>\storage_<instanceId> (instance 999 by default, so it
-              never touches a real server's storage_1).
-    Never   : copies the private key anywhere, deletes anything, or contacts a remote server.
+              the private key(s) in -KeyDirectory.
+    Writes  : <repo>\build\@NIMBY-<stamp>\ (and the -Server and -Dev siblings when produced),
+              <repo>\logs\build-<stamp>\ (manifest, tool logs, server profile and logs), and the
+              key pair(s) in -KeyDirectory on first run. The boot check writes the server's
+              persistence to <server>\mpmissions\<mission>\storage_<instanceId>; pack.json must
+              name instance 998 or 999 so storage_1 is never written.
+    Never   : copies a private key anywhere, deletes anything, or contacts a remote server.
 
     Exit codes: 0 = PASS, 1 = FAIL, 2 = UNKNOWN (built and verified, but the boot check was
     skipped or could not reach a verdict).
@@ -32,7 +45,8 @@
     Runs in Windows PowerShell 5.1 and PowerShell 7. No elevation needed.
 
 .PARAMETER KeyDirectory
-    Folder holding <authority>.biprivatekey and <authority>.bikey. Created on first run.
+    Folder holding <authority>.biprivatekey and <authority>.bikey. Created on first run. With
+    -Dev the dev key pair (pack.json dev.keyAuthority) lives in the same folder.
 
 .PARAMETER DayZToolsPath
     DayZ Tools install folder. Found through Steam when omitted.
@@ -44,8 +58,19 @@
 .PARAMETER SkipBootCheck
     Build and verify only.
 
+.PARAMETER Dev
+    Also build the dev harness (pack.json "dev") to build\@NIMBY-Dev-<stamp>\ with the dev key,
+    and load it beside the pack in the boot check.
+
+.PARAMETER Qualification
+    Boot with storageAutoFix = 0 so persistence corruption fails the check instead of being
+    repaired. The default quick check boots with storageAutoFix = 1.
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Build-NimbyPack.ps1
+
+.EXAMPLE
+    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Build-NimbyPack.ps1 -Dev -Qualification
 #>
 [CmdletBinding()]
 param(
@@ -53,7 +78,9 @@ param(
     [string]$KeyDirectory = 'D:\Keys\nimby',
     [string]$DayZToolsPath,
     [string]$ServerPath,
-    [switch]$SkipBootCheck
+    [switch]$SkipBootCheck,
+    [switch]$Dev,
+    [switch]$Qualification
 )
 
 Set-StrictMode -Version Latest
@@ -74,6 +101,31 @@ function Write-Manifest {
     Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8
 }
 
+function Get-OptionalProperty {
+    # Reads a property that pack.json may omit. Strict mode throws on a missing member otherwise.
+    param(
+        [Parameter(Mandatory)][object]$Object,
+        [Parameter(Mandatory)][string]$Name,
+        [AllowNull()][object]$Default = $null
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) { return $Default }
+    return $property.Value
+}
+
+function Test-AddonServerOnly {
+    # True when the addon row carries "serverOnly": true.
+    param([Parameter(Mandatory)][object]$Addon)
+    return [bool](Get-OptionalProperty -Object $Addon -Name 'serverOnly' -Default $false)
+}
+
+function Test-TestInstanceId {
+    # Shared rules, section 8: test storage is storage_998 and storage_999 only.
+    param([Parameter(Mandatory)][int]$InstanceId)
+    return ($InstanceId -eq 998 -or $InstanceId -eq 999)
+}
+
 function Get-PackDefinition {
     # Loads and validates pack.json. Throws with a precise message on any problem.
     param([Parameter(Mandatory)][string]$Path)
@@ -90,10 +142,27 @@ function Get-PackDefinition {
     $names = @{}
     foreach ($addon in $pack.addons) {
         foreach ($field in 'folder', 'pboName', 'prefix') {
-            if (-not $addon.$field) { throw "An addon in pack.json is missing '$field'." }
+            if (-not (Get-OptionalProperty -Object $addon -Name $field)) { throw "An addon in pack.json is missing '$field'." }
         }
         if ($names.ContainsKey($addon.pboName)) { throw "Duplicate pboName '$($addon.pboName)' in pack.json." }
         $names[$addon.pboName] = $true
+    }
+
+    $dev = Get-OptionalProperty -Object $pack -Name 'dev'
+    if ($null -ne $dev) {
+        foreach ($field in 'folder', 'pboName', 'prefix', 'keyAuthority') {
+            if (-not (Get-OptionalProperty -Object $dev -Name $field)) { throw "pack.json 'dev' is missing '$field'." }
+        }
+        if ($dev.keyAuthority -notmatch '^[A-Za-z0-9_]+$') { throw "dev.keyAuthority '$($dev.keyAuthority)' must be letters, digits, or underscore." }
+        if ($dev.keyAuthority -eq $pack.keyAuthority) { throw 'dev.keyAuthority must differ from keyAuthority: the harness is signed with a separate key.' }
+        if ($names.ContainsKey($dev.pboName)) { throw "dev.pboName '$($dev.pboName)' collides with an addon; the harness is never an addon row." }
+    }
+
+    foreach ($field in 'mission', 'port', 'instanceId', 'timeoutSeconds', 'failurePatterns', 'readyPatterns') {
+        if ($null -eq $pack.bootCheck.PSObject.Properties[$field]) { throw "pack.json bootCheck is missing '$field'." }
+    }
+    if (-not (Test-TestInstanceId -InstanceId ([int]$pack.bootCheck.instanceId))) {
+        throw "bootCheck.instanceId $($pack.bootCheck.instanceId) is not a test instance; only 998 and 999 are allowed so storage_1 is never written."
     }
     return $pack
 }
@@ -109,33 +178,39 @@ function Resolve-ToolPath {
 }
 
 function Get-ServerArgument {
-    # Builds the DayZ server argument list for the boot check.
+    # Builds the DayZ server argument list for the boot check. Several -mod folders join with ';'
+    # inside one argument; -servermod= is present only when a server-only output exists.
     param(
         [Parameter(Mandatory)][string]$ConfigPath,
         [Parameter(Mandatory)][string]$ProfilePath,
-        [Parameter(Mandatory)][string]$ModPath,
+        [Parameter(Mandatory)][string[]]$ModPath,
+        [string]$ServerModPath,
         [Parameter(Mandatory)][int]$Port
     )
 
-    return @(
+    $arguments = @(
         "-config=$ConfigPath",
         "-port=$Port",
         "-profiles=$ProfilePath",
-        "-mod=$ModPath",
-        '-dologs',
-        '-adminlog',
-        '-freezecheck'
+        ("-mod={0}" -f ($ModPath -join ';'))
     )
+    if ($ServerModPath) { $arguments += "-servermod=$ServerModPath" }
+    $arguments += '-dologs', '-adminlog', '-freezecheck'
+    return $arguments
 }
 
 function Write-BootConfig {
-    # Writes a throwaway serverDZ config for the boot check. No passwords, BattlEye off.
+    # Writes a throwaway serverDZ config for the boot check. No passwords, BattlEye off: the boot
+    # check's storage is disposable, so a process stop is acceptable here (the graceful-stop rule
+    # applies to Start-NimbyTestServer.ps1).
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string]$Mission,
-        [Parameter(Mandatory)][int]$InstanceId
+        [Parameter(Mandatory)][int]$InstanceId,
+        [Parameter(Mandatory)][ValidateSet(0, 1)][int]$StorageAutoFix
     )
 
+    if (-not (Test-TestInstanceId -InstanceId $InstanceId)) { throw "Refusing to write a boot config for instanceId $InstanceId; only 998 and 999 are test instances." }
     $lines = @(
         '// Generated by Build-NimbyPack.ps1 for a local boot check. Not a real server config.',
         'hostname = "NIMBY build check - local only";',
@@ -146,7 +221,7 @@ function Write-BootConfig {
         'forceSameBuild = 1;',
         'BattlEye = 0;',
         "instanceId = $InstanceId;",
-        'storageAutoFix = 1;',
+        "storageAutoFix = $StorageAutoFix;",
         'class Missions',
         '{',
         '    class DayZ',
@@ -156,6 +231,25 @@ function Write-BootConfig {
         '};'
     )
     Set-Content -LiteralPath $Path -Value $lines -Encoding utf8
+}
+
+function Initialize-SelfTestFlag {
+    # Creates <profile>\<Prefix>\selftest for each prefix so every addon runs its self-test at
+    # mission start (shared rules, section 8). Returns the flag paths.
+    param(
+        [Parameter(Mandatory)][string]$ProfilePath,
+        [Parameter(Mandatory)][string[]]$Prefix
+    )
+
+    $flags = @()
+    foreach ($p in $Prefix) {
+        $dir = Join-Path $ProfilePath $p
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $flag = Join-Path $dir 'selftest'
+        Set-Content -LiteralPath $flag -Value '' -Encoding ascii
+        $flags += $flag
+    }
+    return $flags
 }
 
 function Get-BootVerdict {
@@ -179,6 +273,25 @@ function Get-BootVerdict {
         }
     }
     return [PSCustomObject]@{ Verdict = 'PENDING'; Evidence = '' }
+}
+
+function Get-SelfTestVerdict {
+    # Counts "[NIMBY][<component>][SelfTest] PASS|FAIL <case>" lines per component.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$LogText)
+
+    $pattern = '\[NIMBY\]\[(?<c>[^\]]+)\]\[SelfTest\]\s+(?<r>PASS|FAIL)\b(?<rest>.*)$'
+    $counts = [ordered]@{}
+    $failures = @()
+    foreach ($line in ($LogText -split "\r?\n")) {
+        $match = [regex]::Match($line, $pattern)
+        if (-not $match.Success) { continue }
+        $component = $match.Groups['c'].Value
+        if (-not $counts.Contains($component)) { $counts[$component] = [PSCustomObject]@{ Pass = 0; Fail = 0 } }
+        if ($match.Groups['r'].Value -eq 'PASS') { $counts[$component].Pass++ } else { $counts[$component].Fail++; $failures += $line.Trim() }
+    }
+    $pass = 0; $fail = 0
+    foreach ($key in $counts.Keys) { $pass += $counts[$key].Pass; $fail += $counts[$key].Fail }
+    return [PSCustomObject]@{ Pass = $pass; Fail = $fail; Components = $counts; Failures = $failures }
 }
 
 function Read-ServerLogText {
@@ -265,6 +378,144 @@ function Invoke-Native {
     }
 }
 
+function Initialize-SigningKey {
+    # Ensures <authority>.biprivatekey and .bikey exist in KeyDirectory, creating them with
+    # DSCreateKey on first use. Returns the two paths. Never copies the private key.
+    param(
+        [Parameter(Mandatory)][string]$KeyDirectory,
+        [Parameter(Mandatory)][string]$Authority,
+        [AllowNull()][string]$CreateKeyPath,
+        [Parameter(Mandatory)][string]$LogDir,
+        [Parameter(Mandatory)][string]$Manifest
+    )
+
+    $privateKey = Join-Path $KeyDirectory ("{0}.biprivatekey" -f $Authority)
+    $publicKey = Join-Path $KeyDirectory ("{0}.bikey" -f $Authority)
+    if (-not (Test-Path -LiteralPath $privateKey)) {
+        if (-not $CreateKeyPath) { throw "No private key at '$privateKey' and DSCreateKey.exe not found to create one." }
+        New-Item -ItemType Directory -Path $KeyDirectory -Force | Out-Null
+        $code = Invoke-Native -FilePath $CreateKeyPath -ArgumentList @($Authority) -LogPath (Join-Path $LogDir ("DSCreateKey-{0}.log" -f $Authority)) -WorkingDirectory $KeyDirectory
+        if (-not (Test-Path -LiteralPath $privateKey) -or -not (Test-Path -LiteralPath $publicKey)) {
+            throw "DSCreateKey (exit $code) did not produce both key files for '$Authority' in '$KeyDirectory'."
+        }
+        Write-Manifest -LogPath $Manifest -Line "KEY CREATED authority=$Authority dir=$KeyDirectory"
+    }
+    else {
+        if (-not (Test-Path -LiteralPath $publicKey)) { throw "Private key exists but public key '$publicKey' is missing." }
+        Write-Manifest -LogPath $Manifest -Line "KEY EXISTING authority=$Authority dir=$KeyDirectory"
+    }
+    return [PSCustomObject]@{ PrivateKey = $privateKey; PublicKey = $publicKey }
+}
+
+function Build-NimbyAddon {
+    # Packs one addon into AddonsOut, signs it when PrivateKey is given, and verifies checksum,
+    # prefix, and completeness. Writes ADDON OK or ADDON FAIL to the manifest. Returns $true on OK.
+    param(
+        [Parameter(Mandatory)][string]$SourceFolder,
+        [Parameter(Mandatory)][string]$PboName,
+        [Parameter(Mandatory)][string]$Prefix,
+        [Parameter(Mandatory)][string[]]$Patterns,
+        [Parameter(Mandatory)][string]$AddonsOut,
+        [AllowNull()][string]$SignFile,
+        [AllowNull()][string]$PrivateKey,
+        [AllowNull()][string]$KeyAuthority,
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string]$LogDir,
+        [Parameter(Mandatory)][string]$Manifest
+    )
+
+    if (-not (Test-Path -LiteralPath $SourceFolder -PathType Container)) {
+        Write-Manifest -LogPath $Manifest -Line "ADDON FAIL $PboName [$Label] source folder missing: $SourceFolder"
+        return $false
+    }
+
+    $pbo = Join-Path $AddonsOut ("{0}.pbo" -f $PboName)
+    try {
+        $written = @(Build-PboArchive -SourceFolder $SourceFolder -Destination $pbo -Prefix $Prefix -Patterns $Patterns)
+    }
+    catch {
+        Write-Manifest -LogPath $Manifest -Line "ADDON FAIL $PboName [$Label] pack error: $($_.Exception.Message)"
+        return $false
+    }
+
+    $code = 'unsigned'
+    if ($PrivateKey) {
+        $code = Invoke-Native -FilePath $SignFile -ArgumentList @($PrivateKey, $pbo) -LogPath (Join-Path $LogDir ("DSSignFile-{0}.log" -f $PboName)) -WorkingDirectory $AddonsOut
+        $signature = Join-Path $AddonsOut ("{0}.pbo.{1}.bisign" -f $PboName, $KeyAuthority)
+        if (-not (Test-Path -LiteralPath $signature)) {
+            Write-Manifest -LogPath $Manifest -Line "ADDON FAIL $PboName [$Label] DSSignFile exit=$code no signature at $signature"
+            return $false
+        }
+    }
+
+    $content = Get-PboContent -Path $pbo
+    $expected = @(Get-PboSourceFile -Folder $SourceFolder -Patterns $Patterns)
+    $missing = @(Compare-PboToSource -SourceRelativePaths $expected -PboEntries $content.Entries)
+    if (-not (Test-PboChecksum -Path $pbo)) {
+        Write-Manifest -LogPath $Manifest -Line "ADDON FAIL $PboName [$Label] checksum does not match"
+        return $false
+    }
+    if ($content.Prefix -ne $Prefix) {
+        Write-Manifest -LogPath $Manifest -Line ("ADDON FAIL {0} [{1}] prefix '{2}' expected '{3}'" -f $PboName, $Label, $content.Prefix, $Prefix)
+        return $false
+    }
+    if ($missing.Count -gt 0) {
+        Write-Manifest -LogPath $Manifest -Line ("ADDON FAIL {0} [{1}] missing from PBO: {2}" -f $PboName, $Label, ($missing -join ', '))
+        return $false
+    }
+    $hash = (Get-FileHash -LiteralPath $pbo -Algorithm SHA256).Hash
+    Write-Manifest -LogPath $Manifest -Line ("ADDON OK {0} [{1}] entries={2} sources={3} signexit={4} sha256={5}" -f $PboName, $Label, $content.Entries.Count, $written.Count, $code, $hash)
+    foreach ($entry in $written) {
+        Write-Manifest -LogPath $Manifest -Line ("  ENTRY {0}\{1}" -f $PboName, $entry)
+    }
+    return $true
+}
+
+function Write-ModCpp {
+    param(
+        [Parameter(Mandatory)][string]$ModRoot,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Author,
+        [Parameter(Mandatory)][string]$Overview
+    )
+
+    $modCpp = @(
+        "name = `"$Name`";",
+        "author = `"$Author`";",
+        "tooltip = `"$Name`";",
+        "overview = `"$Overview`";"
+    )
+    Set-Content -LiteralPath (Join-Path $ModRoot 'mod.cpp') -Value $modCpp -Encoding utf8
+}
+
+function Invoke-SignatureCheck {
+    # Runs DSCheckSignatures on one output and the unsigned control, and returns the verdict.
+    param(
+        [Parameter(Mandatory)][string]$CheckSignatures,
+        [Parameter(Mandatory)][string]$AddonsOut,
+        [Parameter(Mandatory)][string]$KeysOut,
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string]$LogDir
+    )
+
+    $realLog = Join-Path $LogDir ("DSCheckSignatures-{0}.log" -f $Label)
+    $realExit = Invoke-Native -FilePath $CheckSignatures -ArgumentList @($AddonsOut, $KeysOut) -LogPath $realLog
+
+    # Folder name avoids failure-sounding words so it cannot leak into a verdict.
+    $negativeDir = Join-Path $LogDir ("sigcheck-control-{0}" -f $Label)
+    New-Item -ItemType Directory -Path $negativeDir -Force | Out-Null
+    $firstPbo = Get-ChildItem -LiteralPath $AddonsOut -Filter '*.pbo' | Select-Object -First 1
+    Copy-Item -LiteralPath $firstPbo.FullName -Destination $negativeDir
+    $negativeLog = Join-Path $LogDir ("DSCheckSignatures-{0}-control.log" -f $Label)
+    $negativeExit = Invoke-Native -FilePath $CheckSignatures -ArgumentList @($negativeDir, $KeysOut) -LogPath $negativeLog
+
+    # [string] turns an empty log (Get-Content returns $null) into an empty string.
+    $realOutput = [string](Get-Content -LiteralPath $realLog -Raw -Encoding utf8)
+    $negativeOutput = [string](Get-Content -LiteralPath $negativeLog -Raw -Encoding utf8)
+    $expectedPbo = @(Get-ChildItem -LiteralPath $AddonsOut -Filter '*.pbo' | ForEach-Object { $_.Name })
+    return Get-SignatureVerdict -RealExit ([int]$realExit) -RealOutput $realOutput -NegativeExit ([int]$negativeExit) -NegativeOutput $negativeOutput -ExpectedPbo $expectedPbo
+}
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -276,11 +527,20 @@ $manifest = Join-Path $logDir 'build.log'
 $exitCode = 1
 
 try {
-    Write-Manifest -LogPath $manifest -Line ("START {0} RepoRoot={1} PS={2}" -f (Get-Date -Format o), $RepoRoot, $PSVersionTable.PSVersion)
+    Write-Manifest -LogPath $manifest -Line ("START {0} RepoRoot={1} PS={2} Dev={3} Qualification={4}" -f (Get-Date -Format o), $RepoRoot, $PSVersionTable.PSVersion, [bool]$Dev, [bool]$Qualification)
 
     $packRoot = Join-Path $RepoRoot 'mods\own\nimby-pack'
     $pack = Get-PackDefinition -Path (Join-Path $packRoot 'pack.json')
-    Write-Manifest -LogPath $manifest -Line ("PACK {0} addons={1}" -f $pack.modFolderName, (@($pack.addons | ForEach-Object { $_.pboName }) -join ','))
+    $clientAddons = @($pack.addons | Where-Object { -not (Test-AddonServerOnly -Addon $_) })
+    $serverAddons = @($pack.addons | Where-Object { Test-AddonServerOnly -Addon $_ })
+    if ($clientAddons.Count -eq 0) { throw 'pack.json lists no client addons; at least one is needed for the Workshop output.' }
+    Write-Manifest -LogPath $manifest -Line ("PACK {0} client={1} server={2}" -f $pack.modFolderName, (@($clientAddons | ForEach-Object { $_.pboName }) -join ','), (@($serverAddons | ForEach-Object { $_.pboName }) -join ','))
+
+    $devDefinition = $null
+    if ($Dev) {
+        $devDefinition = Get-OptionalProperty -Object $pack -Name 'dev'
+        if ($null -eq $devDefinition) { throw '-Dev given but pack.json has no "dev" section.' }
+    }
 
     # Tools ---------------------------------------------------------------
     $steamCandidates = @()
@@ -300,90 +560,64 @@ try {
     if ($null -eq $signFile) { throw "DSSignFile.exe not found under '$DayZToolsPath\Bin\DsUtils'." }
     Write-Manifest -LogPath $manifest -Line "TOOL DSSignFile $signFile"
 
-    # Key -------------------------------------------------------------------
-    $privateKey = Join-Path $KeyDirectory ("{0}.biprivatekey" -f $pack.keyAuthority)
-    $publicKey = Join-Path $KeyDirectory ("{0}.bikey" -f $pack.keyAuthority)
-    if (-not (Test-Path -LiteralPath $privateKey)) {
-        if ($null -eq $createKey) { throw "No private key at '$privateKey' and DSCreateKey.exe not found to create one." }
-        New-Item -ItemType Directory -Path $KeyDirectory -Force | Out-Null
-        $code = Invoke-Native -FilePath $createKey -ArgumentList @($pack.keyAuthority) -LogPath (Join-Path $logDir 'DSCreateKey.log') -WorkingDirectory $KeyDirectory
-        if (-not (Test-Path -LiteralPath $privateKey) -or -not (Test-Path -LiteralPath $publicKey)) {
-            throw "DSCreateKey (exit $code) did not produce both key files in '$KeyDirectory'."
-        }
-        Write-Manifest -LogPath $manifest -Line "KEY CREATED authority=$($pack.keyAuthority) dir=$KeyDirectory"
-    }
-    else {
-        if (-not (Test-Path -LiteralPath $publicKey)) { throw "Private key exists but public key '$publicKey' is missing." }
-        Write-Manifest -LogPath $manifest -Line "KEY EXISTING authority=$($pack.keyAuthority) dir=$KeyDirectory"
+    # Keys ------------------------------------------------------------------
+    $releaseKey = Initialize-SigningKey -KeyDirectory $KeyDirectory -Authority $pack.keyAuthority -CreateKeyPath $createKey -LogDir $logDir -Manifest $manifest
+    $devKey = $null
+    if ($Dev) {
+        $devKey = Initialize-SigningKey -KeyDirectory $KeyDirectory -Authority $devDefinition.keyAuthority -CreateKeyPath $createKey -LogDir $logDir -Manifest $manifest
     }
 
-    # Build ---------------------------------------------------------------
+    # Build: client output --------------------------------------------------
     $modRoot = Join-Path $RepoRoot ("build\{0}-{1}" -f $pack.modFolderName, $stamp)
     $addonsOut = Join-Path $modRoot 'addons'
     $keysOut = Join-Path $modRoot 'keys'
     New-Item -ItemType Directory -Path $addonsOut, $keysOut -Force | Out-Null
 
     $failures = 0
-    foreach ($addon in $pack.addons) {
-        $source = Join-Path $packRoot $addon.folder
-        if (-not (Test-Path -LiteralPath $source -PathType Container)) {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) source folder missing: $source"
-            $failures++
-            continue
-        }
+    $prefixes = @()
+    foreach ($addon in $clientAddons) {
+        $ok = Build-NimbyAddon -SourceFolder (Join-Path $packRoot $addon.folder) -PboName $addon.pboName -Prefix $addon.prefix -Patterns $pack.includePatterns -AddonsOut $addonsOut -SignFile $signFile -PrivateKey $releaseKey.PrivateKey -KeyAuthority $pack.keyAuthority -Label 'client' -LogDir $logDir -Manifest $manifest
+        if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix }
+    }
+    Copy-Item -LiteralPath $releaseKey.PublicKey -Destination $keysOut
+    Write-ModCpp -ModRoot $modRoot -Name $pack.modName -Author $pack.author -Overview "$($pack.modName) server pack"
+    Write-Manifest -LogPath $manifest -Line "MOD $modRoot"
 
-        $pbo = Join-Path $addonsOut ("{0}.pbo" -f $addon.pboName)
-        try {
-            $written = @(Build-PboArchive -SourceFolder $source -Destination $pbo -Prefix $addon.prefix -Patterns $pack.includePatterns)
+    # Build: server-only output (shared rules 8.1) ---------------------------
+    $serverRoot = $null
+    if ($serverAddons.Count -gt 0) {
+        $serverRoot = Join-Path $RepoRoot ("build\{0}-Server-{1}" -f $pack.modFolderName, $stamp)
+        $serverAddonsOut = Join-Path $serverRoot 'addons'
+        New-Item -ItemType Directory -Path $serverAddonsOut -Force | Out-Null
+        foreach ($addon in $serverAddons) {
+            # Unsigned: verifySignatures checks client PBOs only, and this folder never reaches clients.
+            $ok = Build-NimbyAddon -SourceFolder (Join-Path $packRoot $addon.folder) -PboName $addon.pboName -Prefix $addon.prefix -Patterns $pack.includePatterns -AddonsOut $serverAddonsOut -SignFile $null -PrivateKey $null -KeyAuthority $null -Label 'server' -LogDir $logDir -Manifest $manifest
+            if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix }
         }
-        catch {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) pack error: $($_.Exception.Message)"
-            $failures++
-            continue
-        }
-
-        $code = Invoke-Native -FilePath $signFile -ArgumentList @($privateKey, $pbo) -LogPath (Join-Path $logDir ("DSSignFile-{0}.log" -f $addon.pboName)) -WorkingDirectory $addonsOut
-        $signature = Join-Path $addonsOut ("{0}.pbo.{1}.bisign" -f $addon.pboName, $pack.keyAuthority)
-        if (-not (Test-Path -LiteralPath $signature)) {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) DSSignFile exit=$code no signature at $signature"
-            $failures++
-            continue
-        }
-
-        $content = Get-PboContent -Path $pbo
-        $expected = @(Get-PboSourceFile -Folder $source -Patterns $pack.includePatterns)
-        $missing = @(Compare-PboToSource -SourceRelativePaths $expected -PboEntries $content.Entries)
-        if (-not (Test-PboChecksum -Path $pbo)) {
-            Write-Manifest -LogPath $manifest -Line "ADDON FAIL $($addon.pboName) checksum does not match"
-            $failures++
-            continue
-        }
-        if ($content.Prefix -ne $addon.prefix) {
-            Write-Manifest -LogPath $manifest -Line ("ADDON FAIL {0} prefix '{1}' expected '{2}'" -f $addon.pboName, $content.Prefix, $addon.prefix)
-            $failures++
-            continue
-        }
-        if ($missing.Count -gt 0) {
-            Write-Manifest -LogPath $manifest -Line ("ADDON FAIL {0} missing from PBO: {1}" -f $addon.pboName, ($missing -join ', '))
-            $failures++
-            continue
-        }
-        $hash = (Get-FileHash -LiteralPath $pbo -Algorithm SHA256).Hash
-        Write-Manifest -LogPath $manifest -Line ("ADDON OK {0} entries={1} sources={2} signexit={3} sha256={4}" -f $addon.pboName, $content.Entries.Count, $written.Count, $code, $hash)
-        foreach ($entry in $written) {
-            Write-Manifest -LogPath $manifest -Line ("  ENTRY {0}\{1}" -f $addon.pboName, $entry)
-        }
+        Write-ModCpp -ModRoot $serverRoot -Name "$($pack.modName) Server" -Author $pack.author -Overview "$($pack.modName) server-only addons; load with -servermod="
+        Write-Manifest -LogPath $manifest -Line "SERVERMOD $serverRoot"
+    }
+    else {
+        Write-Manifest -LogPath $manifest -Line 'SERVERMOD none (no serverOnly addon in pack.json)'
     }
 
-    Copy-Item -LiteralPath $publicKey -Destination $keysOut
-    $modCpp = @(
-        "name = `"$($pack.modName)`";",
-        "author = `"$($pack.author)`";",
-        "tooltip = `"$($pack.modName)`";",
-        "overview = `"$($pack.modName) server pack`";"
-    )
-    Set-Content -LiteralPath (Join-Path $modRoot 'mod.cpp') -Value $modCpp -Encoding utf8
-    Write-Manifest -LogPath $manifest -Line "MOD $modRoot"
+    # Build: dev harness ----------------------------------------------------
+    $devRoot = $null
+    if ($Dev) {
+        $devRoot = Join-Path $RepoRoot ("build\{0}-Dev-{1}" -f $pack.modFolderName, $stamp)
+        $devAddonsOut = Join-Path $devRoot 'addons'
+        $devKeysOut = Join-Path $devRoot 'keys'
+        New-Item -ItemType Directory -Path $devAddonsOut, $devKeysOut -Force | Out-Null
+        $devSource = [System.IO.Path]::GetFullPath((Join-Path $packRoot $devDefinition.folder))
+        $ok = Build-NimbyAddon -SourceFolder $devSource -PboName $devDefinition.pboName -Prefix $devDefinition.prefix -Patterns $pack.includePatterns -AddonsOut $devAddonsOut -SignFile $signFile -PrivateKey $devKey.PrivateKey -KeyAuthority $devDefinition.keyAuthority -Label 'dev' -LogDir $logDir -Manifest $manifest
+        if (-not $ok) { $failures++ } else { $prefixes += $devDefinition.prefix }
+        Copy-Item -LiteralPath $devKey.PublicKey -Destination $devKeysOut
+        Write-ModCpp -ModRoot $devRoot -Name "$($pack.modName) Dev" -Author $pack.author -Overview "$($pack.modName) dev harness; never released"
+        Write-Manifest -LogPath $manifest -Line "DEV $devRoot"
+    }
+    else {
+        Write-Manifest -LogPath $manifest -Line 'DEV none (build without -Dev)'
+    }
 
     if ($failures -gt 0) {
         throw "$failures addon(s) failed to build or verify."
@@ -396,25 +630,14 @@ try {
         $signatureUnknown = $true
     }
     else {
-        $realLog = Join-Path $logDir 'DSCheckSignatures-build.log'
-        $realExit = Invoke-Native -FilePath $checkSignatures -ArgumentList @($addonsOut, $keysOut) -LogPath $realLog
-
-        # Folder name avoids failure-sounding words so it cannot leak into a verdict.
-        $negativeDir = Join-Path $logDir 'sigcheck-control'
-        New-Item -ItemType Directory -Path $negativeDir -Force | Out-Null
-        $firstPbo = Get-ChildItem -LiteralPath $addonsOut -Filter '*.pbo' | Select-Object -First 1
-        Copy-Item -LiteralPath $firstPbo.FullName -Destination $negativeDir
-        $negativeLog = Join-Path $logDir 'DSCheckSignatures-control.log'
-        $negativeExit = Invoke-Native -FilePath $checkSignatures -ArgumentList @($negativeDir, $keysOut) -LogPath $negativeLog
-
-        # [string] turns an empty log (Get-Content returns $null) into an empty string.
-        $realOutput = [string](Get-Content -LiteralPath $realLog -Raw -Encoding utf8)
-        $negativeOutput = [string](Get-Content -LiteralPath $negativeLog -Raw -Encoding utf8)
-        $expectedPbo = @(Get-ChildItem -LiteralPath $addonsOut -Filter '*.pbo' | ForEach-Object { $_.Name })
-        $signatureResult = Get-SignatureVerdict -RealExit ([int]$realExit) -RealOutput $realOutput -NegativeExit ([int]$negativeExit) -NegativeOutput $negativeOutput -ExpectedPbo $expectedPbo
-        Write-Manifest -LogPath $manifest -Line ("SIGN {0} {1}" -f $signatureResult.Verdict, $signatureResult.Evidence)
-        if ($signatureResult.Verdict -eq 'FAIL') { throw "Signature check failed: $($signatureResult.Evidence)" }
-        if ($signatureResult.Verdict -eq 'UNKNOWN') { $signatureUnknown = $true }
+        $checks = @(@{ Addons = $addonsOut; Keys = $keysOut; Label = 'client' })
+        if ($Dev) { $checks += @{ Addons = $devAddonsOut; Keys = $devKeysOut; Label = 'dev' } }
+        foreach ($check in $checks) {
+            $signatureResult = Invoke-SignatureCheck -CheckSignatures $checkSignatures -AddonsOut $check.Addons -KeysOut $check.Keys -Label $check.Label -LogDir $logDir
+            Write-Manifest -LogPath $manifest -Line ("SIGN {0} [{1}] {2}" -f $signatureResult.Verdict, $check.Label, $signatureResult.Evidence)
+            if ($signatureResult.Verdict -eq 'FAIL') { throw "Signature check failed [$($check.Label)]: $($signatureResult.Evidence)" }
+            if ($signatureResult.Verdict -eq 'UNKNOWN') { $signatureUnknown = $true }
+        }
     }
 
     # Boot check ------------------------------------------------------------
@@ -444,11 +667,20 @@ try {
         else {
             $profileDir = Join-Path $logDir 'server-profile'
             New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+            $storageAutoFix = 1
+            $bootMode = 'quick'
+            if ($Qualification) { $storageAutoFix = 0; $bootMode = 'qualification' }
             $bootConfig = Join-Path $logDir 'serverDZ.bootcheck.cfg'
-            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId ([int]$boot.instanceId)
+            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId ([int]$boot.instanceId) -StorageAutoFix $storageAutoFix
+            Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $boot.instanceId)))
 
+            $flags = @(Initialize-SelfTestFlag -ProfilePath $profileDir -Prefix $prefixes)
+            Write-Manifest -LogPath $manifest -Line ("SELFTEST FLAGS {0}" -f ($prefixes -join ','))
+
+            $modPaths = @($modRoot)
+            if ($devRoot) { $modPaths += $devRoot }
             $serverExe = Join-Path $ServerPath 'DayZServer_x64.exe'
-            $serverArgs = Get-ServerArgument -ConfigPath $bootConfig -ProfilePath $profileDir -ModPath $modRoot -Port ([int]$boot.port)
+            $serverArgs = Get-ServerArgument -ConfigPath $bootConfig -ProfilePath $profileDir -ModPath $modPaths -ServerModPath $serverRoot -Port ([int]$boot.port)
             Write-Manifest -LogPath $manifest -Line ("BOOT START {0} {1}" -f $serverExe, ($serverArgs -join ' '))
 
             # Start-Process joins arguments with spaces; quote each so paths with spaces survive.
@@ -467,6 +699,27 @@ try {
                     }
                 }
 
+                if ($verdict.Verdict -eq 'READY') {
+                    # Self-tests run at mission start, which can land after the ready line. Keep
+                    # scanning for the grace period; a FAIL pattern during it still fails the boot.
+                    $grace = [int](Get-OptionalProperty -Object $boot -Name 'selfTestGraceSeconds' -Default 20)
+                    $graceDeadline = (Get-Date).AddSeconds($grace)
+                    while ((Get-Date) -lt $graceDeadline) {
+                        Start-Sleep -Seconds 5
+                        $again = Get-BootVerdict -LogText (Read-ServerLogText -ProfilePath $profileDir) -FailurePatterns $boot.failurePatterns -ReadyPatterns $boot.readyPatterns
+                        if ($again.Verdict -eq 'FAIL') { $verdict = $again; break }
+                        if ($process.HasExited) { $verdict = [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = "server exited after ready with code $($process.ExitCode)" }; break }
+                    }
+                    $selfTest = Get-SelfTestVerdict -LogText (Read-ServerLogText -ProfilePath $profileDir)
+                    foreach ($component in $selfTest.Components.Keys) {
+                        Write-Manifest -LogPath $manifest -Line ("SELFTEST {0} pass={1} fail={2}" -f $component, $selfTest.Components[$component].Pass, $selfTest.Components[$component].Fail)
+                    }
+                    Write-Manifest -LogPath $manifest -Line ("SELFTEST TOTAL pass={0} fail={1} flags={2}" -f $selfTest.Pass, $selfTest.Fail, $flags.Count)
+                    if ($selfTest.Fail -gt 0 -and $verdict.Verdict -ne 'FAIL') {
+                        $verdict = [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = $selfTest.Failures[0] }
+                    }
+                }
+
                 switch ($verdict.Verdict) {
                     'READY' { Write-Manifest -LogPath $manifest -Line "BOOT PASS $($verdict.Evidence)"; $exitCode = 0 }
                     'FAIL' { Write-Manifest -LogPath $manifest -Line "BOOT FAIL $($verdict.Evidence)"; $exitCode = 1 }
@@ -474,7 +727,8 @@ try {
                 }
             }
             finally {
-                # Stops only the server process this script started.
+                # Stops only the server process this script started. The boot check's storage is
+                # disposable (instance 998 or 999), so a process stop is acceptable here.
                 if (-not $process.HasExited) {
                     Stop-Process -Id $process.Id -Force
                     Write-Manifest -LogPath $manifest -Line "BOOT STOPPED pid=$($process.Id)"

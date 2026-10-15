@@ -126,6 +126,10 @@ Decided by Jeff, October 15, 2026, for Golden God. Server-only code (permissions
 
 Legs and Gimme stay single-PBO unless their plan records otherwise.
 
+### 8.2. Tooling as built (October 15, 2026)
+
+Plan 0 landed the rules above as follows. Addon rows in `pack.json` take an optional `"serverOnly": true`; those build unsigned to `build/@NIMBY-Server-<stamp>/` and the boot check adds `-servermod=`. The dev harness is the `pack.json` `dev` section (never an `addons` row); `Build-NimbyPack.ps1 -Dev` builds it to `build/@NIMBY-Dev-<stamp>/` with the `nimby_dev` key and loads it beside the pack. The client output is byte-identical with or without `-Dev`. `-Qualification` boots with `storageAutoFix = 0`; the default quick check keeps `1`. `build.log` records `SERVERMOD`, `DEV`, `BOOT MODE`, `SELFTEST`, and `SUMMARY PASS|FAIL|UNKNOWN mod=<path>`. `Start-NimbyTestServer.ps1` selects only a `SUMMARY PASS` build unless `-BuildPath` is given, reuses `<repo>/profiles/<name>/` with `-ProfileName`, writes `<profile>/BattlEye/BEServer_x64.cfg`, and sends `#shutdown` through `scripts/modules/NimbyRcon.psm1` before any process stop. Both scripts refuse an `instanceId` other than 998 or 999.
+
 ## 9. Quality gate and release
 
 ### 9.1. Quality gate

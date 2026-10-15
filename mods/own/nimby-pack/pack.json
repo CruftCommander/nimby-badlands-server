@@ -11,6 +11,7 @@
         "*.xml",
         "*.csv",
         "*.json",
+        "*.layout",
         "*.txt",
         "LICENSE",
         "NOTICE"
@@ -27,17 +28,26 @@
             "prefix": "NimbyGiveTake"
         }
     ],
+    "dev": {
+        "folder": "../dev/NimbyDevHarness",
+        "pboName": "NimbyDevHarness",
+        "prefix": "NimbyDevHarness",
+        "keyAuthority": "nimby_dev"
+    },
     "bootCheck": {
-        "mission": "dayzOffline.chernarusplus",
+        "mission": "dayzOffline.nasdara",
         "port": 2402,
         "instanceId": 999,
         "timeoutSeconds": 240,
+        "selfTestGraceSeconds": 20,
         "failurePatterns": [
             "SCRIPT\\s*\\(E\\)",
             "Can't compile",
             "Cannot open file",
             "Unknown type",
-            "Undefined function"
+            "Undefined function",
+            "Scripted variables corrupted",
+            "\\[NIMBY\\]\\[[^\\]]+\\]\\[SelfTest\\] FAIL"
         ],
         "readyPatterns": [
             "Init sequence finished",
@@ -45,7 +55,7 @@
         ]
     },
     "testServer": {
-        "mission": "dayzOffline.chernarusplus",
+        "mission": "dayzOffline.nasdara",
         "port": 2302,
         "instanceId": 998,
         "maxPlayers": 4,
