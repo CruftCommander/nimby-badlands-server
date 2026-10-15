@@ -4,14 +4,14 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 ## What this is not
 
-- Not a public Workshop release. The pack exists for this server; if it is ever published, every third-party piece keeps its original attribution and license terms.
+- Not a private download. Decided October 15, 2026: `@NIMBY` is distributed as one public Steam Workshop item, so every third-party piece keeps its original attribution and license terms inside the pack and in its `NOTICE`.
 - Not a place for secrets. The signing private key (`.biprivatekey`) never enters the repository.
 
 ## Contents
 
 | Addon | Origin | License | Status |
 | --- | --- | --- | --- |
-| `NimbyAutorun` | Fork of [SchanaModAutorun](https://github.com/schana/dayz-mod-autorun) (commit 1048f71) | Apache-2.0; see `NimbyAutorun/LICENSE` and `NimbyAutorun/NOTICE` | Source forked October 14, 2026; server-side RPC validation added; per-frame RPC fixed (review CR-004). Not yet built or tested in game |
+| `NimbyAutorun` | Fork of [SchanaModAutorun](https://github.com/schana/dayz-mod-autorun) (commit 1048f71) | Apache-2.0; see `NimbyAutorun/LICENSE` and `NimbyAutorun/NOTICE` | Source forked October 14, 2026; server-side RPC validation added; per-frame RPC fixed (review CR-004). Built (`@NIMBY-20261014-175505`) and solo-tested on 1.29; see `docs/testing/2026-10-14-solo-ingame-test.md`. Display name Legs (decided October 15, 2026). Plan: `docs/plans/2026-10-15-autorun-plan.md` |
 | `NimbyGiveTake` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; re-confirm before release) | Imported October 14, 2026; review fixes CR-001, CR-003, CR-005, CR-006 applied (see `NimbyGiveTake/NOTICE`). Boot-checked; two-client test pending |
 | Zens Core, Zens Zippo Lighter, Zens Music | Repack of Zenarchist's Workshop items | Author permits repacking; Zippo model is CC BY-NC | Theme drop 1; not started |
 

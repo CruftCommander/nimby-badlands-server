@@ -1,180 +1,258 @@
-# Revised plan 3 — NimbyAdmin
+# Plan 3 - Golden God (`NimbyAdmin`)
 
-**Draft v0.2 — October 15, 2026**  
-**Target:** NIMBY | HARDCORE | BADLANDS | 1pp, Host Havoc, DayZ 1.30.164078 / Nasdara  
-**Release:** Independent. Neither Autorun nor Gimme is a prerequisite.
+Draft v0.3, October 15, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
 
-## Purpose and proposed defaults
+Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
+Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
-Provide an in-game administration menu for Jeff and Jay, implemented against vanilla DayZ without CF.
+Golden God is the in-house admin tool for Jeff and Jay: player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative.
 
-- Scope: player management, spawning, weather/time controls, and announcements.
-- Exclude spectate, free camera, ESP, live player maps, arbitrary script execution, and anticheat.
-- Retain `NimbyAdmin` as the addon, class prefix, and display name.
-- Roles: `owner` can manage permissions; `admin` can use operational commands.
-- Bootstrap the first owner through the server profile file.
-- Use a rebindable menu input. Check default bindings in this order: Home, End, F10; use the first verified conflict-free choice. If none is free, ship the action unbound with setup instructions.
-- Use a profile-based ban list checked against authenticated identity at connection.
-- Keep local audit records authoritative; Discord is an asynchronous delivery channel.
-- Block state-changing commands when the required local audit record cannot be appended.
-- Add no custom entity serialization or mod-dependent persistent entity classes.
+Changes since v0.2: display name Golden God (N1); client and server PBO split (N7); ban and permission files fail to last-known-good, not closed (N8); spawn cap 50 items and one vehicle (N6); decisions and data-format tables restored; Discord retry downgraded to fixed backoff on `429`; audit-failure tests scoped to what runs locally; every test row names its evidence; Phase 0 time box restored at 5 days.
 
-These are proposed defaults. Independent release is confirmed by Jeff.
+## What this is not
 
-## Phase 0 — Time-boxed feasibility and security gate
+- Not a copy of COT or VPP. No code is taken from either.
+- Not an observation tool: no spectate, free camera, ESP, or live player map.
+- Not a framework and not an anticheat.
+- Not arbitrary script execution.
+- Not a persistence change: no custom entity serialization, no mod-dependent persistent entity classes, no `OnStoreSave`/`OnStoreLoad`.
 
-This phase proves the architecture. It does not commit the project to the original completion estimate.
+## Decisions
+
+| # | Decision | Choice | Status |
+| --- | --- | --- | --- |
+| N1 | Display name | Golden God. Code prefix `NimbyAdmin`, log prefix `[NIMBY][Admin]`, RPC block `65503xx` unchanged | Decided October 15, 2026 |
+| N2 | Menu key | Home, End, F10, in that order; the first verified free in the 1.30 `inputs.xml` wins; otherwise unbound with setup instructions | Decided |
+| N3 | Roles | `owner` (manage permissions and everything else) and `admin` (operational commands) | Decided |
+| N4 | Bans | Own list in the profile folder, checked against the authenticated identity at connection | Decided |
+| N5 | Discord channel | New private admin channel; webhook URL only in `$profile:NimbyAdmin\config.json` | Decided |
+| N6 | Spawn limits | 50 items and one vehicle per request, plus server-side request limits; all values in `config.json` | Decided October 15, 2026 |
+| N7 | PBO layout | Client PBO `NimbyAdmin` (menu, request sender, admin-state receiver) plus server-only PBO `NimbyAdminServer` loaded with `-servermod=` (router, permissions, bans, audit, webhook, handlers). See shared rules 8.1 | Decided October 15, 2026 |
+| N8 | Access-file failure | Permissions and bans are written atomically with a `.lkg` copy. On a corrupt load the server uses `.lkg`, logs, posts to Discord, and refuses further edits to that file until repaired. Admission is denied only when no `.lkg` exists | Decided October 15, 2026 |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Menu[Client menu<br/>NimbyAdmin.pbo] -- "RPC 65503xx: protocol, request id, command, args" --> Router[Server router<br/>NimbyAdminServer.pbo]
+    Router -- "Steam64 from connection" --> Perms[Permissions store]
+    Perms -- "role or none" --> Router
+    Router -- "authorized, deduped, rate-limited" --> Handlers[Command handlers]
+    Handlers -- "vanilla API calls" --> World[Players, items, vehicles, weather]
+    Handlers -- "intent and result records" --> Audit[Audit journal]
+    Audit -- "JSON line" --> File["$profile:NimbyAdmin\audit-&lt;date&gt;.log"]
+    Audit -- "queued, bounded" --> Webhook[Discord webhook]
+    Router -- "result or denial to sender only" --> Menu
+    Sync[Admin state sync] -- "role at connect and on change" --> Menu
+```
+
+| Component | PBO | Responsibility |
+| --- | --- | --- |
+| Menu | Client | Layouts and widgets; sends requests; never decides anything; hidden unless the admin state sync says the player has a role |
+| Admin state sync | Both | Server tells a client its role at connect and on change; the client only renders |
+| Command router | Server | Reads protocol version, request id, command, args; derives the actor from the connection; authorizes; dedupes; rate-limits; dispatches; returns the result to the sender only |
+| Permissions store | Server | `$profile:NimbyAdmin\permissions.json` with `.lkg`; first-owner bootstrap |
+| Ban store | Server | `$profile:NimbyAdmin\bans.json` with `.lkg`; checked at connection |
+| Command handlers | Server | One class per command; validates arguments through engine-free validators; calls vanilla APIs |
+| Audit journal | Server | Appends intent and terminal result records; a failed append blocks the state change |
+| Discord delivery | Server | Bounded queue, fixed backoff on `429`, never blocks a command |
+| Item catalog | Both | Built from game config at runtime; the server validates every class independently before spawning |
+
+## Data formats
+
+`permissions.json`:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `version` | `integer` | Yes | Schema version, starting at 1 |
+| `admins` | array of `Admin` | Yes | Empty on first boot; the first owner comes from `config.json` `bootstrapOwnerSteam64` |
+
+`Admin`:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `steam64` | `string` | Yes | 17-digit Steam64 id; validated on load; an invalid row is skipped and logged, never granted |
+| `name` | `string` | No | Label for logs only; never used for authorization |
+| `role` | `string` | Yes | `owner` or `admin`; any other value grants nothing |
+
+`bans.json` entry:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `steam64` | `string` | Yes | Banned identity |
+| `reason` | `string` | Yes | Escaped free text, maximum 200 characters |
+| `actor` | `string` | Yes | Steam64 of the admin who created the ban |
+| `createdUtc` | `string` | Yes | ISO 8601 UTC |
+| `expiresUtc` | `string` | No | ISO 8601 UTC; absent means permanent |
+
+`config.json`:
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `version` | `integer` | Yes | 1 | Schema version |
+| `bootstrapOwnerSteam64` | `string` | No | none | Granted `owner` on boot when `permissions.json` has no owner |
+| `webhookUrl` | `string` | No | none | Discord webhook; never logged or synced to clients |
+| `spawnMaxItems` | `integer` | No | 50 | Items per request (N6) |
+| `spawnMaxVehicles` | `integer` | No | 1 | Vehicles per request (N6) |
+| `requestsPerSecond` | `integer` | No | 5 | Per-sender request limit |
+| `discordQueueMax` | `integer` | No | 200 | Queued messages before overflow is reported |
+| `auditRetentionDays` | `integer` | No | 90 | Audit files older than this are rotated out |
+
+Audit record (one JSON object per line; two per command, `intent` then `result`):
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | Yes | Request id from the client, unique per actor |
+| `phase` | `string` | Yes | `intent` or `result` |
+| `ts` | `string` | Yes | ISO 8601 with explicit offset |
+| `actor` | `object` | Yes | `steam64`, `biId`, `name` |
+| `command` | `string` | Yes | For example `player.teleportTo`, `spawn.item` |
+| `target` | `object` | No | Player identity or item class, with positions where relevant |
+| `args` | `object` | No | Validated arguments |
+| `result` | `string` | Yes on `result` | `ok`, `partial`, `denied`, `invalid`, or `failed` |
+| `effects` | `object` | No | Actual created quantities, entities removed, values applied |
+| `reason` | `string` | No | Failure or denial reason |
+
+## Phase 0 - feasibility and security gate (5-day time box)
+
+Depends on Plan 0 (shared tooling), including the server-mod build output.
 
 ### Build and environment
 
-- Record exact engine versions, source revision, and script archive hashes.
-- Verify APIs against stable 1.30 and test native behavior.
-- Add `.layout` and any actually required menu assets to package inclusion checks.
-- Verify resource loading from the signed PBO on a real client.
-- Configure build and interactive tests for Nasdara.
-- Use a pinned artifact, reusable profile, disposable storage, and graceful shutdown.
-- Check Host Havoc profile access and outbound HTTPS feasibility before relying on hosted webhook delivery.
+1. Record engine versions, source revision, and the shared 1.30 reference hashes in `docs/baselines/`.
+2. Verify against the shared reference and record file:line: RPC send and receive on both sides, `PlayerIdentity` Steam64 access, profile-folder file read and write, JSON load and save, `RestApi`/`RestContext`/`RestCallback`, menu creation and input focus, `.layout` loading from a signed PBO, the N2 key candidates in `inputs.xml`, and player position set.
+3. Confirm with the orchestrator that `pack.json` carries both `NimbyAdmin` rows and `*.layout` in `includePatterns`.
+4. Verify HostHavoc supports `-servermod=` from the panel and that outbound HTTPS to Discord works from the host, before any server-only code or webhook work.
+5. Build, sign, and boot both PBOs on Nasdara; verify a menu `.layout` loads from the signed client PBO on a real client.
 
 ### Minimum vertical slice
 
-Implement:
-
-- Menu shell and player selection.
-- Authenticated server router.
-- Permission loading and first-owner bootstrap.
-- Local audit journal.
-- Asynchronous Discord delivery.
-- One command: teleport to another player.
+Menu shell with player selection; authenticated router; permission loading and first-owner bootstrap; audit journal; asynchronous Discord delivery; one command: teleport to player.
 
 ### Security contract
 
-Every request must carry a supported protocol version, request identifier, known command, and bounded arguments.
+Every request carries a supported protocol version, a request id, a known command, and bounded arguments. The server:
 
-The server must:
+- derives the actor from the authenticated connection and resolves identity by Steam64, never from a client-supplied id or name;
+- authorizes every command and sensitive query;
+- resolves targets against current sessions, so a selection does not silently retarget after reconnect;
+- rejects stale, malformed, unknown, unauthorized, and duplicate requests;
+- applies per-sender and aggregate limits before expensive processing;
+- returns results only to the sender.
 
-- Derive the actor from the authenticated connection.
-- Resolve identity using the verified Steam64 API, not a client-supplied ID or display name.
-- Authorize every command and sensitive query.
-- Resolve targets against the current player session.
-- Reject stale, malformed, unknown, unauthorized, and duplicate requests.
-- Apply per-sender and aggregate limits before expensive processing.
-- Return results only to the appropriate recipient.
-
-Permission updates affect subsequent authorization immediately. Unknown roles and invalid entries grant no access. Malformed files must not silently replace an existing configuration with an empty one.
+Permission updates take effect on the next request. Unknown roles and invalid entries grant nothing. A malformed file never replaces a working configuration with an empty one (N8).
 
 ### Gate tests
 
-Test non-admin access, forged requests, duplicate mutations, permission revocation, malformed payloads, disconnect/reconnect, profile restart persistence, audit-write failure, and webhook failure.
+| Scenario | Required result | Evidence |
+| --- | --- | --- |
+| Non-admin presses the menu key | Nothing opens; no request sent | No `[NIMBY][Admin]` request line for that player |
+| Non-admin forges a teleport (dev harness) | Denied | Audit `result=denied`; no position change |
+| Admin teleports to a player | Moves | Audit `intent` then `result=ok` with the same `id`; one Discord message |
+| Duplicate request id | Second ignored | One `intent`, one `result`; `[NIMBY][Admin] duplicate id=` line |
+| Permission revoked mid-session | Next request denied | `result=denied reason=no role` |
+| Malformed payload | Rejected | `result=invalid` |
+| Disconnect and reconnect | Role re-synced; menu state correct | Admin state sync line at connect |
+| Restart | Permissions and config persist; no entity data written | Files unchanged; `storage_1` copy boot clean |
+| Audit file locked or read-only (local) | Command blocked | `result=failed reason=audit unavailable`; no state change |
+| Webhook wrong or Discord down | Command succeeds | `result=ok`; one `[NIMBY][Admin] discord failed` line, not one per retry |
+| Self-test | Validators pass | `[NIMBY][Admin][SelfTest] PASS` for every case |
 
-Use isolated test tooling and signing trust; ship no testing backdoors.
+Go/no-go: continue only when the slice passes and remaining uncertainties are written down. If the time box is exceeded or the menu or RPC plumbing proves unworkable, stop; Jay keeps the HostHavoc panel. Reintroducing CF/COT needs its own compatibility decision and persistence test.
 
-**Go/no-go:** Continue only after the slice passes and remaining uncertainties are documented. If it fails, retain Host Havoc panel administration. Reintroducing CF/COT requires a separate compatibility decision and persistence test.
-
-## Phase 1 — Permissions, player management, and recovery
+## Phase 1 - permissions, player management, and recovery
 
 ### Permissions
 
-- Support owner-managed role changes.
-- Prevent removal or demotion of the last owner through the menu.
-- Validate the full proposed configuration before replacing the active one.
-- Preserve a last-known-good copy and document offline recovery.
+- Owner-managed role changes from the menu; the last owner cannot be removed or demoted.
+- Validate the whole proposed configuration before replacing the active one; write atomically with `.lkg` (N8).
 - Audit permission changes and denied attempts.
+- Document offline recovery: which file to restore, from where, and how to verify.
 
 ### Player commands
 
-Provide player list, teleport to, bring, heal, kill, kick, ban/unban, and private message.
+Player list, teleport to, bring, heal, kill, kick, ban, unban, private message.
 
-- Player lists identify current sessions; selection must not silently retarget after reconnect.
-- Teleport and bring reject unsafe player states and invalid destinations. Avoid occupied geometry, unsuitable terrain, and unsafe placement near vehicles.
-- Require explicit confirmation for kill and ban.
-- Define **Heal** as restoring health, blood, and shock; stopping bleeding; and repairing fractures. Disease, hunger, thirst, temperature, and equipment condition remain separate from this command.
-- Ban records contain Steam64, reason, actor, creation time, and optional UTC expiry. Applying a ban to an online player also removes that session.
-- Persist permission and ban changes before reporting success.
-- Corrupt or unavailable ban data disables admission until corrected; it must not silently become an empty list.
-- Document that removing/disabling NimbyAdmin removes its connection-time ban enforcement unless bans have been transferred to another system.
+- Teleport and bring reject unsafe player states and invalid destinations; avoid occupied geometry, unsuitable terrain, and placement near vehicles.
+- Kill and ban require explicit confirmation in the menu.
+- Heal restores health, blood, and shock, stops bleeding, and repairs fractures. Disease, hunger, thirst, temperature, and equipment stay separate.
+- A ban on an online player also ends that session. Ban and permission changes persist before success is reported.
+- Removing or disabling Golden God removes connection-time ban enforcement; the ops doc says so.
 
-**Exit:** Every command passes authorized, unauthorized, stale-target, and restart tests with Jeff and Jay.
+Exit: every command passes authorized, unauthorized, stale-target, and restart tests with Jeff and Jay, each with an audit `intent` and `result` pair.
 
-## Phase 2 — Controlled spawning
+## Phase 2 - controlled spawning
 
-- Build the catalog from game configuration, but validate classes independently on the server.
-- Include only appropriate instantiable item and vehicle classes. Do not assume every config entry is safe to spawn.
-- Support inventory, feet, and validated nearby ground placement.
-- Default limits: **10 items per request; one vehicle per request**, plus server-side request limits.
-- Treat the limit as a maximum, not a promise that every requested object was created.
-- Report actual created quantities and partial failures.
-- Never silently move failed inventory spawns onto the ground.
-- Track entities created by the current request so incomplete construction can be cleaned up safely before success is reported.
-- Supply profile-based presets for explicitly supported vehicle classes. Validate parts, fluids, placement, and operability individually.
-- Reject unvalidated vehicle presets rather than generating a supposedly complete vehicle from assumptions.
+- Build the catalog from game configuration; the server validates each class independently. Not every config entry is safe to spawn.
+- Destinations: inventory, feet, or validated nearby ground.
+- Limits per N6; the limit is a maximum, not a promise. Report actual created quantities and partial failures as `result=partial` with `effects`.
+- Never silently move a failed inventory spawn to the ground.
+- Track entities created by the current request so incomplete construction is cleaned up before success is reported. A crash mid-request leaves an unresolved `intent`; do not claim exactly-once.
+- Vehicle presets live in `$profile:NimbyAdmin\vehicles.json` for explicitly supported classes; validate parts, fluids, placement, and operability individually. Reject unvalidated presets.
 
-Test occupied space, full inventory, invalid classes, duplicate requests, partial creation failure, and restart persistence.
+| Scenario | Required result | Evidence |
+| --- | --- | --- |
+| Spawn 50 items to inventory with room | All created | `result=ok effects.created=50` |
+| Spawn with partial room | Some created, rest reported | `result=partial effects.created=<n>`; nothing on the ground |
+| Invalid class | Refused | `result=invalid` |
+| Duplicate request id | Second ignored | One `result` |
+| Vehicle preset for each supported class | Drivable after spawn and after restart | Manual drive; audit `result=ok`; vehicle present after RCON `#shutdown` restart |
+| Unvalidated vehicle preset | Refused | `result=invalid reason=preset not validated` |
 
-**Exit:** Supported items and vehicles work after spawning and restart, with accurate audit outcomes.
-
-## Phase 3 — World controls and dependable audit delivery
+## Phase 3 - world controls and audit delivery
 
 ### World controls
 
-- Provide overcast, rain, fog, wind, time-of-day, and server-wide announcements.
-- Bound all values and validate finite numeric input.
-- Weather overrides last for the requested duration, then return control to the normal weather system. A newer override replaces the previous one.
-- Do not maintain custom weather overrides across restart in v1.
-- Set time immediately; subsequent progression follows existing server settings.
-- Exclude direct sandstorm control from v1 unless separately specified and verified.
+Overcast, rain, fog, wind, time of day, and server-wide announcements. Bound every value and validate finite numeric input. Weather overrides last for the requested duration, then return control to the normal system; a newer override replaces the previous one; overrides do not persist across restart in v1. Time is set immediately and then progresses by server settings. Sandstorm control is out of v1 unless separately specified and verified.
 
 ### Local audit
 
-Use structured, correlated records for accepted intent and terminal result. Include:
-
-- Event/request identifier and timestamp with explicit timezone.
-- Actor identity and command.
-- Target identity/class and relevant positions.
-- Validated arguments.
-- Result, actual effects, and failure reason.
-
-A crash between intent and completion leaves an unresolved operation; do not claim exactly-once execution or reconstruct success from assumption.
-
-Test unwritable files, disk exhaustion, interrupted writes, rotation, and recovery. Keep denial logging bounded so attackers cannot exhaust storage.
+Records per the audit table above. Test locked files, rotation, and recovery locally; HostHavoc disk exhaustion is recorded as untestable. Keep denial logging rate-limited so a hostile client cannot exhaust storage.
 
 ### Discord
 
-- Store the webhook secret only in server profile configuration.
-- Use delivery confirmation, escaped text, disabled mentions, and payload limits.
-- Use a bounded queue and retries that honor Discord rate-limit responses.
-- Distinguish retryable failures from permanent configuration failures.
-- Surface queue overflow and delivery failure locally and in the admin UI.
-- Never repeat a game command because its Discord notification failed.
-- Never include the webhook secret in logs or client synchronization.
+- Webhook URL only in `config.json`; never in logs, client sync, or the repo.
+- Escaped text, mentions disabled, payload limits enforced.
+- Bounded queue (`discordQueueMax`); on `429`, back off on a fixed schedule (1 s, 5 s, 30 s) and then drop with one local line. `RestCallback` exposes status and body, not reliable headers, so retry-after values are not assumed.
+- Distinguish retryable failures from configuration failures; surface overflow and permanent failure locally and in the admin menu.
+- Never repeat a game command because its notification failed.
 
-**Exit:** Local records remain useful during HTTP failures, and delivery failures cannot stall gameplay or create unlimited work.
+Exit: local records remain useful during HTTP failures; delivery failures cannot stall gameplay or create unbounded work.
 
-## Phase 4 — Hardening and independent release
+## Phase 4 - hardening and release
 
-- Run a command-by-command authorization and malformed-input matrix.
-- Test permission changes during active sessions and across restart.
-- Test duplicate requests, invalid targets, concurrent admins, and sustained request bursts.
-- Exercise every destructive command’s failure and partial-success behavior.
-- Run install/update/removal checks on disposable copies of representative world and character storage.
-- Compare against the same-build control; investigate all unexplained script and save-load errors.
-- Verify normal Workshop installation, stale-client behavior, and packaged menu resources.
-- Document setup, permissions, bans, audit failures, backup/restore, and rollback.
-- Obtain Jay’s menu usability sign-off and Jeff’s release approval.
-- Deploy the independently qualified @NIMBY version at an approved scheduled restart.
+- Command-by-command authorization and malformed-input matrix from the dev harness.
+- Permission changes during active sessions and across restart.
+- Duplicate requests, invalid targets, concurrent admins, sustained bursts.
+- Every destructive command's failure and partial-success behavior.
+- Install, update, and removal checks on disposable copies of representative world and character storage, compared against the same-build control.
+- Stale-client behavior and packaged menu resources verified from a normal Workshop install.
+- Write `docs/operations/golden-god.md` (setup, permissions, bans, audit failures, backup and restore, rollback, server-mod upload) and a one-page quick reference for Jay.
+- Jay's menu usability sign-off; Jeff's release approval; deploy per shared rules 9.
 
-Back up mission storage and NimbyAdmin profile data together. Code rollback does not reverse spawned objects or player changes. World restoration is a separate decision because it discards later progress.
+Back up mission storage and `$profile:NimbyAdmin` together. Code rollback does not reverse spawned objects or player changes; world restoration is a separate decision because it discards later progress.
 
-## Acceptance, assumptions, and estimate
+## Acceptance criteria
 
-Release requires:
-
-- Server-authoritative authorization for every command and sensitive query.
-- No unexplained script errors or new persistence failures.
-- Successful local audit recording before state-changing commands.
+- Server-authoritative authorization for every command and sensitive query, with a dev-harness denial test per command.
+- No unexplained script errors; the `storage_1`-copy boot shows 0 "Scripted variables corrupted".
+- Audit `intent` written before every state change; `result` written after.
 - Bounded, non-blocking Discord delivery.
-- Passed multiplayer, restart, removal, and rollback tests.
-- Verified Workshop distribution and client/server compatibility.
+- Multiplayer, restart, removal, and rollback tests passed against the exact artifact.
+- Client PBO in the Workshop item; server PBO on the host only; no secret in either.
+- Jay signs off on the menu.
 
-The installed stable scripts are available locally. Remaining external prerequisites are isolated multiplayer testing, hosted HTTPS verification, representative backup data, and a test Discord webhook.
+## Estimate
 
-Re-estimate after Phase 0 in engineering effort and tester hours. Treat five-to-six weeks as an initial hypothesis. Do not promise same-day compatibility with future DayZ updates.
+Re-estimate after Phase 0 in engineering effort and tester hours. Treat five to six weeks as an initial hypothesis. No promise of same-day compatibility with future DayZ updates.
+
+## Risks
+
+| Risk | Effect | Mitigation |
+| --- | --- | --- |
+| Menu layout iteration runs long | Phases 0-2 slip | Functional layouts first, vanilla widgets and `set:dayz_gui` images only; polish after Phase 4 |
+| A missed server-side check | Any player acts as admin | Server-only checks in the server PBO; denial test per command; Phase 4 sweep |
+| HostHavoc lacks `-servermod=` or outbound HTTPS | N7 layout or Discord blocked | Phase 0 item 4 before any dependent code |
+| `RestApi` limited in 1.30 | No Discord posts | Local audit is authoritative; webhook becomes a later item |
+| Sandstorm not scriptable | One control missing | Out of v1 |
+| DayZ update breaks a used API | Admin tool down | Small surface; boot check fails the build |
