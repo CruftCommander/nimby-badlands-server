@@ -43,7 +43,7 @@ to `Player connect enabled`:
 | `!!! [CE][LoadPrototype] 5 groups have no points` / `10 Errors during XML parse` | 1 each | Vanilla Chernarus `mapgroupproto.xml` |
 | `!!! [CE][offlineDB]` ChristmasTree / Static_FrozenScientist_DE ignored | 1 each | Vanilla types |
 | `!!! [CE][DE][SPAWNS]` skipping `VehicleTransitBus` | 1 | Vanilla event list |
-| `!!! [CE][offlineDB] :: No Shutdown message present.` | 1 | See finding 1 - currently on every boot |
+| `!!! [CE][offlineDB] :: No Shutdown message present.` | 1 | Every boot, including after a clean `#shutdown` (verified 10:02 PM). Not a shutdown-health signal. Likely means `messages.xml` has no `<shutdown>` countdown entry, which is intended (unverified) |
 | `NETWORK (E): Will delete object with !finite or outside world coords` (animal) | 0-1 | Occasional, vanilla |
 | `SCRIPT (E)` | **0** | The script log is module loads only, 1558 bytes every boot |
 
@@ -51,7 +51,7 @@ to `Player connect enabled`:
 
 - Memory: 2.0-2.3 GB, flat over 40 minutes.
 - Server FPS: hundreds to ~5,000 when empty. Meaningless until players connect; re-baseline then.
-- One `Players: 0 in total` and one `Used memory` line per second (see finding 2).
+- One `Players: 0 in total` and one `Used memory` line per minute (`logMemory`/`logPlayers = 60` since cfg v0.3, 10:06 PM CT; before that, one per second).
 
 ## What abnormal looks like
 
@@ -61,18 +61,18 @@ to `Player connect enabled`:
 - `valid:NO` on a `.bin` storage file (not the `.001`/`.002` history files).
 - Memory climbing steadily while empty.
 - An RPT that ends without the next boot's start being a scheduled or manual action.
+- A clean stop ends the RPT with `--- Termination successfully completed ---`. An RPT that just stops mid-line was a hard stop (panel Stop, Restart, Steam Update) or a crash.
 
 ## Findings
 
-1. **Every stop so far is a hard stop.** Each boot logs `No Shutdown message present`, and no
-   RPT ends with a shutdown sequence. The panel's Stop, Restart and the Steam Update task
-   end the process without DayZ's shutdown save. While empty this costs little (the idle
-   save runs), but with players anything since the last autosave can be lost at each 12-hour
-   restart. Next step: test an RCON `#shutdown` before the 12:00 update and confirm the next
-   boot no longer logs the message.
-2. **`logMemory = 1` and `logPlayers = 1` are intervals in seconds**, so the RPT and
-   `server_console.log` get two lines per second (`server_console.log` reached 821 KB in four
-   hours). Set both to `60`, like `logAverageFps`.
+1. **The panel's Stop, Restart and Steam Update are hard stops.** Their RPTs end mid-stream with
+   no termination line. An RCON `#shutdown` (tested 10:02 PM CT) ends with
+   `--- Termination successfully completed ---` after about 7 seconds, and the panel starts the
+   server again by itself about 20 seconds later. Correction: the `No Shutdown message present`
+   line is not evidence of a hard stop; it appears after the clean `#shutdown` too.
+2. **`logMemory = 1` and `logPlayers = 1` were intervals in seconds**, so the RPT and
+   `server_console.log` got two lines per second (`server_console.log` reached 821 KB in four
+   hours). Fixed in cfg v0.3: both are `60`, verified in the 10:06 PM boot.
 3. **`server_console.log` prints the BattlEye RCON password in plaintext on every boot**
    (`Config entry: RConPassword ...`). Anyone with panel or SFTP access can read it, and so can
    every local pull in `logs/`. RCON listens on the public IP (port 2406) with
