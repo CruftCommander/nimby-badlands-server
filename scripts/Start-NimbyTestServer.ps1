@@ -419,7 +419,13 @@ try {
         if (${env:ProgramFiles(x86)}) { $steamCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Steam') }
         $steamRoot = Get-SteamRootPath -Candidates $steamCandidates
         $candidates = @()
-        if ($null -ne $steamRoot) { $candidates += Find-SteamAppPath -LibraryPaths (Get-SteamLibraryPath -SteamRoot $steamRoot) -FolderName 'DayZServer' }
+        if ($null -ne $steamRoot) {
+            $libraries = @(Get-SteamLibraryPath -SteamRoot $steamRoot)
+            if ($libraries.Count -gt 0) {
+                $candidates += Find-SteamInstalledAppPath -LibraryPaths $libraries -AppId '223350' -RequiredFile 'DayZServer_x64.exe'
+                $candidates += Find-SteamAppPath -LibraryPaths $libraries -FolderName 'DayZServer' -RequiredFile 'DayZServer_x64.exe'
+            }
+        }
         $candidates += 'D:\DayZServer'
         foreach ($candidate in $candidates) {
             if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'DayZServer_x64.exe'))) { $ServerPath = $candidate; break }

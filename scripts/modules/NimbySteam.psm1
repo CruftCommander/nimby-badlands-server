@@ -64,21 +64,81 @@ function Get-SteamLibraryPath {
     return $libraries.ToArray()
 }
 
+function Test-SteamAppFolder {
+    <#
+    .SYNOPSIS
+        True when the folder exists and, if -RequiredFile is given, that file exists inside it.
+    .DESCRIPTION
+        A folder name alone is not proof of an install: Steam leaves a folder behind after an
+        uninstall or a move to another library (observed October 16, 2026: an empty
+        "DayZ Tools\Bin\Logs" on C: while the real install was on F:).
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$RequiredFile
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return $false }
+    if (-not $RequiredFile) { return $true }
+    return (Test-Path -LiteralPath (Join-Path $Path $RequiredFile) -PathType Leaf)
+}
+
 function Find-SteamAppPath {
     <#
     .SYNOPSIS
         Returns the first steamapps\common\<FolderName> that exists in any library, or $null.
+    .PARAMETER RequiredFile
+        A path relative to the app folder that must exist for the folder to count, for example
+        'Bin\DsUtils\DSSignFile.exe'. Without it, a leftover empty folder matches.
     #>
     [CmdletBinding()]
     [OutputType([string])]
     param(
         [Parameter(Mandatory)][string[]]$LibraryPaths,
-        [Parameter(Mandatory)][string]$FolderName
+        [Parameter(Mandatory)][string]$FolderName,
+        [string]$RequiredFile
     )
 
     foreach ($library in $LibraryPaths) {
         $candidate = Join-Path $library ("steamapps\common\{0}" -f $FolderName)
-        if (Test-Path -LiteralPath $candidate -PathType Container) {
+        if (Test-SteamAppFolder -Path $candidate -RequiredFile $RequiredFile) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Find-SteamInstalledAppPath {
+    <#
+    .SYNOPSIS
+        Returns the install folder of a Steam app by its app id, read from the library that holds
+        its appmanifest_<AppId>.acf, or $null when no library has the manifest.
+    .DESCRIPTION
+        Steam writes steamapps\appmanifest_<AppId>.acf only in the library where the app is
+        installed, and "installdir" inside it names the folder under steamapps\common. This is
+        the authoritative lookup; Find-SteamAppPath by folder name is the fallback.
+    .PARAMETER RequiredFile
+        A path relative to the install folder that must exist, so a manifest left mid-download or
+        mid-move does not count.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string[]]$LibraryPaths,
+        [Parameter(Mandatory)][ValidatePattern('^\d+$')][string]$AppId,
+        [string]$RequiredFile
+    )
+
+    foreach ($library in $LibraryPaths) {
+        $manifest = Join-Path $library ("steamapps\appmanifest_{0}.acf" -f $AppId)
+        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { continue }
+        $content = Get-Content -LiteralPath $manifest -Raw -Encoding utf8
+        $match = [regex]::Match($content, '"installdir"\s+"([^"]+)"')
+        if (-not $match.Success) { continue }
+        $candidate = Join-Path $library ("steamapps\common\{0}" -f $match.Groups[1].Value)
+        if (Test-SteamAppFolder -Path $candidate -RequiredFile $RequiredFile) {
             return $candidate
         }
     }
@@ -107,4 +167,4 @@ function Find-WorkshopItemPath {
     return $null
 }
 
-Export-ModuleMember -Function Get-SteamRootPath, Get-SteamLibraryPath, Find-SteamAppPath, Find-WorkshopItemPath
+Export-ModuleMember -Function Get-SteamRootPath, Get-SteamLibraryPath, Test-SteamAppFolder, Find-SteamAppPath, Find-SteamInstalledAppPath, Find-WorkshopItemPath
