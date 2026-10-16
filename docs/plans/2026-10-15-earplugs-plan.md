@@ -1,6 +1,6 @@
 # Plan 7 - Ears (`NimbyEarplugs`)
 
-Draft v0.4, October 16, 2026. Changes since v0.3: default key N, not End (E2, Jeff); End is free again. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/ears`, coordinated by the orchestrator. Status: draft for Jeff's review. Changes since v0.2: display name Ears (Jeff, October 16, 2026; was Hush), worktree `feat/ears`; EP-005 is now the pack's first proof that a NIMBY binding is rebindable in the vanilla Controls page (shared rules 5). Changes since v0.1: display name Hush (E1).
+Draft v0.5, October 16, 2026. Changes since v0.4: the `pack.json` row lands at Phase 0, not Phase 1 (E6, Jeff), because the Phase 0 probe is a client addon that has to build and load; `missionGameplay.c:1690` identified as `OnPlayerRespawned`, and the other vanilla writes to the scene volume listed, so Phase 0 item 3 names the real candidates. Changes since v0.3: default key N, not End (E2, Jeff); End is free again. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/ears`, coordinated by the orchestrator. Status: draft for Jeff's review. Changes since v0.2: display name Ears (Jeff, October 16, 2026; was Hush), worktree `feat/ears`; EP-005 is now the pack's first proof that a NIMBY binding is rebindable in the vanilla Controls page (shared rules 5). Changes since v0.1: display name Hush (E1).
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
@@ -22,7 +22,7 @@ Ears lets a player press one key to lower the game's effect volume and press it 
 | Volume API | `g_Game.GetSoundScene().SetSoundVolume(volume, fadeSeconds)` | `missionGameplay.c:1690`, `MainMenuVideo.c:32-42` |
 | Saved level | `g_Game.m_volume_sound` from `GetSoundScene().GetSoundVolume()` | `DayZGame.c:1147` |
 | VOIP level | Separate (`GetVOIPVolume`, `:1150`) | `DayZGame.c:1150` |
-| Vanilla reset point | `missionGameplay.c:1690` restores `m_volume_sound` on its own schedule | To be recorded in Phase 0 |
+| Vanilla reset points | `missionGameplay.c:1690` is `OnPlayerRespawned` (restores `m_volume_sound`, 1 s fade). Others: death `DayZPlayerImplement.c:870` (0, instant), unconscious `PlayerBase.c:3778` (0, 2 s), waking `PlayerBase.c:3832` (restores `m_volume_sound`, 1 s). The Options > Sound effects slider goes through `NumericOptionsAccess` (`OptionsMenuSounds.c:49,80,88`), engine side; inventory and pause menu have no script write | Which of these, if any, the toggle must survive is recorded in Phase 0 |
 | Default key | `kN`; `bin/constants.xml:507`; in `bin/preset_X1MouseKey.xml` it appears only as the modifier of the developer terrain-brush inputs `UABuldBrushOuterUp` and `UABuldBrushOuterDown` (`kN` plus mouse wheel, `:881-890`), so a plain N press is free in play | Shared rules 5 |
 | Legs input precedent | `Data/Inputs.xml` with `<modded_inputs>` | `mods/own/nimby-pack/NimbyAutorun/Data/Inputs.xml` |
 
@@ -35,13 +35,15 @@ Ears lets a player press one key to lower the game's effect volume and press it 
 | E3 | Reduced level | 15 percent of the player's saved volume, 0.5 s fade in and out; both in a client-side constant block, not a profile file, because the client has no profile write path the pack relies on | Claude default |
 | E4 | Indicator | A small vanilla notification on each toggle ("Earplugs in" and "Earplugs out"); no HUD icon | Claude default |
 | E5 | Relog | Earplugs come out on every mission start | Claude default |
+| E6 | `pack.json` row timing | The `NimbyEarplugs` row and a stub `config.cpp` land on `main` before the worktree branches, so the Phase 0 probe builds and `main` stays buildable; exception to shared rules section 3 ("at that addon's Phase 1") | Decided by Jeff, October 16, 2026 |
 
 ## Phase 0 - prove set and restore
 
-1. Record builds and reference hashes in `docs/baselines/`.
-2. On the local test server, call `SetSoundVolume(0.15, 0.5)` from a key press and confirm effect audio drops while VOIP is unchanged.
-3. Open and close the inventory, the pause menu, and the Controls menu with earplugs in; record which of them triggers the `missionGameplay.c:1690` reset and whether the reduced level survives.
-4. Confirm `kN` reaches the input and nothing else reacts to a plain press; confirm N plus mouse wheel does nothing on a release build (the brush inputs are developer tools).
+1. Record builds and reference hashes in `docs/baselines/`. The `pack.json` row and stub addon are already on `main` (E6).
+2. Build a probe: `Data/Inputs.xml` binding `UANimbyEarplugsToggle` to `kN`, a modded `MissionGameplay` that toggles `SetSoundVolume(0.15, 0.5)` on press and logs every call, the scene level once a second while earplugs are in, and every vanilla reset it can observe, to the client script log with the `[NIMBY][Earplugs]` prefix.
+3. On the local replica (`-ServerPath D:\DayZServer -InstanceId 998`), press N and confirm effect audio drops while VOIP is unchanged.
+4. Open and close the inventory, the pause menu, and the Options menu (Sound tab, then Controls tab) with earplugs in; then go unconscious and wake, and die and respawn, if the replica allows it in the session; record which of these resets the level.
+5. Confirm `kN` reaches the input and nothing else reacts to a plain press; confirm N plus mouse wheel does nothing on a release build (the brush inputs are developer tools).
 
 Exit: the reduced level can be held across menus, or the reset point is known and the toggle can reapply after it.
 
@@ -49,7 +51,6 @@ Exit: the reduced level can be held across menus, or the reset point is known an
 
 - `config.cpp` (`CfgPatches` requiring `DZ_Data`), `Data/Inputs.xml`, `Scripts/5_Mission` modded `MissionGameplay` reading the input in `OnUpdate`, the toggle state, the reapply hook from Phase 0, and the notifications (E4).
 - Self-test: the toggle state machine (in, out, reapply) as an engine-free class.
-- `pack.json` row added by the orchestrator.
 
 ## Phase 2 - release
 

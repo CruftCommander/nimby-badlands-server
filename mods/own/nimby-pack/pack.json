@@ -26,6 +26,11 @@
             "folder": "NimbyGiveTake",
             "pboName": "NimbyGiveTake",
             "prefix": "NimbyGiveTake"
+        },
+        {
+            "folder": "NimbyEarplugs",
+            "pboName": "NimbyEarplugs",
+            "prefix": "NimbyEarplugs"
         }
     ],
     "dev": {
