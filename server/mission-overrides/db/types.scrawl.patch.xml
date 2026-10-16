@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Scrawl loot and lifetime rows (plan N3 and N4, Jeff, October 15 and 16, 2026).
+  DRAFT - not applied to the live server. Applies at Scrawl Phase 2, at a scheduled restart,
+  with the live types.xml backed up first (shared rules 9.2 step 3). Each <type> below REPLACES
+  the row of the same name in mpmissions/dayzOffline.nasdara/db/types.xml. Everything not listed
+  here is unchanged. Source rows read from server/live/db/types.xml on October 16, 2026 (Paper
+  at 18166, Pen_Black at 18409): all five at nominal 0 today.
+
+  Paper: nominal 30 in residential tiers 1 and 2; lifetime 30 days (2592000 s). If it degrades the
+  server, scale to 1209600 (14 days) or 604800 (7 days) at a restart. CE refreshes lifetime on
+  interaction, so a handled note lives and an untouched one despawns; a raised flag pole refreshes
+  every item in its radius. quantmin/quantmax -1 keeps CE out of the quantity so a spawned stack
+  follows varQuantityInit = 1 from Scrawl's config override; the teddy-bear cargo entry in
+  cfgspawnabletypes.xml is untouched.
+  Pens: 30 in total, 8/8/7/7 across the four colors (the split is Claude's); usages copied from the
+  live Pen_Black row; lifetime left at the live 28800.
+-->
+<types>
+    <type name="Paper">
+        <nominal>30</nominal>
+        <lifetime>2592000</lifetime>
+        <restock>0</restock>
+        <min>15</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="tools"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Office"/>
+        <usage name="School"/>
+        <value name="Tier1"/>
+        <value name="Tier2"/>
+    </type>
+    <type name="Pen_Black">
+        <nominal>8</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>4</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="tools"/>
+        <tag name="shelves"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Office"/>
+        <usage name="School"/>
+    </type>
+    <type name="Pen_Blue">
+        <nominal>8</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>4</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="tools"/>
+        <tag name="shelves"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Office"/>
+        <usage name="School"/>
+    </type>
+    <type name="Pen_Red">
+        <nominal>7</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>3</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="tools"/>
+        <tag name="shelves"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Office"/>
+        <usage name="School"/>
+    </type>
+    <type name="Pen_Green">
+        <nominal>7</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>3</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="tools"/>
+        <tag name="shelves"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Office"/>
+        <usage name="School"/>
+    </type>
+</types>
