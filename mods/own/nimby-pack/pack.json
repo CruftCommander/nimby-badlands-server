@@ -31,6 +31,11 @@
             "folder": "NimbyEarplugs",
             "pboName": "NimbyEarplugs",
             "prefix": "NimbyEarplugs"
+        },
+        {
+            "folder": "NimbyNotes",
+            "pboName": "NimbyNotes",
+            "prefix": "NimbyNotes"
         }
     ],
     "dev": {
