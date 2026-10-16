@@ -549,18 +549,18 @@ try {
     $libraries = @()
     if ($null -ne $steamRoot) { $libraries = Get-SteamLibraryPath -SteamRoot $steamRoot }
 
-    # DayZ Tools: the app manifest (app 830720) names the library that holds the install; the folder
+    # DayZ Tools: the app manifest (app 830640) names the library that holds the install; the folder
     # name is only a fallback, and both require DSSignFile.exe so a leftover folder never matches.
     $toolsSource = 'parameter'
     if (-not $DayZToolsPath -and $libraries.Count -gt 0) {
-        $DayZToolsPath = Find-SteamInstalledAppPath -LibraryPaths $libraries -AppId '830720' -RequiredFile 'Bin\DsUtils\DSSignFile.exe'
+        $DayZToolsPath = Find-SteamInstalledAppPath -LibraryPaths $libraries -AppId '830640' -RequiredFile 'Bin\DsUtils\DSSignFile.exe'
         $toolsSource = 'appmanifest'
         if (-not $DayZToolsPath) {
             $DayZToolsPath = Find-SteamAppPath -LibraryPaths $libraries -FolderName 'DayZ Tools' -RequiredFile 'Bin\DsUtils\DSSignFile.exe'
             $toolsSource = 'folder'
         }
     }
-    if (-not $DayZToolsPath) { throw 'DayZ Tools with Bin\DsUtils\DSSignFile.exe not found in any Steam library. Install it from Steam (app 830720) or pass -DayZToolsPath.' }
+    if (-not $DayZToolsPath) { throw 'DayZ Tools with Bin\DsUtils\DSSignFile.exe not found in any Steam library. Install it from Steam (app 830640) or pass -DayZToolsPath.' }
     Write-Manifest -LogPath $manifest -Line "TOOL DayZTools $DayZToolsPath source=$toolsSource"
 
     $createKey = Resolve-ToolPath -Candidates @(Join-Path $DayZToolsPath 'Bin\DsUtils\DSCreateKey.exe')
