@@ -24,6 +24,7 @@ Folders are created as their first file lands.
 | `server/serverDZ.cfg` | Server configuration |
 | `server/launch-params.md` | `-mod=` and `-servermod=` strings per environment |
 | `server/mission-overrides/` | `types.xml`, `globals.xml`, `cfggameplay.json`, `messages.xml` changes |
+| `server/live/` | Read-only copy of the live mission's loot and gameplay files, written by `scripts/Sync-LiveReplica.ps1`; the plans' Phase 0 sections read these |
 | `mods/manifest.json` | Workshop IDs, versions, `.bikey` names, readiness status |
 | `mods/own/` | Source for mods built here |
 | `scripts/` | `Install-WorkshopMods.ps1`, `Backup-Server.ps1`, `Restore-Server.ps1`, `Deploy-Config.ps1` |

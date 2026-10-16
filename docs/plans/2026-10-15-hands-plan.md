@@ -1,11 +1,13 @@
-# Plan 2 - Gimme (`NimbyGimme`, formerly `NimbyGiveTake`)
+# Plan 2 - Hands (`NimbyHands`, formerly `NimbyGiveTake`)
 
-Draft v0.3, October 15, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/gimme`, coordinated by the orchestrator. Status: ready for implementation once Plan 0 (shared tooling) is on `main`.
+Draft v0.4, October 16, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: ready for implementation once Plan 0 (shared tooling) is on `main`.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
-Gimme lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's inventory (cargo or an eligible attachment slot), never their hands. It has never moved an item between two real players; proving that comes before the rename.
+Hands lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's inventory (cargo or an eligible attachment slot), never their hands. It has never moved an item between two real players; proving that comes before the rename.
+
+Changes since v0.3: display name Hands (Jeff, October 16, 2026; was Gimme), so the rename target is `NimbyHands`, worktree `feat/hands`, inputs `UANimbyHands*`, string keys `STR_NIMBY_HANDS_*`, log prefix `[NIMBY][Hands]`; the pocket-toggle Controls label is "Hands: open or close pockets"; key bindings are player-configurable per shared rules 5.
 
 Changes since v0.2: shared rules moved to their own file; current-state and decisions tables restored; the in-flight registry and completion-signal candidates are specified; pockets close on unconsciousness and restraint (G4); the pocket toggle is unbound with a discoverable label (G2); every test row names its evidence; dead `#ifdef DIAG` code is scheduled for removal; the stale-PBO check moves to deployment.
 
@@ -39,11 +41,11 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 
 | # | Decision | Choice | Status |
 | --- | --- | --- | --- |
-| G1 | Rename depth | Full rename to `NimbyGimme`: folder, PBO, config classes, scripts, input actions, string keys, log prefix. Attribution stays first in `NOTICE` | Decided |
-| G2 | Pocket toggle key (T-002) | Unbound by default. Controls label "Gimme: open or close pockets"; the pocket notification names the binding. Phase 0 still records whether `Shift+O` can exclude a plain `O` press; if it can, Jeff may revisit | Decided October 15, 2026 |
+| G1 | Rename depth | Full rename to `NimbyHands`: folder, PBO, config classes, scripts, input actions, string keys, log prefix. Attribution stays first in `NOTICE` | Decided |
+| G2 | Pocket toggle key (T-002) | Unbound by default. Controls label "Hands: open or close pockets"; the pocket notification names the binding. Phase 0 still records whether `Shift+O` can exclude a plain `O` press; if it can, Jeff may revisit | Decided October 15, 2026 |
 | G3 | Pocket access default | Off; resets on reconnect and respawn; opening permits deposits only | Decided |
 | G4 | Pockets auto-close | Close on unconsciousness and on restraint. "Put in pockets" refuses an unconscious or restrained target. The toggle cannot be used while restrained | Decided October 15, 2026 |
-| G5 | In-flight transfer registry | Server-side, mission-lifetime singleton `NimbyGimmeTransfers`: `map<EntityAI, ref NimbyGimmeTransfer>` keyed by item, evicted on terminal state or after a bounded timeout (default 5,000 ms) once inventory state is reconciled. Nothing persisted | Decided (Claude default) |
+| G5 | In-flight transfer registry | Server-side, mission-lifetime singleton `NimbyHandsTransfers`: `map<EntityAI, ref NimbyHandsTransfer>` keyed by item, evicted on terminal state or after a bounded timeout (default 5,000 ms) once inventory state is reconciled. Nothing persisted | Decided (Claude default) |
 
 ## Phase 0 - prove the transfer path before renaming
 
@@ -60,7 +62,7 @@ Exit: the native transfer path moves an item between two real clients; its valid
 
 ### Validation and concurrency
 
-- Register every request in `NimbyGimmeTransfers` (G5) with giver, receiver, item, action, and a correlation id before dispatch; refuse a request whose item already has an unresolved entry.
+- Register every request in `NimbyHandsTransfers` (G5) with giver, receiver, item, action, and a correlation id before dispatch; refuse a request whose item already has an unresolved entry.
 - Revalidate consent, player state (alive, conscious, not restrained per G4, not in a vehicle, not swimming), proximity, source item, and destination immediately before dispatch.
 - Reject stale requests after item replacement, consent withdrawal, disconnect, or player replacement.
 - Reconcile actual inventory state before evicting an unresolved entry; a timeout must not itself authorize a retry.
@@ -89,9 +91,9 @@ A recipient moving the item afterward must not turn `CONFIRMED` into a failure. 
 
 | Event | Line |
 | --- | --- |
-| Lifecycle | `[NIMBY][Gimme] id=<corr> action=<class> state=<REQUESTED|CONFIRMED|REFUSED|UNCONFIRMED> giver=<name> (<bi-id>, <steam64>) receiver=<name> (<bi-id>, <steam64>) item=<type> #<netid> detail=<text>` |
-| Pocket toggle | `[NIMBY][Gimme] pockets player=<name> (<bi-id>, <steam64>) open=<bool> reason=<toggle|unconscious|restrained|respawn|reconnect>` |
-| Self-test | `[NIMBY][Gimme][SelfTest] PASS|FAIL <case>` |
+| Lifecycle | `[NIMBY][Hands] id=<corr> action=<class> state=<REQUESTED|CONFIRMED|REFUSED|UNCONFIRMED> giver=<name> (<bi-id>, <steam64>) receiver=<name> (<bi-id>, <steam64>) item=<type> #<netid> detail=<text>` |
+| Pocket toggle | `[NIMBY][Hands] pockets player=<name> (<bi-id>, <steam64>) open=<bool> reason=<toggle|unconscious|restrained|respawn|reconnect>` |
+| Self-test | `[NIMBY][Hands][SelfTest] PASS|FAIL <case>` |
 
 Escape player-supplied text. Keep logs bounded; one terminal line per request.
 
@@ -103,7 +105,7 @@ Exit: concurrent or stale requests cannot produce a second transfer; logs distin
 
 ## Phase 2 - rename, controls, and permission evidence
 
-- Rename folder, PBO, config classes, custom classes and members, input actions (`UANimbyGimme*`), string keys (`STR_NIMBY_GIMME_*`), and the log prefix. Ask the orchestrator for the `pack.json` row change.
+- Rename folder, PBO, config classes, custom classes and members, input actions (`UANimbyHands*`), string keys (`STR_NIMBY_HANDS_*`), and the log prefix. Ask the orchestrator for the `pack.json` row change.
 - Apply G2: the toggle ships unbound; Controls label and notification text per the decision.
 - Document that renamed input actions require players to rebind `O` once.
 - Store a dated capture of the Workshop permission text beside `NOTICE` (Jeff provides or approves it). Public Workshop distribution makes this a release blocker.

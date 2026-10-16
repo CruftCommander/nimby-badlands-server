@@ -1,5 +1,7 @@
 # Rigged ADA feasibility
 
+> **Superseded in part, October 16, 2026.** The feature is named Payload (code prefix `NimbyPayload`); this file keeps its name. Eligibility is no longer a class allowlist: any vehicle with storage can be rigged when its cargo is large enough to hold the explosive, so a motorbike with no cargo cannot be rigged and a future helicopter mod with cargo can. The "Not open to every vehicle" line and the allowlist decision below are replaced by that rule; the horn, remote, rename, and disarm design stands until the 1.30 hooks are re-verified.
+
 Draft v0.4, October 14, 2026. Roadmap phase 4. Owner: Jeff Fabish. Status: design decisions made by Jeff on October 14, 2026 (see Decisions); hooks still to be re-verified on 1.30.
 
 The rigged ADA is feasible as a small client-and-server mod built entirely on vanilla hooks: a player wires plastic explosive into an ADA 4x4 or any other base-game car, the vehicle's display name changes while the rig is armed, and the charge goes off when the horn sounds or when a paired remote detonator fires. Every hook this design depends on exists in the vanilla 1.29 scripts (Scripts Rev. 125372, August 12, 2026). Badlands ships as 1.30, so each hook gets re-checked against the 1.30 scripts before code is written.

@@ -1,5 +1,7 @@
 # Candidate features and mods
 
+> **Superseded in part, October 15, 2026.** The smoking, cannabis, Zippo, and hookah rows below predate the 1.30 script reference. Vanilla 1.30 ships cannabis seeds, a six-stage cannabis plant, a `Cannabis` crop, three cigarette-pack brands, a `PetrolLighter`, and persisted written notes. The current design is `docs/design/puff-sprout-scrawl-earplugs-feasibility.md` and plans 4-9 in `docs/plans/`. New candidate recorded October 15, 2026, not planned: a base-size governor that detects an oversized base (item count or render cost affecting other players) and removes items lowest-priority first; Jeff raised it alongside the note-lifetime decision.
+
 Research v0.2, October 14, 2026, the day before Badlands (update 1.30) releases. Covers roadmap phases 3 and 4 plus the two quality-of-life mods in the launch set. Owner: Jeff Fabish. Jeff ruled on five decisions on October 14, 2026 (see Decisions); everything else waits for him.
 
 Every Workshop mod below was last tested by its author on 1.29 or earlier, and no author has said anything about 1.30. Bohemia warns that 1.30 changes the animation graph, the navmesh format, and the mod filesystem, and that animation-related mods may break. Treat every row as "re-check on October 15".
@@ -56,7 +58,7 @@ Both forks are small and share one NIMBY client pack. They are also the two mods
 | Cannabis growing | Defer | - | The only maintained option is IceBlade's stack (CannabisPlus [1932611410](https://steamcommunity.com/sharedfiles/filedetails/?id=1932611410), DrugsPLUS [2170927235](https://steamcommunity.com/sharedfiles/filedetails/?id=2170927235), AgricultureCore [3690289718](https://steamcommunity.com/sharedfiles/filedetails/?id=3690289718)): three or four mods, no repacks, and the author warns it can wreck a server economy. Joints come from the smoking system | Adopt the IceBlade stack if growing becomes a goal |
 | Regional clothing | Wait for vanilla 1.30 | - | Badlands brings regional clothing; inventory what ships on October 15 before adding anything | - |
 | Thobe | Own build, after the vanilla inventory | Own build | No DayZ thobe mod found | - |
-| Long beards | Own build | Own build | No DayZ long-beard mod found; this is new character-model work and the most expensive item on the list | StartWithBeard ([2981585492](https://steamcommunity.com/sharedfiles/filedetails/?id=2981585492), server-only, permissive) only gives spawn beards from vanilla |
+| Long beards | Own build | Own build | No DayZ long-beard mod found; this is new character-model work and the most expensive item on the list. Rule from Jeff, October 16, 2026: beards are not customizable; a male character's beard grows continuously from spawn up to a maximum length until he shaves it | StartWithBeard ([2981585492](https://steamcommunity.com/sharedfiles/filedetails/?id=2981585492), server-only, permissive) only gives spawn beards from vanilla |
 
 Zens Zippo and Zens Music share the Zens Core dependency ([3702420204](https://steamcommunity.com/sharedfiles/filedetails/?id=3702420204)), so adopting one makes the second cheaper.
 
@@ -81,6 +83,9 @@ Made by Jeff on October 14, 2026.
 | Smoking | One own-build smoking system: cigarettes, joints, and hookah on a shared smokable base, lit by the Zippo | Largest build item in theme drop 1 |
 | Cannabis growing | In scope as a later own build on vanilla gardening, after the smoking system ships | Joints come from loot and crafting until then |
 | Rig the 1.30 motorbikes | Yes; Jana 50 and Bitrak 682 join the rigged-vehicle allowlist once the 1.30 hooks are confirmed | See the rigged-vehicle design for the condition on horn mode |
+| Splash (October 16, 2026) | Custom loading screen: server art, logo, and a text line while the client loads. Client-only `modded class LoadingScreen`; images baked into the PBO; changes rarely. Separate from Greet because a Bohemia change to the loading-screen class breaks only this. Phase 0: confirm the class is still moddable on 1.30 (1.30 changed the mod filesystem). Code prefix `NimbySplash` | Proposed by Jeff; name decided by Jeff, October 16, 2026 |
+| Greet (October 16, 2026) | Welcome window after spawn: rules, Discord invite, tips, restart schedule, with a per-client "do not show again for this version" flag. Text is a JSON file in the server profile folder sent by RPC at connect, so it is edited without a client update; vanilla `messages.xml` hourly lines stay, the join line moves into the window. Phase 0: confirm a window at spawn does not fight the vanilla connecting HUD states. Code prefix `NimbyGreet` | Proposed by Jeff; name decided by Jeff, October 16, 2026 |
+| Payload (October 16, 2026) | The vehicle-bomb feature is named Payload (Rigged for a few hours on October 16; Rigged ADA before that). Any vehicle with storage can be rigged if its cargo is large enough to hold the explosive; that replaces the class allowlist as the eligibility rule | Supersedes the allowlist line in `docs/design/rigged-ada-feasibility.md` (see its banner) |
 
 ## Sources
 

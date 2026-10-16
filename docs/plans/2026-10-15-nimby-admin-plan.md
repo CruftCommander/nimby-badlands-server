@@ -1,18 +1,20 @@
-# Plan 3 - Golden God (`NimbyAdmin`)
+# Plan 3 - Central Scrutinizer (`NimbyAdmin`)
 
-Draft v0.3, October 15, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
+Draft v0.4, October 16, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
-Golden God is the in-house admin tool for Jeff and Jay: player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative.
+Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.1) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; none of it is planned until Jeff rules on its decisions Q1-Q6.
+
+Changes since v0.3: display name Central Scrutinizer (Jeff, October 16, 2026; was Golden God); the tool serves every admin, not one person; observation features (live player map, spectate) stay out of scope but the architecture carries the seams for them (N9); key bindings are player-configurable per shared rules 5.
 
 Changes since v0.2: display name Golden God (N1); client and server PBO split (N7); ban and permission files fail to last-known-good, not closed (N8); spawn cap 50 items and one vehicle (N6); decisions and data-format tables restored; Discord retry downgraded to fixed backoff on `429`; audit-failure tests scoped to what runs locally; every test row names its evidence; Phase 0 time box restored at 5 days.
 
 ## What this is not
 
 - Not a copy of COT or VPP. No code is taken from either.
-- Not an observation tool: no spectate, free camera, ESP, or live player map.
+- Not an observation tool yet. No spectate, free camera, or live player map ships in this plan, and ESP never does. Jeff decided on October 16, 2026 that a map-based player view and spectating come later, so the architecture carries the seams for them (N9) without implementing them.
 - Not a framework and not an anticheat.
 - Not arbitrary script execution.
 - Not a persistence change: no custom entity serialization, no mod-dependent persistent entity classes, no `OnStoreSave`/`OnStoreLoad`.
@@ -21,13 +23,14 @@ Changes since v0.2: display name Golden God (N1); client and server PBO split (N
 
 | # | Decision | Choice | Status |
 | --- | --- | --- | --- |
-| N1 | Display name | Golden God. Code prefix `NimbyAdmin`, log prefix `[NIMBY][Admin]`, RPC block `65503xx` unchanged | Decided October 15, 2026 |
-| N2 | Menu key | Home, End, F10, in that order; the first verified free in the 1.30 `inputs.xml` wins; otherwise unbound with setup instructions | Decided |
+| N1 | Display name | Central Scrutinizer. Code prefix `NimbyAdmin`, log prefix `[NIMBY][Admin]`, RPC block `65503xx` unchanged | Decided by Jeff, October 16, 2026 (Golden God on October 15) |
+| N2 | Menu key | Home, then F10; the first verified free in the 1.30 `bin/preset_X1MouseKey.xml` wins (there is no `inputs.xml` in 1.30, shared rules 7); otherwise unbound with setup instructions. End left the list on October 15, 2026 when Jeff gave it to Ears (D8); Home is free and F10 is bound in vanilla, so Home is expected | Decided; revised October 15, 2026 |
 | N3 | Roles | `owner` (manage permissions and everything else) and `admin` (operational commands) | Decided |
 | N4 | Bans | Own list in the profile folder, checked against the authenticated identity at connection | Decided |
 | N5 | Discord channel | New private admin channel; webhook URL only in `$profile:NimbyAdmin\config.json` | Decided |
 | N6 | Spawn limits | 50 items and one vehicle per request, plus server-side request limits; all values in `config.json` | Decided October 15, 2026 |
 | N7 | PBO layout | Client PBO `NimbyAdmin` (menu, request sender, admin-state receiver) plus server-only PBO `NimbyAdminServer` loaded with `-servermod=` (router, permissions, bans, audit, webhook, handlers). See shared rules 8.1 | Decided October 15, 2026 |
+| N9 | Observation seams | Built now, used later: (a) the server-to-client channel is a typed push envelope (`NimbyAdminPush`: kind, sequence, payload), with `role` the only kind in this plan, so a position feed or spectate stream is a new kind, not a new channel; (b) permissions are capability strings on roles (`player.kick`, `spawn.item`, `world.weather`, and reserved `observe.map`, `observe.spectate`), so observation gets its own capabilities with no schema change; (c) the client menu is a page registry (`NimbyAdminPage` subclasses register at init); a Map or Spectate page registers like any other; (d) RPC ids `6550350`-`6550399` are reserved for observation feeds; (e) a streaming handler variant (server-paced, rate-limited, per-subscriber) is specified when the first feed is built, not now. The self-test registers one fake page, one fake push kind, and one fake capability to prove the seams exist | Decided by Jeff, October 16, 2026 (build for later map and spectator views); seam design is Claude's |
 | N8 | Access-file failure | Permissions and bans are written atomically with a `.lkg` copy. On a corrupt load the server uses `.lkg`, logs, posts to Discord, and refuses further edits to that file until repaired. Admission is denied only when no `.lkg` exists | Decided October 15, 2026 |
 
 ## Architecture
@@ -49,7 +52,7 @@ flowchart LR
 | Component | PBO | Responsibility |
 | --- | --- | --- |
 | Menu | Client | Layouts and widgets; sends requests; never decides anything; hidden unless the admin state sync says the player has a role |
-| Admin state sync | Both | Server tells a client its role at connect and on change; the client only renders |
+| Admin state sync | Both | Server tells a client its role at connect and on change through the `NimbyAdminPush` envelope (N9); the client only renders |
 | Command router | Server | Reads protocol version, request id, command, args; derives the actor from the connection; authorizes; dedupes; rate-limits; dispatches; returns the result to the sender only |
 | Permissions store | Server | `$profile:NimbyAdmin\permissions.json` with `.lkg`; first-owner bootstrap |
 | Ban store | Server | `$profile:NimbyAdmin\bans.json` with `.lkg`; checked at connection |
@@ -177,7 +180,7 @@ Player list, teleport to, bring, heal, kill, kick, ban, unban, private message.
 - Kill and ban require explicit confirmation in the menu.
 - Heal restores health, blood, and shock, stops bleeding, and repairs fractures. Disease, hunger, thirst, temperature, and equipment stay separate.
 - A ban on an online player also ends that session. Ban and permission changes persist before success is reported.
-- Removing or disabling Golden God removes connection-time ban enforcement; the ops doc says so.
+- Removing or disabling Central Scrutinizer removes connection-time ban enforcement; the ops doc says so.
 
 Exit: every command passes authorized, unauthorized, stale-target, and restart tests with Jeff and Jay, each with an audit `intent` and `result` pair.
 
@@ -227,7 +230,7 @@ Exit: local records remain useful during HTTP failures; delivery failures cannot
 - Every destructive command's failure and partial-success behavior.
 - Install, update, and removal checks on disposable copies of representative world and character storage, compared against the same-build control.
 - Stale-client behavior and packaged menu resources verified from a normal Workshop install.
-- Write `docs/operations/golden-god.md` (setup, permissions, bans, audit failures, backup and restore, rollback, server-mod upload) and a one-page quick reference for Jay.
+- Write `docs/operations/central-scrutinizer.md` (setup, permissions, bans, audit failures, backup and restore, rollback, server-mod upload) and a one-page quick reference for Jay.
 - Jay's menu usability sign-off; Jeff's release approval; deploy per shared rules 9.
 
 Back up mission storage and `$profile:NimbyAdmin` together. Code rollback does not reverse spawned objects or player changes; world restoration is a separate decision because it discards later progress.

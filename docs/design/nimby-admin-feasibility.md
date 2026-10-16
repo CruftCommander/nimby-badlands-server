@@ -2,7 +2,7 @@
 
 Draft v0.1, October 15, 2026. Owner: Jeff Fabish. Status: scope decided by Jeff on October 15, 2026 (see Decisions); awaiting go/no-go on the Phase 0 spike.
 
-> **Superseded in part, October 15, 2026.** Where this study and `docs/plans/2026-10-15-nimby-admin-plan.md` (v0.3) differ, the plan is authoritative. Known differences: the tool is named Golden God; server-only code ships in a separate `-servermod` PBO; weather overrides do not persist across restart; heal excludes disease, hunger, thirst, temperature, and equipment; corrupt access files fall back to a last-known-good copy instead of blocking admission.
+> **Superseded in part, October 15, 2026.** Where this study and `docs/plans/2026-10-15-nimby-admin-plan.md` (v0.3) differ, the plan is authoritative. Known differences: the tool is named Central Scrutinizer; server-only code ships in a separate `-servermod` PBO; weather overrides do not persist across restart; heal excludes disease, hunger, thirst, temperature, and equipment; corrupt access files fall back to a last-known-good copy instead of blocking admission.
 
 Building our own admin tool is feasible and costs no extra money. The work is about 5-6 weeks at Jeff's 10+ hours per week, which is about 55-70 hours of Jeff's time; Claude writes the code, tests, and build changes. The tool ships as a new `NimbyAdmin` addon inside the `@NIMBY` pack, depends on nothing but vanilla DayZ, and never writes to world saves, so adding, updating, or removing it cannot repeat the October 15 corruption.
 

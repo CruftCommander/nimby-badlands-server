@@ -1,6 +1,6 @@
 # Plan 1 - Legs (`NimbyAutorun`)
 
-Draft v0.3, October 15, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/autorun`, coordinated by the orchestrator. Status: ready for implementation once Plan 0 (shared tooling) is on `main`.
+Draft v0.4, October 16, 2026. Changes since v0.3: the stop rule is stated as taking control back (A5, Jeff); key bindings are player-configurable per shared rules 5. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/autorun`, coordinated by the orchestrator. Status: ready for implementation once Plan 0 (shared tooling) is on `main`.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
@@ -26,7 +26,7 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 | Server rate limiting | None on request processing; only rejection logging is rate-limited (10 s per player) | `nimbyautorun_playerbase.c:96-111` |
 | Server-to-client cancellation | None; the server changes its own override and the client is not told | `nimbyautorun_playerbase.c:68-72` |
 | Client interrupts | Toggle, WASD, fire, raise, lean, plus vehicle, unconscious, restrained, dead; `IsControlDisabled()` checked only on start, not as an interrupt | `nimbyautorun_missiongameplay.c:27-80` |
-| Default key | numpad plus (`kAdd`) | `Data/Inputs.xml` |
+| Default key | numpad plus (`kAdd`) in source; A3 now requires double-tap Left Shift, so `Data/Inputs.xml` changes in Phase 1 (item "Inputs" below) | `Data/Inputs.xml` |
 | RPC id | `6550101` | `nimbyautorun_playerbase.c:15` |
 | Save footprint | None; no `OnStoreSave`/`OnStoreLoad`, no net-synced variables | Grep |
 | Player id in logs | `GetId()` (BI hash) only | `nimbyautorun_playerbase.c:108` |
@@ -40,7 +40,8 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 | --- | --- | --- | --- |
 | A1 | Display name | Legs. Code prefix stays `NimbyAutorun`; Controls entry reads "Legs: toggle autorun" | Decided October 15, 2026 |
 | A2 | Lean interrupt (T-001) | Lean interrupts if Phase 0 shows `UALeanLeft`/`UALeanRight` report a press while sprinting; otherwise lean is dropped from the interrupt list and documented | Decided, conditional |
-| A3 | Default key | numpad plus; players rebind | Decided |
+| A3 | Default key | Double-tap Left Shift: `<btn name="kLShift"><event name="doubleclick"/></btn>` in `Data/Inputs.xml` (vanilla precedent `UAWalkRunToggle` on `kLControl`, `bin/preset_X1MouseKey.xml:27-31`); players rebind. Phase 0 adds a check that the double tap toggles autorun without leaving `UATurbo` (the `kLShift` hold, `:21-22`) in a stuck state. Replaces numpad plus | Decided, revised by Jeff October 15, 2026 |
+| A5 | Stop rule | Autorun stops when the player takes control back: any movement key (WASD), a single Shift press (the sprint hold; a double tap while stopped starts autorun, any Shift press while running stops it), Space (jump or vault), fire, weapon raise, lean (per A2), or the toggle itself; and on vehicle entry, unconsciousness, restraint, death, and the menu and focus cases in Phase 1. It does not stop on unrelated input such as chat, gestures, or the inventory hotbar | Decided by Jeff, October 16, 2026 |
 | A4 | Server cancellation RPC | `6550102`, server to owning client; on receipt the client clears its override and remembered state and does not re-send start | Decided (shared rules 4.1) |
 
 ## Phase 0 - baseline and test environment
@@ -52,13 +53,15 @@ Depends on Plan 0 (shared tooling) being on `main`.
 3. Settle A2: on the test server, hold lean while sprinting and record whether `LocalPress` fires. Record the result in this plan.
 4. Build and boot on 1.30 Nasdara with the shared tooling; confirm the quick boot check and the qualification run are separate invocations.
 5. Establish the same-build vanilla control. Investigate existing copied-world save-load errors separately; do not exempt them automatically.
+6. Settle the A3 double tap: bind `UANimbyAutorunToggle` to `kLShift` with `<event name="doubleclick"/>` on the test server and record whether the double tap toggles autorun, whether the two short `UATurbo` presses it also fires leave the sprint hold in any stuck state, and whether a held Shift still sprints normally.
 
-Exit: the signed addon boots on 1.30 Nasdara with 0 `SCRIPT (E)`; every touched API is recorded as VERIFIED (file:line) or CHANGED with its fix; A2 is settled.
+Exit: the signed addon boots on 1.30 Nasdara with 0 `SCRIPT (E)`; every touched API is recorded as VERIFIED (file:line) or CHANGED with its fix; A2 and the A3 double tap are settled.
 
 ## Phase 1 - movement lifecycle and request handling
 
 ### Client
 
+- Inputs: change `Data/Inputs.xml` from `kAdd` to `kLShift` with the `doubleclick` event per A3; update the Controls label if the binding text is shown there.
 - Preserve the toggle, movement, fire, weapon-raise, and lean (per A2) interrupts.
 - Treat `IsControlDisabled()`, inventory, pause, any input-capturing menu, and focus loss as interrupts, not only as start blockers. Require a fresh toggle afterward.
 - Clear local overrides and remembered state on player replacement, respawn, disconnect, and mission teardown.
@@ -88,7 +91,7 @@ Exit: client and server reach the same stopped state after every interruption, w
 
 ## Phase 2 - multiplayer and failure testing
 
-Jeff and Jay on the local test server. Vehicles come from the test mission's `init.c`, never the live mission; do not depend on Golden God.
+Jeff and Jay on the local test server. Vehicles come from the test mission's `init.c`, never the live mission; do not depend on Central Scrutinizer.
 
 | Scenario | Required result | Evidence |
 | --- | --- | --- |

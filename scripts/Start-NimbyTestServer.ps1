@@ -54,6 +54,16 @@
 .PARAMETER ShutdownTimeoutSeconds
     How long to wait for the server to exit after the RCON #shutdown before stopping the process.
 
+.PARAMETER Vanilla
+    Boot with no -mod= at all: the same-build vanilla control the release gate compares against
+    (shared rules 9.2). No build is selected, no key is installed, and -BuildPath, -ServerModPath,
+    and -DevPath are refused.
+
+.PARAMETER InstanceId
+    Override pack.json testServer.instanceId for this run. On the local replica built by
+    Sync-LiveReplica.ps1, 998 is the copy of the live world and 999 is the fresh world. Only 998
+    and 999 are accepted (shared rules, section 8).
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Start-NimbyTestServer.ps1
 
@@ -68,7 +78,9 @@ param(
     [string]$DevPath,
     [string]$ServerPath,
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$ProfileName,
-    [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60
+    [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
+    [ValidateSet(998, 999)][int]$InstanceId,
+    [switch]$Vanilla
 )
 
 Set-StrictMode -Version Latest
@@ -209,7 +221,7 @@ function Get-ServerArgument {
     param(
         [Parameter(Mandatory)][string]$ConfigPath,
         [Parameter(Mandatory)][string]$ProfilePath,
-        [Parameter(Mandatory)][string[]]$ModPath,
+        [string[]]$ModPath = @(),
         [string]$ServerModPath,
         [Parameter(Mandatory)][int]$Port
     )
@@ -217,9 +229,10 @@ function Get-ServerArgument {
     $arguments = @(
         "-config=$ConfigPath",
         "-port=$Port",
-        "-profiles=$ProfilePath",
-        ("-mod={0}" -f ($ModPath -join ';'))
+        "-profiles=$ProfilePath"
     )
+    # -Vanilla passes no mod folders; the server then runs with no -mod= argument at all.
+    if ($ModPath.Count -gt 0) { $arguments += ("-mod={0}" -f ($ModPath -join ';')) }
     if ($ServerModPath) { $arguments += "-servermod=$ServerModPath" }
     $arguments += '-dologs', '-adminlog', '-freezecheck'
     return $arguments
@@ -360,11 +373,20 @@ try {
     $pack = Get-Content -LiteralPath (Join-Path $RepoRoot 'mods\own\nimby-pack\pack.json') -Raw -Encoding utf8 | ConvertFrom-Json
     $test = $pack.testServer
     if ($null -eq $test) { throw 'pack.json has no testServer section.' }
+    if ($PSBoundParameters.ContainsKey('InstanceId')) {
+        # Per-run world selection on the replica: 998 live copy, 999 fresh (Sync-LiveReplica.ps1).
+        $test.instanceId = $InstanceId
+        Write-Manifest -LogPath $manifest -Line ("INSTANCE override={0}" -f $InstanceId)
+    }
     if (-not (Test-TestInstanceId -InstanceId ([int]$test.instanceId))) { throw "testServer.instanceId $($test.instanceId) is not a test instance; only 998 and 999 are allowed so storage_1 is never written." }
 
     # Build selection ---------------------------------------------------------
     $logRoot = Join-Path $RepoRoot 'logs'
-    if ($BuildPath) {
+    if ($Vanilla) {
+        if ($BuildPath -or $ServerModPath -or $DevPath) { throw '-Vanilla boots with no mod; drop -BuildPath, -ServerModPath, and -DevPath.' }
+        Write-Manifest -LogPath $manifest -Line 'BUILD none (vanilla control boot)'
+    }
+    elseif ($BuildPath) {
         if (-not (Test-ModFolder -Path $BuildPath)) { throw "No addons\*.pbo under -BuildPath '$BuildPath'." }
         $buildLogPath = Get-BuildLogForBuild -BuildPath $BuildPath -LogRoot $logRoot -ModFolderName $pack.modFolderName
         $build = $null
@@ -384,10 +406,10 @@ try {
     }
     if ($ServerModPath -and -not (Test-ModFolder -Path $ServerModPath)) { throw "No addons\*.pbo under -ServerModPath '$ServerModPath'." }
     if ($DevPath -and -not (Test-ModFolder -Path $DevPath)) { throw "No addons\*.pbo under -DevPath '$DevPath'." }
-    Write-Manifest -LogPath $manifest -Line "MOD $BuildPath"
+    if ($Vanilla) { Write-Manifest -LogPath $manifest -Line 'MOD none' } else { Write-Manifest -LogPath $manifest -Line "MOD $BuildPath" }
     if ($ServerModPath) { Write-Manifest -LogPath $manifest -Line "SERVERMOD $ServerModPath" } else { Write-Manifest -LogPath $manifest -Line 'SERVERMOD none' }
     if ($DevPath) { Write-Manifest -LogPath $manifest -Line "DEV $DevPath" } else { Write-Manifest -LogPath $manifest -Line 'DEV none' }
-    foreach ($line in (Get-AddonHashLine -Path $BuildPath -Label 'client')) { Write-Manifest -LogPath $manifest -Line $line }
+    if (-not $Vanilla) { foreach ($line in (Get-AddonHashLine -Path $BuildPath -Label 'client')) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($ServerModPath) { foreach ($line in (Get-AddonHashLine -Path $ServerModPath -Label 'server')) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($DevPath) { foreach ($line in (Get-AddonHashLine -Path $DevPath -Label 'dev')) { Write-Manifest -LogPath $manifest -Line $line } }
 
@@ -410,7 +432,7 @@ try {
 
     # Keys so clients loading the pack pass signature verification.
     $serverKeys = Join-Path $ServerPath 'keys'
-    foreach ($line in (Install-ServerKey -ModPath $BuildPath -ServerKeys $serverKeys)) { Write-Manifest -LogPath $manifest -Line $line }
+    if (-not $Vanilla) { foreach ($line in (Install-ServerKey -ModPath $BuildPath -ServerKeys $serverKeys)) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($DevPath) { foreach ($line in (Install-ServerKey -ModPath $DevPath -ServerKeys $serverKeys)) { Write-Manifest -LogPath $manifest -Line $line } }
 
     # Profile -----------------------------------------------------------------
@@ -436,7 +458,8 @@ try {
     Write-Manifest -LogPath $manifest -Line "BE CONFIG $beConfig rconPort=$rconPort"
 
     # Start -------------------------------------------------------------------
-    $modPaths = @($BuildPath)
+    $modPaths = @()
+    if (-not $Vanilla) { $modPaths += $BuildPath }
     if ($DevPath) { $modPaths += $DevPath }
     $serverArgs = Get-ServerArgument -ConfigPath $config -ProfilePath $profileDir -ModPath $modPaths -ServerModPath $ServerModPath -Port ([int]$test.port)
     Write-Manifest -LogPath $manifest -Line ("SERVER START {0}" -f ($serverArgs -join ' '))
@@ -445,7 +468,7 @@ try {
     $process = Start-Process -FilePath (Join-Path $ServerPath 'DayZServer_x64.exe') -ArgumentList $quoted -WorkingDirectory $ServerPath -PassThru -WindowStyle Minimized
 
     Write-Information -MessageData ("Server starting on port {0}. Join password: {1}" -f $test.port, $password) -InformationAction Continue
-    Write-Information -MessageData ("Client mod folder: {0}" -f $BuildPath) -InformationAction Continue
+    if ($Vanilla) { Write-Information -MessageData 'Client mod folder: none (vanilla)' -InformationAction Continue } else { Write-Information -MessageData ("Client mod folder: {0}" -f $BuildPath) -InformationAction Continue }
     if ($DevPath) { Write-Information -MessageData ("Dev harness folder (load beside the pack): {0}" -f $DevPath) -InformationAction Continue }
     Write-Information -MessageData 'Run the test, then press Enter here to stop the server (RCON #shutdown) and summarize.' -InformationAction Continue
     [void](Read-Host)
