@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Ears key binding (shared rules 5, Ears plan E2).
+  Default N: bin/constants.xml:507 declares kN; bin/preset_X1MouseKey.xml:881-890 uses it only as
+  the modifier of the developer brush inputs, so a plain press is free in play.
+  The sorting group puts the binding on its own NIMBY tab in Options > Controls, where the player
+  rebinds it (EP-005). Vanilla tabs are the <sorting> blocks at bin/constants.xml:812-915.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyEarplugsToggle" loc="Ears: toggle earplugs" />
+        </actions>
+    </inputs>
+    <sorting name="nimby" loc="NIMBY">
+        <input name="UANimbyEarplugsToggle" />
+    </sorting>
+    <preset>
+        <input name="UANimbyEarplugsToggle">
+            <btn name="kN" />
+        </input>
+    </preset>
+</modded_inputs>
