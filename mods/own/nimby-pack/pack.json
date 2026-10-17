@@ -36,6 +36,11 @@
             "folder": "NimbyNotes",
             "pboName": "NimbyNotes",
             "prefix": "NimbyNotes"
+        },
+        {
+            "folder": "NimbyTack",
+            "pboName": "NimbyTack",
+            "prefix": "NimbyTack"
         }
     ],
     "dev": {
