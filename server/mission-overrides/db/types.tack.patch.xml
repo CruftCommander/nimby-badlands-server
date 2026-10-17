@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Tack lifetime rows (plan T5, Claude default; Jeff rules at Phase 2).
+  DRAFT - not applied to the live server. Applies at Tack Phase 2, at a scheduled restart, with
+  the live types.xml backed up first (shared rules 9.2 step 3), after Scrawl's types.scrawl.patch.xml
+  because the pinned classes inherit from Paper. Each <type> below is ADDED to
+  mpmissions/dayzOffline.nasdara/db/types.xml (none exists there today). Everything not listed
+  here is unchanged. Nothing spawns: nominal 0, min 0; the classes exist only through the pin
+  action. lifetime 2592000 (30 days) matches Scrawl's Paper row; CE refreshes it when a player
+  interacts and a raised flag pole refreshes everything in its radius, so a read note stays and a
+  forgotten one despawns. crafted="1" because every instance is player-made. count_in_map="1" so
+  the CE counts pinned notes toward nothing (nominal 0) but still tracks them.
+  Nail stays at its live nominal 0; NailBox (140) is the nail source on Nasdara.
+-->
+<types>
+    <type name="NimbyTack_PinnedNote_Nail">
+        <nominal>0</nominal>
+        <lifetime>2592000</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="tools"/>
+    </type>
+    <type name="NimbyTack_PinnedNote_Tape">
+        <nominal>0</nominal>
+        <lifetime>2592000</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="tools"/>
+    </type>
+    <type name="NimbyTack_PinnedNote_Epoxy">
+        <nominal>0</nominal>
+        <lifetime>2592000</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="tools"/>
+    </type>
+    <type name="NimbyTack_PinnedNote_Knife">
+        <nominal>0</nominal>
+        <lifetime>2592000</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="tools"/>
+    </type>
+</types>
