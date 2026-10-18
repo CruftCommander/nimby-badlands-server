@@ -120,9 +120,13 @@ function Get-NimbyBeServerConfigLine {
         [Parameter(Mandatory)][ValidateRange(1, 65535)][int]$Port
     )
 
+    # RConIP binds the RCON socket to loopback: Send-NimbyRconCommand only ever talks to
+    # 127.0.0.1, and a test server that an outside player reaches over a tunnel or a forwarded
+    # game port must never answer RCON on that path (docs/operations/replica-remote-tester.md).
     return @(
         "RConPassword $Password",
         "RConPort $Port",
+        'RConIP 127.0.0.1',
         'RestrictRCon 0'
     )
 }
