@@ -20,7 +20,7 @@ class CfgMods
     class NimbyNotes
     {
         type = "mod";
-        dependencies[] = { "Game", "World" };
+        dependencies[] = { "Game", "World", "Mission" };
         class defs
         {
             class gameScriptModule
@@ -30,6 +30,10 @@ class CfgMods
             class worldScriptModule
             {
                 files[] = { "NimbyNotes/Scripts/4_World" };
+            };
+            class missionScriptModule
+            {
+                files[] = { "NimbyNotes/Scripts/5_Mission" };
             };
         };
     };
