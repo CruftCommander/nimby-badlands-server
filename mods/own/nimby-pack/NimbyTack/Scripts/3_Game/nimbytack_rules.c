@@ -3,8 +3,8 @@
 // Purpose : The predicates and arithmetic of Tack as pure functions, so the
 //           self-test covers them and the 4_World layer only feeds them facts it
 //           reads from the world: the wall-angle test (T2), the fastener lists
-//           (T2, T7), the wood test for the knife (T2), take-down damage (T4),
-//           the per-area cap (T6), and the config clamps (T6).
+//           (T2, T7), the wood test for the knife (T2), the sheet's facing (T3),
+//           take-down damage (T4), the per-area cap (T6), and the config clamps (T6).
 // -----------------------------------------------------------------------------
 class NimbyTackFastener
 {
@@ -61,12 +61,8 @@ class NimbyTackRules
 {
     // Paper has 15 hitpoints (DZ/gear/consumables/config.cpp:40).
     static const float PAPER_HITPOINTS = 15.0;
-    // The pinned sheet sits this far off the wall along the normal (T3).
-    // Default when no config is loaded (client side, self-test); the server reads wallOffsetMeters.
-    static const float WALL_OFFSET_METERS = 0.03;
-    // The Paper model lies flat with its face up; this pitch turns the face onto the wall.
-    // Phase 0 item 3 confirms the sign in game.
-    static const float PITCH_OFFSET_DEGREES = 90.0;
+    // The wall offset (T3) has one home: NimbyTackConfig.wallOffsetMeters. Callers read it from
+    // the loaded config, or from a fresh NimbyTackConfig for the client-side default.
 
     // T7: every class that drives a nail. Vanilla 1.30 classes: DZ/gear/tools/config.cpp:1660
     // (Hammer), :1806, :1884, :1497; DZ/weapons/melee/blade/config.cpp:171; DZ/weapons/melee/blunt/config.cpp:329.
@@ -151,16 +147,17 @@ class NimbyTackRules
         return lowered.Contains("wood");
     }
 
-    // Superseded October 17, 2026: the Euler form left the sheet horizontal in game. Kept for
-    // the self-test; CreatePinned builds a basis with Math3D.DirectionAndUpMatrix instead.
-    static vector OrientationFor(vector normal)
+    // T3: the direction the sheet's model +Z takes when it is pinned. The Paper model is a sheet
+    // in its own XY plane with its printed front on -Z, so the face takes the negated wall normal
+    // and the page top (model +Y) takes world up; CreatePinned feeds both to
+    // Math3D.DirectionAndUpMatrix. Two Euler forms left the sheet flat like a shelf, and +normal
+    // put the red margin on the right (October 17, 2026 builds 173256 and 182834).
+    static vector FaceDirection(vector normal)
     {
-        vector angles = normal.VectorToAngles();
-        angles[1] = angles[1] + PITCH_OFFSET_DEGREES;
-        return angles;
+        return normal * -1;
     }
 
-    static vector PinPosition(vector hitPosition, vector normal, float offsetMeters = 0.03)
+    static vector PinPosition(vector hitPosition, vector normal, float offsetMeters)
     {
         return hitPosition + normal * offsetMeters;
     }
@@ -318,16 +315,32 @@ class NimbyTackRules
         failures += Case(results, "Wood surface is case-insensitive", IsWoodSurface("WoodPlanks_int"));
         failures += Case(results, "concrete surface refuses the knife", !IsWoodSurface("cp_concrete1"));
 
-        vector orientation = OrientationFor("0 0 1");
-        failures += Case(results, "orientation tips the sheet upright", Math.AbsFloat(orientation[1] - PITCH_OFFSET_DEGREES) < 0.01);
+        vector basis[4];
+        vector wallNormal = "0 0 1";
+        vector awayFromWall = "0 0 -1";
+        Math3D.DirectionAndUpMatrix(FaceDirection(wallNormal), vector.Up, basis);
+        vector face = basis[2];
+        vector pageTop = basis[1];
+        failures += Case(results, "pinned face points away from the wall", vector.Distance(face, awayFromWall) < 0.001);
+        failures += Case(results, "pinned page top stays up", vector.Distance(pageTop, vector.Up) < 0.001);
+        vector leaning = Vector(0.99, -0.137, 0.04);
+        leaning.Normalize();
+        Math3D.DirectionAndUpMatrix(FaceDirection(leaning), vector.Up, basis);
+        vector leaningUp = basis[1];
+        failures += Case(results, "leaning wall keeps the page top near up", leaningUp[1] > 0.98);
         vector pinned = PinPosition("10 2 10", "0 0 1", 0.01);
         failures += Case(results, "pin sits 1 cm off the wall when asked", Math.AbsFloat(pinned[2] - 10.01) < 0.0001);
         vector pinnedDefault = PinPosition("10 2 10", "0 0 1", defaults.wallOffsetMeters);
-        failures += Case(results, "pin sits at the config offset (3 cm default)", Math.AbsFloat(pinnedDefault[2] - 10.03) < 0.0001);
+        failures += Case(results, "pin sits at the config default offset", Math.AbsFloat(pinnedDefault[2] - (10.0 + defaults.wallOffsetMeters)) < 0.0001);
+        failures += Case(results, "config default offset is inside the clamp", defaults.wallOffsetMeters >= 0.005 && defaults.wallOffsetMeters <= 0.2);
         NimbyTackConfig lowOffset = new NimbyTackConfig();
         lowOffset.wallOffsetMeters = 0.0;
         Sanitize(lowOffset);
         failures += Case(results, "offset below 5 mm clamps to 5 mm", Math.AbsFloat(lowOffset.wallOffsetMeters - 0.005) < 0.0001);
+        NimbyTackConfig highOffset = new NimbyTackConfig();
+        highOffset.wallOffsetMeters = 1.0;
+        Sanitize(highOffset);
+        failures += Case(results, "offset above 20 cm clamps to 20 cm", Math.AbsFloat(highOffset.wallOffsetMeters - 0.2) < 0.0001);
 
         failures += Case(results, "nail damage default 5", TakeDownDamage(NimbyTackFastener.NAIL, defaults) == 5.0);
         failures += Case(results, "tape damage default 3", TakeDownDamage(NimbyTackFastener.TAPE, defaults) == 3.0);

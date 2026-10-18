@@ -9,6 +9,11 @@
 //           opened and closed once (seen October 17, 2026, every read). This
 //           override removes both when the note menu hides, the same two calls
 //           HideInventory makes.
+// Guard   : When the inventory menu is itself open underneath (N9 will open the
+//           note menu from a pen-and-paper combine in the inventory), the exclude
+//           and the restriction belong to the inventory and HideInventory removes
+//           them later; stripping them here would free mouse look and jump under
+//           an open inventory (self-review S2).
 // Client  : UIScriptedMenu exists only on the client; the server never builds one.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
@@ -23,8 +28,14 @@ modded class NoteMenu
         {
             return;
         }
+        UIManager ui = g_Game.GetUIManager();
+        if (ui && ui.FindMenu(MENU_INVENTORY))
+        {
+            NimbyNotesLog.Debug("note menu closed over the inventory; input state left to HideInventory");
+            return;
+        }
         mission.RemoveActiveInputExcludes({"inventory"}, false);
         mission.RemoveActiveInputRestriction(EInputRestrictors.INVENTORY);
-        Print("[NIMBY][Notes] note menu closed; inventory input exclude and restriction removed");
+        NimbyNotesLog.Debug("note menu closed; inventory input exclude and restriction removed");
     }
 }

@@ -13,8 +13,9 @@
 //           no mouse look, no jump, until the sheet leaves the hands (seen
 //           October 17, 2026 on every read). NimbyNotesMenuWatch ends the
 //           action the first frame the menu is closed after having been open.
-//           The action objects are per-client singletons, so the flag is safe
-//           on the client and never read on the server.
+//           The action objects are per-client singletons, so one watcher per
+//           action is safe on the client and never read on the server. Read and
+//           write share the watcher class so the logic lives once (S10).
 // -----------------------------------------------------------------------------
 modded class ActionConstructor
 {
@@ -26,11 +27,45 @@ modded class ActionConstructor
     }
 }
 
-// N11: shared by the read and write actions. Returns true when the action was ended.
+// N11: one instance per action. Reset at action start; Update every client frame.
 class NimbyNotesMenuWatch
 {
-    // Each action keeps its own seen flag (Enforce out parameters on members are
-    // unreliable, shared rules) and calls these two helpers from OnUpdate.
+    protected string m_Which;
+    protected bool m_Seen;
+
+    void NimbyNotesMenuWatch(string which)
+    {
+        m_Which = which;
+        m_Seen = false;
+    }
+
+    void Reset()
+    {
+        m_Seen = false;
+    }
+
+    // Ends the action the first frame the note menu is closed after having been open.
+    void Update(ActionData action_data)
+    {
+        if (g_Game.IsHeadlessOrDedicatedServer())
+        {
+            return;
+        }
+        if (MenuOpen())
+        {
+            m_Seen = true;
+            return;
+        }
+        if (!m_Seen)
+        {
+            return;
+        }
+        if (EndAction(action_data, m_Which))
+        {
+            m_Seen = false;
+        }
+    }
+
     static bool MenuOpen()
     {
         if (g_Game.IsHeadlessOrDedicatedServer())
@@ -64,74 +99,52 @@ class NimbyNotesMenuWatch
             return false;
         }
         manager.RequestEndAction();
-        Print("[NIMBY][Notes] " + which + " ended: note menu closed");
+        NimbyNotesLog.Debug(which + " ended: note menu closed");
         return true;
     }
 }
 
 modded class ActionReadPaper
 {
-    protected bool m_NimbyNotesMenuSeen;
+    protected ref NimbyNotesMenuWatch m_NimbyNotesWatch;
+
+    void ActionReadPaper()
+    {
+        m_NimbyNotesWatch = new NimbyNotesMenuWatch("read");
+    }
 
     override void OnStartClient(ActionData action_data)
     {
         super.OnStartClient(action_data);
-        m_NimbyNotesMenuSeen = false;
+        m_NimbyNotesWatch.Reset();
     }
 
     override void OnUpdate(ActionData action_data)
     {
         super.OnUpdate(action_data);
-        if (g_Game.IsHeadlessOrDedicatedServer())
-        {
-            return;
-        }
-        if (NimbyNotesMenuWatch.MenuOpen())
-        {
-            m_NimbyNotesMenuSeen = true;
-            return;
-        }
-        if (!m_NimbyNotesMenuSeen)
-        {
-            return;
-        }
-        if (NimbyNotesMenuWatch.EndAction(action_data, "read"))
-        {
-            m_NimbyNotesMenuSeen = false;
-        }
+        m_NimbyNotesWatch.Update(action_data);
     }
 }
 
 modded class ActionWritePaper
 {
-    protected bool m_NimbyNotesMenuSeen;
+    protected ref NimbyNotesMenuWatch m_NimbyNotesWatch;
+
+    void ActionWritePaper()
+    {
+        m_NimbyNotesWatch = new NimbyNotesMenuWatch("write");
+    }
 
     override void OnStartClient(ActionData action_data)
     {
         super.OnStartClient(action_data);
-        m_NimbyNotesMenuSeen = false;
+        m_NimbyNotesWatch.Reset();
     }
 
     override void OnUpdate(ActionData action_data)
     {
         super.OnUpdate(action_data);
-        if (g_Game.IsHeadlessOrDedicatedServer())
-        {
-            return;
-        }
-        if (NimbyNotesMenuWatch.MenuOpen())
-        {
-            m_NimbyNotesMenuSeen = true;
-            return;
-        }
-        if (!m_NimbyNotesMenuSeen)
-        {
-            return;
-        }
-        if (NimbyNotesMenuWatch.EndAction(action_data, "write"))
-        {
-            m_NimbyNotesMenuSeen = false;
-        }
+        m_NimbyNotesWatch.Update(action_data);
     }
 
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)

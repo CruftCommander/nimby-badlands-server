@@ -36,14 +36,29 @@ class NimbyTackWorld
         return "pos=" + position[0].ToString() + " " + position[1].ToString() + " " + position[2].ToString();
     }
 
+    // Why the last ProbeWall call refused, as one token for the server's refusal line. The
+    // actions run one probe at a time on each side, so a static is enough and avoids a second
+    // out parameter (Enforce out parameters on members are unreliable, shared rules).
+    protected static string s_LastProbeReason = "";
+
+    static string LastProbeReason()
+    {
+        return s_LastProbeReason;
+    }
+
     // T2: the wall under the cursor. The action target gives the object and the cursor hit
     // position but no normal (ActionTargets.c:115), so one raycast from the head to just past
-    // the hit point recovers the normal and the surface material. Players, items, and the
-    // probing player are never walls.
-    static bool ProbeWall(PlayerBase player, ActionTarget target, NimbyTackConfig config, out NimbyTackHit hit)
+    // the hit point recovers the normal and, when asked, the surface material. Players, items,
+    // and the probing player are never walls.
+    // wantSurface: the surface name costs a second raycast against fire geometry, so only the
+    // knife's wood test, the server's pin log, and the debug flag ask for it; the other
+    // fasteners' per-frame client condition does not.
+    static bool ProbeWall(PlayerBase player, ActionTarget target, NimbyTackConfig config, bool wantSurface, out NimbyTackHit hit)
     {
+        s_LastProbeReason = "";
         if (!player || !target)
         {
+            s_LastProbeReason = "no-target";
             return false;
         }
         Object wall = target.GetObject();
@@ -53,16 +68,19 @@ class NimbyTackWorld
         }
         if (!wall)
         {
+            s_LastProbeReason = "no-object";
             return false;
         }
         if (wall.IsMan() || wall.IsInherited(ItemBase))
         {
+            s_LastProbeReason = "target-not-building";
             return false;
         }
         vector head = MiscGameplayFunctions.GetPlayerHeadPosition(player);
         vector cursor = target.GetCursorHitPos();
         if (vector.Distance(head, cursor) > config.reachMeters)
         {
+            s_LastProbeReason = "out-of-reach";
             return false;
         }
         vector direction = vector.Direction(head, cursor);
@@ -73,6 +91,7 @@ class NimbyTackWorld
         array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
         if (!DayZPhysics.RaycastRVProxy(params, results))
         {
+            s_LastProbeReason = "no-hit";
             NimbyTackLog.Debug("probe: no hit from head to cursor");
             return false;
         }
@@ -88,18 +107,27 @@ class NimbyTackWorld
             }
             vector normal = result.dir;
             normal.Normalize();
-            string surfaceName = SurfaceNameOf(result);
-            if (surfaceName == "")
-            {
-                // The view-geometry hit carried no surface on every Nasdara building tried on
-                // October 17, 2026. Fire geometry is what bullets read materials from, so ask it.
-                surfaceName = FireSurfaceName(head, end, player, result.obj);
-            }
-            NimbyTackLog.Debug("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+            // The angle test comes before the surface lookup: a floor or a ceiling never pays
+            // for the second ray.
             if (!NimbyTackRules.IsWallNormal(normal, config.wallAngleDegrees))
             {
+                s_LastProbeReason = "not-wall-angle";
+                NimbyTackLog.Debug("probe: refused hit=" + result.obj.GetType() + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
                 return false;
             }
+            string surfaceName = "";
+            if (wantSurface)
+            {
+                surfaceName = SurfaceNameOf(result);
+                if (surfaceName == "")
+                {
+                    // The view-geometry hit carried no surface on every Nasdara building tried
+                    // on October 17, 2026. Fire geometry is what bullets read materials from,
+                    // so ask it.
+                    surfaceName = FireSurfaceName(head, end, player, result.obj, result.pos);
+                }
+            }
+            NimbyTackLog.Debug("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
             hit = new NimbyTackHit();
             hit.position = result.pos;
             hit.normal = normal;
@@ -107,6 +135,7 @@ class NimbyTackWorld
             hit.wall = result.obj;
             return true;
         }
+        s_LastProbeReason = "no-building-hit";
         return false;
     }
 
@@ -209,8 +238,11 @@ class NimbyTackWorld
     }
 
     // Same ray against fire geometry (ObjIntersectFire), surface of the first hit on the wall
-    // object. Debug-logs what it found so the test record can settle how 1.30 reports walls.
-    static string FireSurfaceName(vector head, vector end, PlayerBase player, Object wall)
+    // object. Debug-logs what it found, with the fire hit's position and normal next to the
+    // view-geometry hit (viewHit) and the gap between them: the pin sits on the view hit, and
+    // on Land_House_1M3_Dam2 that point is inside the rendered mud-brick relief at 3 cm
+    // (October 17, 2026). The two planes decide whether the fire hit should place the pin.
+    static string FireSurfaceName(vector head, vector end, PlayerBase player, Object wall, vector viewHit)
     {
         RaycastRVParams params = new RaycastRVParams(head, end, player, 0.0);
         params.sorted = true;
@@ -232,16 +264,19 @@ class NimbyTackWorld
                 continue;
             }
             string name = SurfaceNameOf(result);
-            NimbyTackLog.Debug("probe: fire-geometry surface=" + name + " component=" + result.component.ToString());
+            vector fireNormal = result.dir;
+            fireNormal.Normalize();
+            float gap = vector.Distance(result.pos, viewHit);
+            NimbyTackLog.Debug("probe: fire-geometry surface=" + name + " component=" + result.component.ToString() + " normal=" + fireNormal.ToString() + " " + PositionTag(result.pos) + " view-" + PositionTag(viewHit) + " gap=" + gap.ToString());
             return name;
         }
         NimbyTackLog.Debug("probe: fire-geometry ray did not hit the wall object");
         return "";
     }
 
-    // T3: create the pinned class at the hit point, 1 cm off the wall, facing the normal, with
-    // the sheet's text and health. No ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the engine does not
-    // drop it to the ground (CentralEconomy.c:28).
+    // T3: create the pinned class at the hit point, wallOffsetMeters off the wall along the
+    // normal, facing out, with the sheet's text and health. No ECE_CREATEPHYSICS; ECE_KEEPHEIGHT
+    // so the engine does not drop it to the ground (CentralEconomy.c:28).
     static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackHit hit, Paper sheet)
     {
         string className = NimbyTackFastener.PinnedClass(fastener);
@@ -261,16 +296,11 @@ class NimbyTackWorld
             }
             return null;
         }
-        // Orientation as a basis, not Euler angles. The Paper model is a sheet in its own
-        // XY plane: width along model X, page height along model Y, face along model Z (two
-        // builds on October 17, 2026 proved it: Euler yaw-to-normal plus pitch 90, and a
-        // basis with model +Y on the normal, both left the sheet horizontal like a shelf,
-        // which only a Z-facing sheet does under both). So the face (model +Z) takes the
-        // wall normal and the page top (model +Y) takes world up. The 18:34 run showed the
-        // ruled side with its red margin on the right, so the model's front is -Z: the
-        // direction is the negated normal, which mirrors left-right and keeps the top up.
+        // Orientation as a basis, not Euler angles: model +Z takes NimbyTackRules.FaceDirection
+        // (the negated normal, so the printed front faces out) and model +Y takes world up.
+        // The reasoning and the two failed forms are recorded on FaceDirection.
         vector transform[4];
-        Math3D.DirectionAndUpMatrix(hit.normal * -1, vector.Up, transform);
+        Math3D.DirectionAndUpMatrix(NimbyTackRules.FaceDirection(hit.normal), vector.Up, transform);
         transform[3] = position;
         pinned.SetTransform(transform);
         pinned.NimbyTackFreeze();

@@ -86,8 +86,11 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         {
             return false;
         }
+        // Only the knife needs the surface name here (wood test); the debug flag asks for it
+        // so the test record sees every surface. Everyone else skips the fire-geometry ray.
+        bool wantSurface = GetFastener() == NimbyTackFastener.KNIFE || NimbyTackLog.IsDebug();
         NimbyTackHit hit;
-        if (!NimbyTackWorld.ProbeWall(player, target, config, hit))
+        if (!NimbyTackWorld.ProbeWall(player, target, config, wantSurface, hit))
         {
             return false;
         }
@@ -128,9 +131,9 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             }
         }
         NimbyTackHit hit;
-        if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, hit))
+        if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, true, hit))
         {
-            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=no-wall " + who);
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " " + who);
             player.MessageStatus("There is no wall there.");
             return;
         }
@@ -155,7 +158,10 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         }
         ConsumeFastener(player, tool, nail, pinned, config);
         GetGame().ObjectDelete(sheet);
-        NimbyTackLog.Info("pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+        // Built in two statements: one concatenation this long is "Formula too complex" to Enforce.
+        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + config.wallOffsetMeters.ToString();
+        line = line + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
+        NimbyTackLog.Info(line);
     }
 
     // T2: what the pin costs. Nail, tape, and epoxy are spent and never come back; the knife
@@ -293,7 +299,12 @@ class ActionNimbyTackTakeDown : ActionContinuousBase
         m_FullBody = true;
         m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
         m_Text = "Take down note";
-        m_LockTargetOnUse = false;
+        // The target lock stays at its default (true, ActionBase.c:89). The pin actions drop it
+        // because their target is a wall with no inventory; this target is a Paper with one,
+        // so the lock reserves it and a second player's take-down on the same note waits.
+        // Without it two take-downs in one frame each created a sheet from one note
+        // (self-review S1, October 17, 2026). The IsSetForDeletion guards below cover the
+        // frame between the first finish and the engine's delete.
     }
 
     // The action lives on the pinned note (the target), not on an item in hands. Only the
@@ -322,6 +333,10 @@ class ActionNimbyTackTakeDown : ActionContinuousBase
         {
             return false;
         }
+        if (pinned.IsSetForDeletion())
+        {
+            return false;
+        }
         return pinned.GetNimbyTackFastener() >= 0;
     }
 
@@ -333,6 +348,13 @@ class ActionNimbyTackTakeDown : ActionContinuousBase
         if (!player || !pinned)
         {
             NimbyTackLog.Info("refuse takedown reason=no-target " + who);
+            return;
+        }
+        if (pinned.IsSetForDeletion())
+        {
+            // Another take-down or a burn finished on this note first; a second sheet would
+            // duplicate the text.
+            NimbyTackLog.Info("refuse takedown reason=deleted class=" + pinned.GetType() + " " + who + " " + NimbyTackWorld.PositionTag(pinned.GetPosition()));
             return;
         }
         NimbyTackConfig config = NimbyTackConfigLoader.Get();

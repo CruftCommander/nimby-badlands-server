@@ -63,11 +63,14 @@ class NimbyTack_PinnedNote : Paper
             knifeNote = " knife=ground";
         }
         string source = "unknown";
+        PlayerBase burner = null;
         if (fire_source)
         {
             source = fire_source.GetType();
+            // The match is in the burner's hands, so its hierarchy root is the player.
+            burner = PlayerBase.Cast(fire_source.GetHierarchyRootPlayer());
         }
-        NimbyTackLog.Info("burn class=" + GetType() + " source=" + source + knifeNote + " " + NimbyTackWorld.PositionTag(GetPosition()));
+        NimbyTackLog.Info("burn class=" + GetType() + " source=" + source + knifeNote + " " + NimbyTackWorld.PlayerTag(burner) + " " + NimbyTackWorld.PositionTag(GetPosition()));
         GetGame().ObjectDelete(this);
     }
 

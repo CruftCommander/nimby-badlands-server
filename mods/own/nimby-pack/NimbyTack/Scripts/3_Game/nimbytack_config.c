@@ -20,8 +20,11 @@ class NimbyTackConfig
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
     float wallAngleDegrees = 25.0;
-    // T3: how far off the wall the sheet is created, along the normal. 1 cm sat inside the
-    // relief of the Nasdara mud-brick walls (October 17, 2026); the shed was fine at 1 cm.
+    // T3: how far off the wall the sheet is created, along the normal. This initializer is the
+    // only place the default lives (self-test and client read it through a fresh instance).
+    // 1 cm sat inside the relief of the Nasdara mud-brick walls and 3 cm still clipped
+    // Land_House_1M3_Dam2 (October 17, 2026); the shed was fine at 1 cm. Moves only once a
+    // value clears the relief in game.
     float wallOffsetMeters = 0.03;
     // T4: health taken from the sheet per take-down, by fastener. Paper has 15 hitpoints.
     float takeDownDamageNail = 5.0;
@@ -97,8 +100,19 @@ class NimbyTackConfigLoader
         NimbyTackConfig loaded = new NimbyTackConfig();
         if (FileExist(PATH))
         {
-            JsonFileLoader<NimbyTackConfig>.JsonLoadFile(PATH, loaded);
-            NimbyTackLog.Info("config loaded; path=" + PATH);
+            // LoadFile reports a parse failure; the legacy JsonLoadFile swallowed it and the
+            // server ran on defaults while logging "config loaded". The operator's file is left
+            // untouched so the typo can be fixed; the defaults run until the next restart.
+            string error;
+            if (!JsonFileLoader<NimbyTackConfig>.LoadFile(PATH, loaded, error))
+            {
+                loaded = new NimbyTackConfig();
+                NimbyTackLog.Info("config invalid; defaults in use; path=" + PATH + " error=" + error);
+            }
+            else
+            {
+                NimbyTackLog.Info("config loaded; path=" + PATH);
+            }
         }
         else
         {
