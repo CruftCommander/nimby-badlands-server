@@ -185,6 +185,8 @@ Decided by Jeff, October 15, 2026: independent, gated. Each mod ships on its own
 
 Decided by Jeff, October 15, 2026: one public Steam Workshop item, `@NIMBY`, containing only release-qualified client PBOs. Consequences: every third-party piece keeps its attribution and permission evidence inside the pack and in `NOTICE`; the Hands permission capture is a release blocker; the preview image stays small because it is the only real download-size driver; the pack README's "Not a public Workshop release" line is superseded.
 
+Decided by Jeff, October 17, 2026: the source of every NIMBY mod is public. The Workshop item description links the GitHub repository (or repositories) that hold `mods/own/nimby-pack/`. Consequences: the repository needs a public remote before the first release (none exists today); the repository MUST NOT contain `serverDZ*.cfg` values, BattlEye configuration, the signing private key, or any profile-folder secret (already section 10); third-party notices in `NOTICE` cover the published source as well as the PBOs; a license file is chosen before the remote goes public.
+
 ## 10. Guardrails
 
 - No live-server change without Jeff's approval. Never take the server offline outside the restart chain.
