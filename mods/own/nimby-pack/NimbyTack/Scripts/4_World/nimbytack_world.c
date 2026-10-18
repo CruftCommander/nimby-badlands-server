@@ -1,10 +1,16 @@
 // -----------------------------------------------------------------------------
 // NimbyTack - world queries shared by the actions.
-// Purpose : The engine-facing half of Tack: the wall probe (raycast from the head
-//           to the cursor hit, normal and surface read from RaycastRVResult,
-//           DayZPhysics.c:208), the inventory searches, the per-area count, the
-//           pinned-note creation, and the log tags. Every decision these feed is
-//           made in NimbyTackRules.
+// Purpose : The engine-facing half of Tack: the wall probe (view-geometry raycast
+//           from the head to the cursor hit for the object, position, and surface,
+//           DayZPhysics.c:98; physics raycast for the normal, DayZPhysics.c:211),
+//           the inventory searches, the per-area count, the pinned-note creation,
+//           and the log tags. Every decision these feed is made in NimbyTackRules.
+// Normal  : RaycastRVResult.dir is NOT the surface normal for a line-object hit.
+//           The October 18, 2026 round logged it varying with the player's pitch on
+//           one flat shed wall (y from +0.18 to -0.20), so it is the ray itself;
+//           "normal * offset" had been pushing the sheet INTO the wall, which is why
+//           1 cm sat inside the mud brick and 6 cm vanished in both walls. The normal
+//           now comes from DayZPhysics.RayCastBullet and points toward the player.
 // -----------------------------------------------------------------------------
 class NimbyTackHit
 {
@@ -105,8 +111,12 @@ class NimbyTackWorld
             {
                 continue;
             }
-            vector normal = result.dir;
-            normal.Normalize();
+            vector normal;
+            if (!WallNormal(head, end, direction, player, normal))
+            {
+                s_LastProbeReason = "no-physics-normal";
+                return false;
+            }
             // The angle test comes before the surface lookup: a floor or a ceiling never pays
             // for the second ray.
             if (!NimbyTackRules.IsWallNormal(normal, config.wallAngleDegrees))
@@ -217,6 +227,41 @@ class NimbyTackWorld
         return count;
     }
 
+    // The outward surface normal at the wall under the ray, from the physics geometry
+    // (PhxInteractionLayers.BUILDING). RayCastBullet reports the face normal; when the physics
+    // geometry hands back the far face, the normal is flipped so it always points toward the
+    // player, which is the side the sheet hangs on and faces.
+    static bool WallNormal(vector head, vector end, vector direction, PlayerBase player, out vector normal)
+    {
+        Object hitObject;
+        vector hitPosition;
+        vector hitNormal;
+        float hitFraction;
+        if (!DayZPhysics.RayCastBullet(head, end, PhxInteractionLayers.BUILDING, player, hitObject, hitPosition, hitNormal, hitFraction))
+        {
+            NimbyTackLog.Debug("probe: physics ray had no building hit");
+            return false;
+        }
+        if (hitNormal.Length() < 0.5)
+        {
+            NimbyTackLog.Debug("probe: physics ray returned a zero normal");
+            return false;
+        }
+        hitNormal.Normalize();
+        if (vector.Dot(hitNormal, direction) > 0.0)
+        {
+            hitNormal = hitNormal * -1;
+        }
+        string hitName = "none";
+        if (hitObject)
+        {
+            hitName = hitObject.GetType();
+        }
+        NimbyTackLog.Debug("probe: physics hit=" + hitName + " normal=" + hitNormal.ToString() + " fraction=" + hitFraction.ToString() + " " + PositionTag(hitPosition));
+        normal = hitNormal;
+        return true;
+    }
+
     // Surface name from one raycast hit: the surface file name, else its type. Empty when the
     // geometry carries no surface info.
     static string SurfaceNameOf(RaycastRVResult result)
@@ -297,8 +342,8 @@ class NimbyTackWorld
             return null;
         }
         // Orientation as a basis, not Euler angles: model +Z takes NimbyTackRules.FaceDirection
-        // (the negated normal, so the printed front faces out) and model +Y takes world up.
-        // The reasoning and the two failed forms are recorded on FaceDirection.
+        // (the outward normal, toward the player) and model +Y takes world up. The reasoning
+        // and the failed forms are recorded on FaceDirection.
         vector transform[4];
         Math3D.DirectionAndUpMatrix(NimbyTackRules.FaceDirection(hit.normal), vector.Up, transform);
         transform[3] = position;

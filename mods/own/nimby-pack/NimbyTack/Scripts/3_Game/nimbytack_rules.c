@@ -147,14 +147,15 @@ class NimbyTackRules
         return lowered.Contains("wood");
     }
 
-    // T3: the direction the sheet's model +Z takes when it is pinned. The Paper model is a sheet
-    // in its own XY plane with its printed front on -Z, so the face takes the negated wall normal
-    // and the page top (model +Y) takes world up; CreatePinned feeds both to
-    // Math3D.DirectionAndUpMatrix. Two Euler forms left the sheet flat like a shelf, and +normal
-    // put the red margin on the right (October 17, 2026 builds 173256 and 182834).
+    // T3: the direction the sheet's model +Z takes when it is pinned: the outward wall normal,
+    // toward the player, so the printed side reads correctly from where the pin was made (page
+    // top, model +Y, takes world up; CreatePinned feeds both to Math3D.DirectionAndUpMatrix).
+    // History: the October 17, 2026 builds passed RaycastRVResult.dir as the normal, which is the
+    // ray into the wall, so "negated normal" was what faced the player; with a real outward
+    // normal from the physics ray (October 18, 2026) the same facing is +normal.
     static vector FaceDirection(vector normal)
     {
-        return normal * -1;
+        return normal;
     }
 
     static vector PinPosition(vector hitPosition, vector normal, float offsetMeters)
@@ -317,11 +318,10 @@ class NimbyTackRules
 
         vector basis[4];
         vector wallNormal = "0 0 1";
-        vector awayFromWall = "0 0 -1";
         Math3D.DirectionAndUpMatrix(FaceDirection(wallNormal), vector.Up, basis);
         vector face = basis[2];
         vector pageTop = basis[1];
-        failures += Case(results, "pinned face points away from the wall", vector.Distance(face, awayFromWall) < 0.001);
+        failures += Case(results, "pinned face points along the outward normal", vector.Distance(face, wallNormal) < 0.001);
         failures += Case(results, "pinned page top stays up", vector.Distance(pageTop, vector.Up) < 0.001);
         vector leaning = Vector(0.99, -0.137, 0.04);
         leaning.Normalize();

@@ -1,9 +1,12 @@
 // -----------------------------------------------------------------------------
-// NimbyTack - the pin actions (T2) and the take-down action (T4).
+// NimbyTack - the pin actions (T2), the read action (T3), and the take-down action (T4).
 // Purpose : Four continuous actions, one per fastener, each with the fastener in
 //           hands as the main item and the wall under the cursor as the target;
+//           one continuous action on a pinned note that opens its text in place;
 //           one continuous action on a pinned note that returns a sheet. All on the
-//           vanilla action framework (shared rules 4.1: no RPC).
+//           vanilla action framework (shared rules 4.1: no RPC of our own; the read
+//           reuses vanilla ERPCs.RPC_READ_NOTE, which ItemBase routes to
+//           WrittenNoteData.OnRPC and the NoteMenu).
 // Vanilla : ActionContinuousBase hooks ActionContinuousBase.c:289 (OnFinishProgressServer);
 //           CCTCursor and CCINonRuined as in ActionCreateIndoorFireplace.c;
 //           CMD_ACTIONFB_ASSEMBLE is the hammering loop (ActionBuildPart.c:38),
@@ -277,6 +280,127 @@ class ActionNimbyTackPinKnife : ActionNimbyTackPinBase
     }
 }
 
+// T3: read a pinned note where it hangs. Vanilla ActionReadPaper reads the item in hands
+// (CCTNone, HasTarget false, ActionReadPaper.c), so a Paper on a wall never offers it; this is
+// the same action shaped as a target action: hold F on the note, the server sends the text
+// with RPC_READ_NOTE to the reader only (ActionReadPaper.c:24), the client's WrittenNoteData
+// opens the NoteMenu read view (WrittenNoteData.c:46), and the NimbyNotes watcher ends the
+// endless component when the menu closes (N11). No target lock: reading changes nothing and
+// two players may read one note at once.
+class ActionNimbyTackReadCB : ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        EnableStateChangeCallback();
+        m_ActionData.m_ActionComponent = new CAContinuousTime(-1.0);
+    }
+
+    override void EndActionComponent()
+    {
+    }
+
+    override void OnStateChange(int pOldState, int pCurrentState)
+    {
+        if (pCurrentState == STATE_NONE && !g_Game.IsHeadlessOrDedicatedServer())
+        {
+            if (g_Game.GetUIManager() && g_Game.GetUIManager().IsMenuOpen(MENU_NOTE))
+            {
+                g_Game.GetUIManager().FindMenu(MENU_NOTE).Close();
+            }
+            return;
+        }
+        if (pCurrentState != STATE_LOOP_LOOP || pOldState == STATE_LOOP_LOOP)
+        {
+            return;
+        }
+        if (g_Game.IsMultiplayer() && !g_Game.IsServer())
+        {
+            return;
+        }
+        NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(m_ActionData.m_Target.GetObject());
+        if (!pinned)
+        {
+            NimbyTackLog.Info("refuse read reason=no-target " + NimbyTackWorld.PlayerTag(m_ActionData.m_Player));
+            return;
+        }
+        string text = "";
+        WrittenNoteData data = pinned.GetWrittenNoteData();
+        if (data)
+        {
+            text = data.GetNoteText();
+        }
+        Param1<string> param = new Param1<string>(text);
+        pinned.RPCSingleParam(ERPCs.RPC_READ_NOTE, param, true, m_ActionData.m_Player.GetIdentity());
+        NimbyTackLog.Info("read class=" + pinned.GetType() + " length=" + text.Length().ToString() + " " + NimbyTackWorld.PlayerTag(m_ActionData.m_Player) + " " + NimbyTackWorld.PositionTag(pinned.GetPosition()));
+    }
+}
+
+class ActionNimbyTackRead : ActionContinuousBase
+{
+    protected ref NimbyNotesMenuWatch m_NimbyMenuWatch;
+
+    void ActionNimbyTackRead()
+    {
+        m_CallbackClass = ActionNimbyTackReadCB;
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_VIEWNOTE;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_Text = "Read note";
+        m_LockTargetOnUse = false;
+        m_NimbyMenuWatch = new NimbyNotesMenuWatch("tack-read");
+    }
+
+    // Target actions are only read by the interact input (hold F), as on take-down (T14).
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
+    }
+
+    override void CreateConditionComponents()
+    {
+        m_ConditionItem = new CCINone;
+        m_ConditionTarget = new CCTCursor(UAMaxDistances.DEFAULT);
+    }
+
+    override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
+    {
+        if (!player || !target)
+        {
+            return false;
+        }
+        NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(target.GetObject());
+        if (!pinned)
+        {
+            return false;
+        }
+        if (pinned.IsSetForDeletion())
+        {
+            return false;
+        }
+        return pinned.GetNimbyTackFastener() >= 0;
+    }
+
+    override void OnStartClient(ActionData action_data)
+    {
+        super.OnStartClient(action_data);
+        m_NimbyMenuWatch.Reset();
+    }
+
+    override void OnUpdate(ActionData action_data)
+    {
+        super.OnUpdate(action_data);
+        m_NimbyMenuWatch.Update(action_data);
+    }
+
+    override void OnEndRequest(ActionData action_data)
+    {
+        if (action_data.m_Callback)
+        {
+            action_data.m_Callback.InternalCommand(DayZPlayerConstants.CMD_ACTIONINT_INTERRUPT);
+        }
+    }
+}
+
 // T4: pull a pinned note down by hand. No tool; the sheet comes back to the player's inventory
 // (or the ground when it is full) with its text and the fastener's damage applied; the knife
 // comes back with it.
@@ -424,6 +548,7 @@ modded class ActionConstructor
         actions.Insert(ActionNimbyTackPinTape);
         actions.Insert(ActionNimbyTackPinEpoxy);
         actions.Insert(ActionNimbyTackPinKnife);
+        actions.Insert(ActionNimbyTackRead);
         actions.Insert(ActionNimbyTackTakeDown);
     }
 }

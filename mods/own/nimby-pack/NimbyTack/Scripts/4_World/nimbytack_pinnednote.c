@@ -99,9 +99,12 @@ class NimbyTack_PinnedNote : Paper
         return false;
     }
 
+    // Read first so hold F reads by default and take-down is one scroll away (T3, T4). The
+    // inherited ActionReadPaper stays registered but never offers: it has no target.
     override void SetActions()
     {
         super.SetActions();
+        AddAction(ActionNimbyTackRead);
         AddAction(ActionNimbyTackTakeDown);
     }
 }
