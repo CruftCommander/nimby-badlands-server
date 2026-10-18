@@ -1,6 +1,6 @@
 # Plan 7 - Ears (`NimbyEarplugs`)
 
-Draft v0.5, October 16, 2026. Changes since v0.4: the `pack.json` row lands at Phase 0, not Phase 1 (E6, Jeff), because the Phase 0 probe is a client addon that has to build and load; `missionGameplay.c:1690` identified as `OnPlayerRespawned`, and the other vanilla writes to the scene volume listed, so Phase 0 item 3 names the real candidates. Changes since v0.3: default key N, not End (E2, Jeff); End is free again. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/ears`, coordinated by the orchestrator. Status: draft for Jeff's review. Changes since v0.2: display name Ears (Jeff, October 16, 2026; was Hush), worktree `feat/ears`; EP-005 is now the pack's first proof that a NIMBY binding is rebindable in the vanilla Controls page (shared rules 5). Changes since v0.1: display name Hush (E1).
+Draft v0.7, October 17, 2026. Changes since v0.6: Phase 0 test block run on the replica (test record `docs/testing/2026-10-16-ears-phase0.md`): the reduced level held across every menu including the Sound slider with no reapply, so the E9 sampler stays as a safety net; the vanilla notification leak found and fixed (E4); the binding moves to the vanilla Others tab because 1.30 ignores a new `<sorting>` group from `modded_inputs` (EP-005 passed, E11); the client `$profile:` is `%LOCALAPPDATA%\DayZ` (E10 corrected). Status: Phase 1 rebuild pending with the two fixes. Changes since v0.5: Phase 1 written ahead of the Phase 0 test block (Jeff, October 16, 2026): the toggle reapplies the level whenever the scene drifts from the expected value (E9), which covers every reset point Phase 0 can find; earplugs come out at death (E7); the saved level is read live (E8); logging follows shared rules 4.3 with the `$profile:NimbyEarplugs\debug` flag. Status: Phase 0 and Phase 1 built in `build\@NIMBY-20261016-163053` and later, awaiting the in-game test block. Changes since v0.4: the `pack.json` row lands at Phase 0, not Phase 1 (E6, Jeff), because the Phase 0 probe is a client addon that has to build and load; `missionGameplay.c:1690` identified as `OnPlayerRespawned`, and the other vanilla writes to the scene volume listed, so Phase 0 item 3 names the real candidates. Changes since v0.3: default key N, not End (E2, Jeff); End is free again. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/ears`, coordinated by the orchestrator. Status: draft for Jeff's review. Changes since v0.2: display name Ears (Jeff, October 16, 2026; was Hush), worktree `feat/ears`; EP-005 is now the pack's first proof that a NIMBY binding is rebindable in the vanilla Controls page (shared rules 5). Changes since v0.1: display name Hush (E1).
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
@@ -33,9 +33,14 @@ Ears lets a player press one key to lower the game's effect volume and press it 
 | E1 | Display name | Ears. Code prefix `NimbyEarplugs`, log prefix `[NIMBY][Earplugs]`, Controls entry "Ears: toggle earplugs" | Decided by Jeff, October 16, 2026 (Hush on October 15) |
 | E2 | Default key | N (`kN`), input `UANimbyEarplugsToggle`. End was the October 15 choice and is free again | Decided by Jeff, October 16, 2026 |
 | E3 | Reduced level | 15 percent of the player's saved volume, 0.5 s fade in and out; both in a client-side constant block, not a profile file, because the client has no profile write path the pack relies on | Claude default |
-| E4 | Indicator | A small vanilla notification on each toggle ("Earplugs in" and "Earplugs out"); no HUD icon | Claude default |
+| E4 | Indicator | A small vanilla notification on each toggle ("Earplugs in" and "Earplugs out"); no HUD icon. Ears ships `modded class NotificationUI` overriding `RemoveNotification` with a serial fade-map key, because the vanilla key (`count + show_time`, `NotificationUI.c:79`) repeats for same-length toasts in quick succession and the repeated toast then never leaves the screen (seen October 17, 2026). The override moves to a shared NIMBY base addon when a second mod needs it | Claude default; keep-and-fix decided by Jeff, October 17, 2026 |
 | E5 | Relog | Earplugs come out on every mission start | Claude default |
 | E6 | `pack.json` row timing | The `NimbyEarplugs` row and a stub `config.cpp` land on `main` before the worktree branches, so the Phase 0 probe builds and `main` stays buildable; exception to shared rules section 3 ("at that addon's Phase 1") | Decided by Jeff, October 16, 2026 |
+| E7 | Death and unconsciousness | Vanilla owns the level while the player is dead (0, `DayZPlayerImplement.c:870`) or unconscious (0 over 2 s, `PlayerBase.c:3778`; restore on waking, `:3832`). Ears never reapplies while unconscious, and earplugs come out at death so the vanilla respawn restore (`missionGameplay.c:1690`) and Ears agree | Claude default |
+| E8 | Saved level read live | The expected level is `g_Game.m_volume_sound * 0.15` evaluated each second, not a captured copy, so a Sound slider change with earplugs in moves the target with it; the slider value is never written by Ears | Claude default |
+| E9 | Reapply policy | After each apply a 1 s settle window ignores the fade; past it, a scene level more than 0.01 from the expected level is written back at most once per second, with a production log line per reapply. A reset that fires every frame is therefore corrected once a second and visible in the log rather than fought per frame | Claude default. Phase 0 (October 17, 2026): no menu reset the level and no reapply fired, so no direct hook is needed; the sampler stays as the safety net |
+| E10 | Logging | Production: reapply lines and the death take-out. Debug (`$profile:NimbyEarplugs\debug` on the client; `$profile:` is `%LOCALAPPDATA%\DayZ` unless the client runs with `-profiles=`, not `Documents\DayZ`): toggles, menu changes, RESET, one sample per second, the respawn restore. Self-test runs on client and server when `$profile:NimbyEarplugs\selftest` exists; the hook is on `MissionBase` so the boot check sees it, the only Ears code a server executes | Shared rules 4.3 and 8 |
+| E11 | Controls tab | NIMBY bindings appear under the vanilla Unsorted tab. 1.30 ignores a `<sorting>` block in `modded_inputs` both for a new group (`nimby`, October 17 morning) and for an existing one (`others`, October 17 evening rebuild); `UAInputAPI.SortingCount` is engine side. A NIMBY tab waits for the Menu addon (shared rules 5). `Inputs.xml` keeps the `others` block as documentation of the attempt | Claude default, October 17, 2026 |
 
 ## Phase 0 - prove set and restore
 
@@ -49,8 +54,10 @@ Exit: the reduced level can be held across menus, or the reset point is known an
 
 ## Phase 1 - toggle
 
-- `config.cpp` (`CfgPatches` requiring `DZ_Data`), `Data/Inputs.xml`, `Scripts/5_Mission` modded `MissionGameplay` reading the input in `OnUpdate`, the toggle state, the reapply hook from Phase 0, and the notifications (E4).
-- Self-test: the toggle state machine (in, out, reapply) as an engine-free class.
+Written October 16, 2026, in the same build as the probe.
+
+- `config.cpp` (`CfgPatches` requiring `DZ_Data`; `3_Game` and `5_Mission` modules), `Data/Inputs.xml` (`UANimbyEarplugsToggle` on `kN`, vanilla Others sorting group per E11), `Scripts/3_Game/nimbyearplugs_level.c` (engine-free state: in, out, settle, suppress, reapply; 16 self-test cases), `Scripts/3_Game/nimbyearplugs_notificationui.c` (E4 fade-map key fix), `Scripts/5_Mission/nimbyearplugs_missiongameplay.c` (input in `OnUpdate`, toggle, 1 Hz sample and reapply per E9, death and unconscious handling per E7, notifications per E4, debug logging per E10), `Scripts/5_Mission/nimbyearplugs_missionbase.c` (self-test hook).
+- Answered by the Phase 0 record (October 17, 2026): E9's once-per-second reapply stays as the safety net (nothing reset the level); the Options Sound slider does not reset the scene level. Rebuild pending with the E4 notification fix and the E11 Others-tab sorting; the rebuild test captures the debug lines the first run missed.
 
 ## Phase 2 - release
 
@@ -66,6 +73,9 @@ Exit: the reduced level can be held across menus, or the reset point is known an
 | EP-004 | Relog restores the saved volume | Test record |
 | EP-005 | Rebinding to another key in Controls works and N no longer toggles | Test record |
 | EP-006 | Ears is first through the worktree, build, and release flow (D17); the test record names the artifact | `build.log` SUMMARY PASS |
+| EP-007 | Earplugs in, then unconscious and wake: no reapply while unconscious, level back to reduced within 2 s of waking | Test record, `reapply` line after waking |
+| EP-008 | Earplugs in, then die and respawn: `earplugs out: player died` line, respawn at the saved level, N works again | Test record |
+| EP-009 | Sound slider moved with earplugs in: expected level follows the new saved level | Test record, `sample` lines |
 
 ## Risks
 

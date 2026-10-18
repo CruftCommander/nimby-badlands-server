@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Ears key binding (shared rules 5, Ears plan E2).
+  Default N: bin/constants.xml:507 declares kN; bin/preset_X1MouseKey.xml:881-890 uses it only as
+  the modifier of the developer brush inputs, so a plain press is free in play.
+  The binding sorts into the vanilla Others tab (bin/constants.xml:915), where the player rebinds
+  it (EP-005, passed October 17, 2026). A new <sorting> group from modded_inputs is not honored on
+  1.30: the October 17 test showed only the six vanilla tabs plus Unsorted, and the group count is
+  engine side (UAInputAPI.SortingCount). A NIMBY tab waits for the Menu addon.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyEarplugsToggle" loc="Ears: toggle earplugs" />
+        </actions>
+    </inputs>
+    <sorting name="others" loc="layout_pc_keybinding_others">
+        <input name="UANimbyEarplugsToggle" />
+    </sorting>
+    <preset>
+        <input name="UANimbyEarplugsToggle">
+            <btn name="kN" />
+        </input>
+    </preset>
+</modded_inputs>
