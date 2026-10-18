@@ -8,7 +8,6 @@ Files here are applied to the active mission folder on the server
 | `db/messages.xml` | `mpmissions/<mission>/db/messages.xml` | Replace the stock file. Update "Last wipe" on every wipe. |
 | `cfggameplay.patch.json` | `mpmissions/<mission>/cfggameplay.json` | Merge onto the stock file: set only the listed keys. Keep the map's own temperatures and other values. |
 | `db/types.scrawl.patch.xml` | `mpmissions/<mission>/db/types.xml` | DRAFT until Scrawl Phase 2. Replace the five `<type>` rows of the same name (Paper and the four pens); leave every other row. Back up `types.xml` first; apply at a scheduled restart. |
-=======
 | `db/types.tack.patch.xml` | `mpmissions/<mission>/db/types.xml` | DRAFT, not applied. Add the four `NimbyTack_PinnedNote_*` rows at Tack Phase 2, after Scrawl's `types.scrawl.patch.xml`, at a restart with the file backed up. |
 
 ## cfggameplay decisions (2026-10-14, updated 2026-10-15)
