@@ -187,6 +187,8 @@ Decided by Jeff, October 15, 2026: one public Steam Workshop item, `@NIMBY`, con
 
 Decided by Jeff, October 17, 2026: the source of every NIMBY mod is public. The Workshop item description links the GitHub repository (or repositories) that hold `mods/own/nimby-pack/`. Consequences: the repository needs a public remote before the first release (none exists today); the repository MUST NOT contain `serverDZ*.cfg` values, BattlEye configuration, the signing private key, or any profile-folder secret (already section 10); third-party notices in `NOTICE` cover the published source as well as the PBOs; a license file is chosen before the remote goes public.
 
+Decided by Jeff, October 17, 2026 (self-review decisions): the remote is `CruftCommander/nimby-badlands-server` on GitHub, private until the first Workshop release and flipped public at that release after the secrets history check; the license is MIT (`LICENSE` at the repository root, the Bohemia vendor reference and third-party pieces keep their own terms in `NOTICE`); `CLAUDE.md` is tracked and ships with the source.
+
 ## 10. Guardrails
 
 - No live-server change without Jeff's approval. Never take the server offline outside the restart chain.
