@@ -1,6 +1,10 @@
-// NimbyNotes - Scrawl: Paper stacks to 5, written notes never merge. Content addon.
-// Stub on main so the pack builds with the pack.json row in place (Scrawl Phase 1 starts
-// October 16, 2026). The addon body lands from the feat/scrawl worktree.
+// -----------------------------------------------------------------------------
+// NimbyNotes - Scrawl. Paper stacks to 5, written notes never merge, and the
+// 1.30 pen-and-paper write and read actions are reachable again.
+// Plan: docs/plans/2026-10-15-scrawl-plan.md (v0.3). Owner: Jeff Fabish.
+// Content addon (shared rules 6.1): the Paper quantity override changes what an
+// existing sheet saves, so the save-reload round trip and the removal boot gate it.
+// -----------------------------------------------------------------------------
 class CfgPatches
 {
     class NimbyNotes
@@ -16,6 +20,37 @@ class CfgMods
     class NimbyNotes
     {
         type = "mod";
-        dependencies[] = { "World" };
+        dependencies[] = { "Game", "World", "Mission" };
+        class defs
+        {
+            class gameScriptModule
+            {
+                files[] = { "NimbyNotes/Scripts/3_Game" };
+            };
+            class worldScriptModule
+            {
+                files[] = { "NimbyNotes/Scripts/4_World" };
+            };
+            class missionScriptModule
+            {
+                files[] = { "NimbyNotes/Scripts/5_Mission" };
+            };
+        };
+    };
+};
+
+class CfgVehicles
+{
+    class Inventory_Base;
+    // N2: vanilla Paper gains a quantity of 1-5 and splits like Rag (DZ/gear/consumables/config.cpp:343-346).
+    // Sheets saved before Scrawl carry no quantity bit and load as 1 (ItemBase.c:3011-3014).
+    // Everything else about Paper (model, size, slot, flammability, note data) is inherited unchanged.
+    class Paper : Inventory_Base
+    {
+        canBeSplit = 1;
+        varQuantityInit = 1;
+        varQuantityMin = 0;
+        varQuantityMax = 5;
+        varQuantityDestroyOnMin = 1;
     };
 };

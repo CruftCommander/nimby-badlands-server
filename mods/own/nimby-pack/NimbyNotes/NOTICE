@@ -1,0 +1,3 @@
+NimbyNotes (Scrawl) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+Overrides the vanilla DayZ 1.30 Paper config (Bohemia Interactive) and re-registers
+Bohemia's own ActionWritePaper and ActionReadPaper classes; no third-party mod code.
