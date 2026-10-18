@@ -1,0 +1,25 @@
+nimby-badlands-server - NIMBY | HARDCORE | BADLANDS | 1pp
+
+Copyright (c) 2026 Jeff Fabish. Licensed under the MIT License (see LICENSE),
+except for the pieces below, which keep their own terms.
+
+Third-party and vendor pieces
+
+- mods/own/nimby-pack/NimbyAutorun: a modified fork of SchanaModAutorun
+  (https://github.com/schana/dayz-mod-autorun), Apache License 2.0. The
+  license and the list of changes are in that folder's LICENSE and NOTICE.
+- mods/own/nimby-pack/NimbyGiveTake: a fork of Give&Take (Steam Workshop
+  item 2903112334, author affenb3rt). Redistributed under the permission
+  stated on the Workshop page; the capture and the list of changes are in
+  that folder's NOTICE.
+- mods/own/nimby-pack/NimbyEarplugs, NimbyNotes, NimbyTack: original work
+  for this server, MIT. Each folder's NOTICE names the vanilla classes it
+  modifies.
+- DayZ, the DayZ Server, DayZ Tools, and the unpacked 1.30 game scripts are
+  the property of Bohemia Interactive a.s. The scripts are read as API
+  reference from vendor/dayz-1.30-scripts/, which is excluded from this
+  repository by .gitignore; nothing from them is redistributed here. Mods
+  built on DayZ are subject to the Bohemia Interactive EULA and the DayZ
+  modding terms.
+- server/live/: a read-only copy of this server's own mission files, derived
+  from the Bohemia-shipped Nasdara mission data and edited for this server.
