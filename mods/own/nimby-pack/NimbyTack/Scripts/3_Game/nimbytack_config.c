@@ -20,6 +20,9 @@ class NimbyTackConfig
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
     float wallAngleDegrees = 25.0;
+    // T3: how far off the wall the sheet is created, along the normal. 1 cm sat inside the
+    // relief of the Nasdara mud-brick walls (October 17, 2026); the shed was fine at 1 cm.
+    float wallOffsetMeters = 0.03;
     // T4: health taken from the sheet per take-down, by fastener. Paper has 15 hitpoints.
     float takeDownDamageNail = 5.0;
     float takeDownDamageTape = 3.0;
@@ -109,6 +112,6 @@ class NimbyTackConfigLoader
             NimbyTackLog.Info("config clamped; fields=" + clamped.ToString());
         }
         s_Config = loaded;
-        NimbyTackLog.Debug("config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m");
+        NimbyTackLog.Debug("config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " offset=" + loaded.wallOffsetMeters.ToString() + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m");
     }
 }

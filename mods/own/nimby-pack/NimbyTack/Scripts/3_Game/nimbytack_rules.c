@@ -62,7 +62,8 @@ class NimbyTackRules
     // Paper has 15 hitpoints (DZ/gear/consumables/config.cpp:40).
     static const float PAPER_HITPOINTS = 15.0;
     // The pinned sheet sits this far off the wall along the normal (T3).
-    static const float WALL_OFFSET_METERS = 0.01;
+    // Default when no config is loaded (client side, self-test); the server reads wallOffsetMeters.
+    static const float WALL_OFFSET_METERS = 0.03;
     // The Paper model lies flat with its face up; this pitch turns the face onto the wall.
     // Phase 0 item 3 confirms the sign in game.
     static const float PITCH_OFFSET_DEGREES = 90.0;
@@ -150,8 +151,8 @@ class NimbyTackRules
         return lowered.Contains("wood");
     }
 
-    // The pinned sheet's orientation (yaw, pitch, roll) from the wall normal: face the normal,
-    // then tip the flat sheet upright.
+    // Superseded October 17, 2026: the Euler form left the sheet horizontal in game. Kept for
+    // the self-test; CreatePinned builds a basis with Math3D.DirectionAndUpMatrix instead.
     static vector OrientationFor(vector normal)
     {
         vector angles = normal.VectorToAngles();
@@ -159,9 +160,9 @@ class NimbyTackRules
         return angles;
     }
 
-    static vector PinPosition(vector hitPosition, vector normal)
+    static vector PinPosition(vector hitPosition, vector normal, float offsetMeters = 0.03)
     {
-        return hitPosition + normal * WALL_OFFSET_METERS;
+        return hitPosition + normal * offsetMeters;
     }
 
     // T4: health taken from the sheet by one take-down.
@@ -251,6 +252,9 @@ class NimbyTackRules
         before = config.wallAngleDegrees;
         config.wallAngleDegrees = Math.Clamp(before, 0.0, 60.0);
         changed = changed + Changed(before, config.wallAngleDegrees);
+        before = config.wallOffsetMeters;
+        config.wallOffsetMeters = Math.Clamp(before, 0.005, 0.2);
+        changed = changed + Changed(before, config.wallOffsetMeters);
         before = config.takeDownDamageNail;
         config.takeDownDamageNail = Math.Clamp(before, 0.0, PAPER_HITPOINTS);
         changed = changed + Changed(before, config.takeDownDamageNail);
@@ -316,8 +320,14 @@ class NimbyTackRules
 
         vector orientation = OrientationFor("0 0 1");
         failures += Case(results, "orientation tips the sheet upright", Math.AbsFloat(orientation[1] - PITCH_OFFSET_DEGREES) < 0.01);
-        vector pinned = PinPosition("10 2 10", "0 0 1");
-        failures += Case(results, "pin sits 1 cm off the wall", Math.AbsFloat(pinned[2] - 10.01) < 0.0001);
+        vector pinned = PinPosition("10 2 10", "0 0 1", 0.01);
+        failures += Case(results, "pin sits 1 cm off the wall when asked", Math.AbsFloat(pinned[2] - 10.01) < 0.0001);
+        vector pinnedDefault = PinPosition("10 2 10", "0 0 1", defaults.wallOffsetMeters);
+        failures += Case(results, "pin sits at the config offset (3 cm default)", Math.AbsFloat(pinnedDefault[2] - 10.03) < 0.0001);
+        NimbyTackConfig lowOffset = new NimbyTackConfig();
+        lowOffset.wallOffsetMeters = 0.0;
+        Sanitize(lowOffset);
+        failures += Case(results, "offset below 5 mm clamps to 5 mm", Math.AbsFloat(lowOffset.wallOffsetMeters - 0.005) < 0.0001);
 
         failures += Case(results, "nail damage default 5", TakeDownDamage(NimbyTackFastener.NAIL, defaults) == 5.0);
         failures += Case(results, "tape damage default 3", TakeDownDamage(NimbyTackFastener.TAPE, defaults) == 3.0);

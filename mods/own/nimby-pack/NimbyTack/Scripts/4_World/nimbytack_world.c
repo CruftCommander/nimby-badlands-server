@@ -88,10 +88,12 @@ class NimbyTackWorld
             }
             vector normal = result.dir;
             normal.Normalize();
-            string surfaceName = "";
-            if (result.surface)
+            string surfaceName = SurfaceNameOf(result);
+            if (surfaceName == "")
             {
-                surfaceName = result.surface.GetName();
+                // The view-geometry hit carried no surface on every Nasdara building tried on
+                // October 17, 2026. Fire geometry is what bullets read materials from, so ask it.
+                surfaceName = FireSurfaceName(head, end, player, result.obj);
             }
             NimbyTackLog.Debug("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
             if (!NimbyTackRules.IsWallNormal(normal, config.wallAngleDegrees))
@@ -186,6 +188,57 @@ class NimbyTackWorld
         return count;
     }
 
+    // Surface name from one raycast hit: the surface file name, else its type. Empty when the
+    // geometry carries no surface info.
+    static string SurfaceNameOf(RaycastRVResult result)
+    {
+        if (!result)
+        {
+            return "";
+        }
+        if (!result.surface)
+        {
+            return "";
+        }
+        string name = result.surface.GetName();
+        if (name != "")
+        {
+            return name;
+        }
+        return result.surface.GetSurfaceType();
+    }
+
+    // Same ray against fire geometry (ObjIntersectFire), surface of the first hit on the wall
+    // object. Debug-logs what it found so the test record can settle how 1.30 reports walls.
+    static string FireSurfaceName(vector head, vector end, PlayerBase player, Object wall)
+    {
+        RaycastRVParams params = new RaycastRVParams(head, end, player, 0.0);
+        params.sorted = true;
+        params.type = ObjIntersectFire;
+        array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
+        if (!DayZPhysics.RaycastRVProxy(params, results))
+        {
+            NimbyTackLog.Debug("probe: fire-geometry ray had no hit");
+            return "";
+        }
+        foreach (RaycastRVResult result : results)
+        {
+            if (!result.obj)
+            {
+                continue;
+            }
+            if (result.obj != wall)
+            {
+                continue;
+            }
+            string name = SurfaceNameOf(result);
+            NimbyTackLog.Debug("probe: fire-geometry surface=" + name + " component=" + result.component.ToString());
+            return name;
+        }
+        NimbyTackLog.Debug("probe: fire-geometry ray did not hit the wall object");
+        return "";
+    }
+
     // T3: create the pinned class at the hit point, 1 cm off the wall, facing the normal, with
     // the sheet's text and health. No ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the engine does not
     // drop it to the ground (CentralEconomy.c:28).
@@ -196,7 +249,8 @@ class NimbyTackWorld
         {
             return null;
         }
-        vector position = NimbyTackRules.PinPosition(hit.position, hit.normal);
+        NimbyTackConfig config = NimbyTackConfigLoader.Get();
+        vector position = NimbyTackRules.PinPosition(hit.position, hit.normal, config.wallOffsetMeters);
         Object created = GetGame().CreateObjectEx(className, position, ECE_KEEPHEIGHT | ECE_SETUP);
         NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(created);
         if (!pinned)
@@ -207,8 +261,18 @@ class NimbyTackWorld
             }
             return null;
         }
-        pinned.SetPosition(position);
-        pinned.SetOrientation(NimbyTackRules.OrientationFor(hit.normal));
+        // Orientation as a basis, not Euler angles. The Paper model is a sheet in its own
+        // XY plane: width along model X, page height along model Y, face along model Z (two
+        // builds on October 17, 2026 proved it: Euler yaw-to-normal plus pitch 90, and a
+        // basis with model +Y on the normal, both left the sheet horizontal like a shelf,
+        // which only a Z-facing sheet does under both). So the face (model +Z) takes the
+        // wall normal and the page top (model +Y) takes world up. The 18:34 run showed the
+        // ruled side with its red margin on the right, so the model's front is -Z: the
+        // direction is the negated normal, which mirrors left-right and keeps the top up.
+        vector transform[4];
+        Math3D.DirectionAndUpMatrix(hit.normal * -1, vector.Up, transform);
+        transform[3] = position;
+        pinned.SetTransform(transform);
         pinned.NimbyTackFreeze();
         pinned.SetHealth(sheet.GetHealth());
         WrittenNoteData source = sheet.GetWrittenNoteData();

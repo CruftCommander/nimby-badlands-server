@@ -33,6 +33,10 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         m_FullBody = true;
         m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
         m_Text = "Pin note";
+        // The target is a wall, not an inventory entity. With the default lock the server tries
+        // to reserve the target's inventory and logs "Target does not have inventory"
+        // (ActionBase.c:1183; seen on Land_Shed_W1, October 17, 2026).
+        m_LockTargetOnUse = false;
     }
 
     override void CreateConditionComponents()
@@ -289,6 +293,16 @@ class ActionNimbyTackTakeDown : ActionContinuousBase
         m_FullBody = true;
         m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
         m_Text = "Take down note";
+        m_LockTargetOnUse = false;
+    }
+
+    // The action lives on the pinned note (the target), not on an item in hands. Only the
+    // interact input (hold F) looks at the target's actions: ContinuousInteractActionInput sets
+    // m_DetectFromTarget = true, the default continuous input (ActionContinuousBase.c:179)
+    // sets it false. With the default the prompt never appeared (October 17, 2026).
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
     }
 
     override void CreateConditionComponents()

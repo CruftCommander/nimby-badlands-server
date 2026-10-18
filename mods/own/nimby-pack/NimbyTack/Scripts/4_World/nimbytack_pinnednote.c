@@ -12,6 +12,10 @@
 //           shows the sheet still falls.
 // Inventory: a pinned note is never taken, stacked, or split; the take-down action
 //           (T4) is the only way off the wall.
+// Fire    : A lit match burns the note off the wall (Jeff, October 17, 2026). Vanilla
+//           Paper turns a lit sheet into a fireplace and refuses that on a wall, so the
+//           Ignite prompt did nothing. Here ignition always succeeds, a knife in the
+//           Knife slot drops to the ground, and the note is deleted.
 // -----------------------------------------------------------------------------
 class NimbyTack_PinnedNote : Paper
 {
@@ -36,6 +40,35 @@ class NimbyTack_PinnedNote : Paper
     int GetNimbyTackFastener()
     {
         return -1;
+    }
+
+    // Fire: always succeeds; the burn is the deletion. Server side only (the ignite action
+    // calls these from OnFinishProgressServer, ActionLightItemOnFire.c:115,129).
+    override bool IsThisIgnitionSuccessful(EntityAI item_source = null)
+    {
+        return true;
+    }
+
+    override void OnIgnitedThis(EntityAI fire_source)
+    {
+        if (!GetGame().IsServer())
+        {
+            return;
+        }
+        string knifeNote = "";
+        EntityAI knife = FindAttachmentBySlotName("Knife");
+        if (knife)
+        {
+            GetInventory().DropEntity(InventoryMode.SERVER, this, knife);
+            knifeNote = " knife=ground";
+        }
+        string source = "unknown";
+        if (fire_source)
+        {
+            source = fire_source.GetType();
+        }
+        NimbyTackLog.Info("burn class=" + GetType() + " source=" + source + knifeNote + " " + NimbyTackWorld.PositionTag(GetPosition()));
+        GetGame().ObjectDelete(this);
     }
 
     override bool IsTakeable()
