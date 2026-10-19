@@ -1,27 +1,84 @@
 // -----------------------------------------------------------------------------
-// NimbyAutorun - server side.
-// Purpose : Applies an autorun request from the owning client to the server's
-//           copy of the player, after validating it.
+// NimbyAutorun - Legs. Player state, server request handling, forced clears.
+// Purpose : Holds the autorun state of one player on both machines, applies a
+//           validated request from the owning client on the server, clears the
+//           override from server-side hooks when the player enters a vehicle,
+//           falls unconscious, is restrained, dies, or is removed, and tells the
+//           owning client with RPC 6550102 (A4).
 // Origin  : Fork of SchanaModAutorun playerbase.c (Apache-2.0). See NOTICE.
-// Security: The original trusted any client RPC. A client can target any
-//           network object with an RPC, so without the ownership check one
-//           player could force another into autorun. Every field is validated.
+// Security: A client can target any network object with an RPC, so ownership is
+//           derived from the authenticated sender before anything is read, and
+//           every field is validated in NimbyAutorunRules. A request aimed at
+//           another player changes nothing on that player.
+// Plan    : docs/plans/2026-10-15-autorun-plan.md, Phase 1.
 // -----------------------------------------------------------------------------
-
-class NimbyAutorunRpc
-{
-    // Distinct from the original (-44201) so both mods can coexist. Arbitrary;
-    // change only together with the client in 5_mission.
-    static const int TOGGLE = 6550101;
-
-    // Minimum seconds between rejection log lines for one player.
-    static const float REJECT_LOG_INTERVAL = 10.0;
-}
 
 modded class PlayerBase extends ManBase
 {
+    // State on this machine. On the owning client it is what the client applied; on the server
+    // it is what the server applied. Both reset with the player object on respawn.
     protected bool m_NimbyAutorunning;
-    protected float m_NimbyAutorunLastRejectLog = -1000.0;
+    protected int m_NimbyAutorunIdx;
+    // Server only.
+    protected ref NimbyAutorunThrottle m_NimbyAutorunThrottle;
+    protected ref NimbyAutorunLogGate m_NimbyAutorunRejectGate;
+    protected ref NimbyAutorunLogGate m_NimbyAutorunThrottleGate;
+
+    bool NimbyIsAutorunning()
+    {
+        return m_NimbyAutorunning;
+    }
+
+    int NimbyGetAutorunIdx()
+    {
+        return m_NimbyAutorunIdx;
+    }
+
+    // Applies the state to this machine's input controller (human.c:253-256, enum at :7-12).
+    void NimbyAutorunApply(bool running, int movementIdx)
+    {
+        if (!running)
+        {
+            movementIdx = DayZPlayerConstants.MOVEMENTIDX_IDLE;
+        }
+        m_NimbyAutorunning = running;
+        m_NimbyAutorunIdx = movementIdx;
+        HumanInputController controller = GetInputController();
+        if (!controller)
+        {
+            return;
+        }
+        if (running)
+        {
+            controller.OverrideMovementSpeed(HumanInputControllerOverrideType.ENABLED, movementIdx);
+            controller.OverrideMovementAngle(HumanInputControllerOverrideType.ENABLED, 1);
+            return;
+        }
+        controller.OverrideMovementSpeed(HumanInputControllerOverrideType.DISABLED, 0);
+        controller.OverrideMovementAngle(HumanInputControllerOverrideType.DISABLED, 0);
+    }
+
+    // The state that forbids autorun, or "" when none applies.
+    string NimbyAutorunBlockedReason()
+    {
+        if (!IsAlive())
+        {
+            return "dead";
+        }
+        if (IsUnconscious())
+        {
+            return "unconscious";
+        }
+        if (IsRestrained())
+        {
+            return "restrained";
+        }
+        if (IsInVehicle())
+        {
+            return "vehicle";
+        }
+        return "";
+    }
 
     override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
     {
@@ -33,90 +90,266 @@ modded class PlayerBase extends ManBase
             }
             return;
         }
+        if (rpc_type == NimbyAutorunRpc.CANCEL)
+        {
+            if (GetGame().IsClient())
+            {
+                NimbyAutorunHandleCancel(ctx);
+            }
+            return;
+        }
 
         super.OnRPC(sender, rpc_type, ctx);
     }
 
+    // ---- server -------------------------------------------------------------------------
+
+    protected NimbyAutorunThrottle NimbyAutorunGetThrottle()
+    {
+        if (!m_NimbyAutorunThrottle)
+        {
+            m_NimbyAutorunThrottle = new NimbyAutorunThrottle(NimbyAutorunConfigLoader.Get().requestsPerSecond);
+        }
+        return m_NimbyAutorunThrottle;
+    }
+
     protected void NimbyAutorunHandleRequest(PlayerIdentity sender, ParamsReadContext ctx)
     {
-        Param3<bool, int, int> request;
-        if (!ctx.Read(request))
-        {
-            NimbyAutorunReject(sender, "unreadable payload");
-            return;
-        }
-
-        bool isRunning = request.param1;
-        int movementIdx = request.param2;
-        int angle = request.param3;
-
+        // Ownership first: a request aimed at someone else is refused before it is read, so it
+        // can change nothing on the target and earns the target's owner no cancellation.
         PlayerIdentity owner = GetIdentity();
         if (!sender || !owner || sender.GetId() != owner.GetId())
         {
-            NimbyAutorunReject(sender, "sender does not own this player");
+            NimbyAutorunLogReject(sender, "sender does not own this player");
             return;
         }
 
-        if (isRunning)
+        float now = GetGame().GetTickTime();
+        Param3<bool, int, int> request = new Param3<bool, int, int>(false, 0, 0);
+        if (!ctx.Read(request))
         {
-            if (!NimbyAutorunIsValidMovement(movementIdx) || angle != 1)
+            // Counted against the budget, because the stop bypass needs a readable payload.
+            if (!NimbyAutorunGetThrottle().Admit(now, false))
             {
-                NimbyAutorunReject(sender, "movement out of range: idx=" + movementIdx + " angle=" + angle);
+                NimbyAutorunOnThrottled(sender, now);
                 return;
             }
-
-            if (IsInVehicle() || IsUnconscious() || IsRestrained() || !IsAlive())
-            {
-                // Expected during races between client and server state; stop quietly.
-                isRunning = false;
-            }
-            else if (movementIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT && !CanSprint())
-            {
-                movementIdx = DayZPlayerConstants.MOVEMENTIDX_RUN;
-            }
+            NimbyAutorunRefuse(sender, "unreadable payload");
+            return;
         }
 
-        if (!isRunning)
+        bool running = request.param1;
+        int movementIdx = request.param2;
+        int angle = request.param3;
+
+        if (!running)
         {
-            movementIdx = DayZPlayerConstants.MOVEMENTIDX_IDLE;
-            angle = 0;
+            // An authenticated stop bypasses the request throttle and always applies.
+            if (m_NimbyAutorunning)
+            {
+                NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
+                NimbyAutorunLogToggle(owner, "server", "client-stop");
+            }
+            return;
         }
 
-        m_NimbyAutorunning = isRunning;
-        GetInputController().OverrideMovementSpeed(isRunning, movementIdx);
-        GetInputController().OverrideMovementAngle(isRunning, angle);
-    }
+        if (!NimbyAutorunGetThrottle().Admit(now, false))
+        {
+            NimbyAutorunOnThrottled(sender, now);
+            return;
+        }
 
-    protected bool NimbyAutorunIsValidMovement(int movementIdx)
-    {
-        // Enforce Script does not continue an expression across lines; keep it on one line.
-        return movementIdx == DayZPlayerConstants.MOVEMENTIDX_WALK || movementIdx == DayZPlayerConstants.MOVEMENTIDX_RUN || movementIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT;
-    }
+        string invalid = NimbyAutorunRules.ValidateRequest(running, movementIdx, angle);
+        if (invalid != "")
+        {
+            NimbyAutorunRefuse(sender, invalid);
+            return;
+        }
 
-    protected void NimbyAutorunReject(PlayerIdentity sender, string reason)
-    {
-        float now = GetGame().GetTickTime();
-        if (now - m_NimbyAutorunLastRejectLog < NimbyAutorunRpc.REJECT_LOG_INTERVAL)
+        string blocked = NimbyAutorunBlockedReason();
+        if (blocked != "")
+        {
+            // Expected in races between client and server state; the client is told to stop.
+            NimbyAutorunRefuse(sender, "player is " + blocked);
+            return;
+        }
+
+        int resolved = NimbyAutorunRules.ResolveServerIdx(movementIdx, CanSprint());
+        if (m_NimbyAutorunning && resolved == m_NimbyAutorunIdx)
         {
             return;
         }
-        m_NimbyAutorunLastRejectLog = now;
+        NimbyAutorunApply(true, resolved);
+        NimbyAutorunLogToggle(owner, "server", "client-request");
+    }
 
-        string senderId = "unknown";
-        if (sender)
+    // A refused running request: the client already applied it locally, so the server clears
+    // its own override if it was on and sends 6550102 so both sides stop.
+    protected void NimbyAutorunRefuse(PlayerIdentity sender, string reason)
+    {
+        NimbyAutorunLogReject(sender, reason);
+        if (m_NimbyAutorunning)
         {
-            senderId = sender.GetId();
+            NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
         }
-        Print("[NIMBY][Autorun] Rejected request from " + senderId + ": " + reason);
+        NimbyAutorunSendCancel("rejected");
     }
 
-    void NimbySetAutorunning(bool isRunning)
+    // A dropped running request: the client applied it locally and the server did not, so the
+    // first drop in a window stops both sides; later drops in the window are only counted.
+    protected void NimbyAutorunOnThrottled(PlayerIdentity sender, float now)
     {
-        m_NimbyAutorunning = isRunning;
+        NimbyAutorunThrottle throttle = NimbyAutorunGetThrottle();
+        if (throttle.TakeCancel())
+        {
+            if (m_NimbyAutorunning)
+            {
+                NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
+            }
+            NimbyAutorunSendCancel("throttled");
+        }
+        if (!m_NimbyAutorunThrottleGate)
+        {
+            m_NimbyAutorunThrottleGate = new NimbyAutorunLogGate();
+        }
+        if (m_NimbyAutorunThrottleGate.Allow(now, NimbyAutorunRules.LOG_INTERVAL_SECONDS))
+        {
+            NimbyAutorunLog.Info("Throttled " + NimbyAutorunLog.Who(sender) + " count=" + throttle.TakeDropped().ToString());
+        }
     }
 
-    bool NimbyIsAutorunning()
+    protected void NimbyAutorunLogReject(PlayerIdentity sender, string reason)
     {
-        return m_NimbyAutorunning;
+        if (!m_NimbyAutorunRejectGate)
+        {
+            m_NimbyAutorunRejectGate = new NimbyAutorunLogGate();
+        }
+        if (!m_NimbyAutorunRejectGate.Allow(GetGame().GetTickTime(), NimbyAutorunRules.LOG_INTERVAL_SECONDS))
+        {
+            return;
+        }
+        NimbyAutorunLog.Info("Rejected request from " + NimbyAutorunLog.Ids(sender) + ": " + reason);
+    }
+
+    // Game.c:1013, with the owner as the only recipient.
+    protected void NimbyAutorunSendCancel(string reason)
+    {
+        PlayerIdentity owner = GetIdentity();
+        if (!owner)
+        {
+            return;
+        }
+        Param1<string> payload = new Param1<string>(reason);
+        GetGame().RPCSingleParam(this, NimbyAutorunRpc.CANCEL, payload, true, owner);
+    }
+
+    // A server-side clear that does not wait for the client. via is "hook" for the state hooks
+    // below and "tick" for the CommandHandler backstop. A hook that fires while autorun is off
+    // does nothing and logs nothing.
+    void NimbyAutorunForceClear(string reason, string via)
+    {
+        if (!GetGame().IsServer() || !m_NimbyAutorunning)
+        {
+            return;
+        }
+        NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
+        NimbyAutorunLog.Info("Forced clear " + NimbyAutorunLog.Who(GetIdentity()) + " reason=" + reason + " via=" + via);
+        NimbyAutorunSendCancel(reason);
+    }
+
+    void NimbyAutorunLogToggle(PlayerIdentity identity, string side, string cause)
+    {
+        if (!NimbyAutorunLog.IsDebug())
+        {
+            return;
+        }
+        string line = "Toggle " + NimbyAutorunLog.Who(identity) + " running=" + NimbyAutorunLog.Bool(m_NimbyAutorunning);
+        line = line + " idx=" + m_NimbyAutorunIdx.ToString() + " side=" + side + " cause=" + cause;
+        NimbyAutorunLog.Debug(line);
+    }
+
+    // Server-side hooks. Vehicle: PlayerBase.c:4342. Unconscious: PlayerBase.c:3756, called from
+    // CommandHandler at :3381 on both machines. Restraint: PlayerBase.c:2206, called by the
+    // server-side restrain actions and HandcuffsLocked. Death: PlayerBase.c:1214. Removal:
+    // PlayerBase.c:7647 (MissionServer.InvokeOnDisconnect, missionServer.c:442-447) and
+    // PlayerBase.c:1393 (EEDelete). NimbyAutorunForceClear returns at once on a client.
+    override void OnCommandVehicleStart()
+    {
+        super.OnCommandVehicleStart();
+        NimbyAutorunForceClear("vehicle", "hook");
+    }
+
+    override void OnUnconsciousStart()
+    {
+        super.OnUnconsciousStart();
+        NimbyAutorunForceClear("unconscious", "hook");
+    }
+
+    override void SetRestrained(bool is_restrained)
+    {
+        super.SetRestrained(is_restrained);
+        if (is_restrained)
+        {
+            NimbyAutorunForceClear("restrained", "hook");
+        }
+    }
+
+    override void EEKilled(Object killer)
+    {
+        NimbyAutorunForceClear("dead", "hook");
+        super.EEKilled(killer);
+    }
+
+    // Before super, while the identity is still attached.
+    override void OnDisconnect()
+    {
+        NimbyAutorunForceClear("removed", "hook");
+        super.OnDisconnect();
+    }
+
+    override void EEDelete(EntityAI parent)
+    {
+        NimbyAutorunForceClear("removed", "hook");
+        super.EEDelete(parent);
+    }
+
+    // Backstop and sprint re-evaluation while autorun stays on (PlayerBase.c:3206). Costs one
+    // bool test per frame when autorun is off.
+    override void CommandHandler(float pDt, int pCurrentCommandID, bool pCurrentCommandFinished)
+    {
+        super.CommandHandler(pDt, pCurrentCommandID, pCurrentCommandFinished);
+        if (!m_NimbyAutorunning || !GetGame().IsServer())
+        {
+            return;
+        }
+        string blocked = NimbyAutorunBlockedReason();
+        if (blocked != "")
+        {
+            NimbyAutorunForceClear(blocked, "tick");
+            return;
+        }
+        int resolved = NimbyAutorunRules.ResolveServerIdx(m_NimbyAutorunIdx, CanSprint());
+        if (resolved != m_NimbyAutorunIdx)
+        {
+            NimbyAutorunApply(true, resolved);
+            NimbyAutorunLogToggle(GetIdentity(), "server", "cannot-sprint");
+        }
+    }
+
+    // ---- client -------------------------------------------------------------------------
+
+    // A4: clear the override and the remembered state. Nothing is re-sent, so autorun stays off
+    // until the player double-taps again.
+    protected void NimbyAutorunHandleCancel(ParamsReadContext ctx)
+    {
+        Param1<string> payload = new Param1<string>("");
+        string reason = "unknown";
+        if (ctx.Read(payload))
+        {
+            reason = payload.param1;
+        }
+        bool wasRunning = m_NimbyAutorunning;
+        NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
+        NimbyAutorunLog.Debug("Cancel received " + NimbyAutorunLog.Who(GetIdentity()) + " reason=" + reason + " wasRunning=" + NimbyAutorunLog.Bool(wasRunning));
     }
 }
