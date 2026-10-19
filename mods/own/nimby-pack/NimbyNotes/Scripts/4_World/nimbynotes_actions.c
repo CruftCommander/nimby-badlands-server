@@ -98,7 +98,13 @@ class NimbyNotesMenuWatch
         {
             return false;
         }
-        if (action_data.m_State != UA_PROCESSING)
+        // UA_PROCESSING: the loop is still running (the menu was closed before the key was
+        // released). UA_FINISHED: the key was released while the menu was open, the component
+        // finished, and the action waits in the note pose because EndActionComponent is empty
+        // by design (ActionReadPaper.c:10). Vanilla ends the second case from OnUpdate once the
+        // menu is gone (ActionReadPaper.c:57); a target action on a wall needs the same (the
+        // October 19, 2026 trace: state 2, end-input, state 4, menu closed, pose held).
+        if (action_data.m_State != UA_PROCESSING && action_data.m_State != UA_FINISHED)
         {
             return false;
         }
