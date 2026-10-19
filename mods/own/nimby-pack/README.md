@@ -12,7 +12,7 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 | Addon | Origin | License | Status |
 | --- | --- | --- | --- |
 | `NimbyAutorun` | Fork of [SchanaModAutorun](https://github.com/schana/dayz-mod-autorun) (commit 1048f71) | Apache-2.0; see `NimbyAutorun/LICENSE` and `NimbyAutorun/NOTICE` | Source forked October 14, 2026; server-side RPC validation added; per-frame RPC fixed (review CR-004). Built (`@NIMBY-20261014-175505`) and solo-tested on 1.29; see `docs/testing/2026-10-14-solo-ingame-test.md`. Display name Legs (decided October 15, 2026). Plan: `docs/plans/2026-10-15-autorun-plan.md` |
-| `NimbyGiveTake` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; re-confirm before release) | Imported October 14, 2026; review fixes CR-001, CR-003, CR-005, CR-006 applied (see `NimbyGiveTake/NOTICE`). Boot-checked; two-client test pending |
+| `NimbyHands` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; dated capture in `NimbyHands/PERMISSION.md`, a placeholder until Jeff supplies the text; re-confirm before release) | Imported October 14, 2026; review fixes CR-001, CR-003, CR-005, CR-006 applied; Hands Phase 1 (in-flight registry, lifecycle log, pockets G4) and Phase 2 (rename, G2 controls) on `feat/hands`, October 19, 2026 (see `NimbyHands/NOTICE`). Boot-checked on 1.30; two-client test pending. Display name Hands. Plan: `docs/plans/2026-10-15-hands-plan.md` |
 | Zens Core, Zens Zippo Lighter, Zens Music | Repack of Zenarchist's Workshop items | Author permits repacking; Zippo model is CC BY-NC | Theme drop 1; not started |
 
 ## Layout when built
@@ -23,8 +23,8 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
   addons/
     NimbyAutorun.pbo
     NimbyAutorun.pbo.nimby.bisign
-    NimbyGiveTake.pbo
-    NimbyGiveTake.pbo.nimby.bisign
+    NimbyHands.pbo
+    NimbyHands.pbo.nimby.bisign
   keys/
     nimby.bikey
 ```
@@ -47,11 +47,11 @@ Each addon passes these before the pack ships, on a local DayZ server first, the
 2. A client joins with signature verification on and is not kicked.
 3. Autorun: numpad + starts and stops autorun; W, S, A, D, fire, raise, and lean each stop it; stamina drains and speed drops from sprint to run at zero stamina; getting into a vehicle stops it. Review CR-008: get knocked unconscious (or restrained, or into a vehicle) while autorunning, then recover - the player must stand still, not resume running.
 4. Autorun security: a second client cannot start or stop the first client's autorun. The server log shows a `[NIMBY][Autorun] Rejected request` line when this is attempted.
-5. Give n Take, with two clients (two Steam accounts) on the local server:
-   1. Offer (hold O) and Take: the item moves from A's hands to B's inventory. Server script log shows `REQUESTED` then `OK`.
+5. Hands, with two clients (two Steam accounts) on the local server. The full matrix is the Hands plan's Phase 3 and `docs/testing/2026-10-19-hands-phase1.md`:
+   1. Offer (hold O) and Take: the item moves from A's hands to B's inventory. Server script log shows `REQUESTED` then `CONFIRMED` with the same `id`.
    2. Request (hold O, empty hands) and Give: the item moves from A's hands to B's inventory, not B's hands.
-   3. Shift+O on B, then A puts an item in B's pockets. Shift+O again closes them; the action disappears.
-   4. Give or Take when the receiver's inventory is full: no prompt, or a `REFUSED no space` line.
-   5. Two takers on one offer at the same moment: one `OK`, one `REFUSED`; the item exists once.
+   3. B binds "Hands: open or close pockets" (Options > Controls > Others; unbound by default) and opens pockets, then A puts an item in B's pockets. Toggling again closes them; the action disappears.
+   4. Give or Take when the receiver's inventory is full: no prompt, or a `REFUSED` line with `detail=no space in receiver inventory`.
+   5. Two takers on one offer at the same moment: one `CONFIRMED`, one `REFUSED detail=item in flight`; the item exists once.
    6. Repeat 1 and 2 ten times each, then drop and re-pick every received item on both clients. Any item that cannot be dropped or that shows in two places is a failure.
    7. Repeat 6 with 200 ms of added latency on one client (for example with clumsy on Windows).
