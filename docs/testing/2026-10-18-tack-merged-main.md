@@ -42,3 +42,25 @@ Server: local replica `D:\DayZServer`, instance 999, profile `main-round1` (`Nim
 ## Exit
 
 Phase 1 exit met on the merged `main` build `@NIMBY-20261019-131632`: pin with all four fasteners, read in place, take-down with the text, burn, restart survival, and the ruined-sheet path all pass with a tester present.
+
+## Jay session, October 19, 2026 (solo in the event)
+
+Build `@NIMBY-20261019-165705` (`main` `7a295a9`), profile `main-round1` (`wallOffsetMeters` 0.01 in the profile config, debug on), 17:37-18:16 Central, fixed dam spawn. Jay watched and never connected (`.ADM`: one player), so S1 stays NOT RUN. Server log `logs\testserver-20261019-173743\nimby-events.log`: 1992 Tack lines, about 1,950 of them `probe:` trace from `ActionNimbyTackRead` (the debug trace kept until the Phase 2 cleanup; it is the reason the event count reads 2094). Client log `%LOCALAPPDATA%\DayZ\script_2026-10-19_17-38-28.log` (2520 Tack debug lines, same trace).
+
+| Time | Event | Evidence and note |
+| --- | --- | --- |
+| 18:05:15.505 | Scrawl write finished (server) | `[NIMBY][Notes][Debug] write finished; pen and paper references cleared` |
+| 18:05:23.763 | Pin 1, nail, dam yard | `wall= surface=concrete.bisurf normal=<-0.382, 0.000, 0.924> offset=0.01 health=15 nearby=0 pos=3764.8 300.824 14275.9` (no wall object: the terrain-level concrete) |
+| 18:05:27.497 | Read in place | `read class=NimbyTack_PinnedNote_Nail length=0`: the pinned sheet was blank, see NIMBY-T-009 |
+| 18:05:45.861 | Take-down 1 | `takedown fastener=nail sheet=inventory health=10 damage=5` |
+| 18:05:59.657, 18:06:03.222, 18:06:07.935 | Pin 2, read (`length=16`), take-down (`health=10`) | Same spot; the written sheet this time |
+| 18:06:22.794, 18:06:26.394, 18:06:30.896 | Pin 3 on `Land_KirovDam_PowerPlant` (concrete), read (`length=16`), take-down (`health=5`) | `normal=<0.925, 0.000, 0.381>` |
+| 18:11:54.810 | Pin 4 on `Land_TradTent_Small` (the Afghan tent) | `wall=Land_TradTent_Small surface= normal=<0.603, 0.089, 0.793> offset=0.01 health=5 nearby=0 pos=3141.33 321.054 14688.1`. Probe trace at 18:11:51-53: physics (BUILDING layer) hit `normal=<0.603, 0.089, 0.793> fraction=0.852 pos=3141.36 321.058 14688.1`; fire geometry `surface= component=171 normal=<-0.699, -0.107, -0.707> pos=3141.36 321.059 14688.2 view-pos=3141.33 321.054 14688.1 gap=0.0498`. Observed in game: the note showed through to the inside of the tent. See NIMBY-T-008 |
+| 18:13:27.514 | Take-down 4 | `health=0 damage=5`: the sheet came back ruined, as the ruined-sheet path intends (health 15, 10, 5, 0 across four pulls of one sheet, `PullsUntilRuined` 3) |
+| 18:15:57.068 | Pin 5 on wood, left on the wall at shutdown | `wall= surface=wood.bisurf normal=<0.502, 0.012, -0.865> health=13.75` (a second sheet). A restart check of this note is available on the next `main-round1` start |
+
+Findings:
+
+- **NIMBY-T-008 (medium, Tack):** a note pinned to `Land_TradTent_Small` renders through the canvas to the inside. The tent reports no surface material from either lookup (`surface=` empty after view and fire geometry), and its BUILDING-layer physics shell sits 3 to 5 cm behind the visible cloth (physics hit 3141.36 against view hit 3141.33; fire-geometry gap 0.0498 m), so the 1 cm offset from the view hit lands in or behind the cloth. Candidate rules, Jeff rules: (a) refuse a pin when the surface stays empty after both lookups, logged as `refuse pin ... reason=no-surface` (every concrete, wood, and mud-brick wall tried since October 17 returned a name; tents, cloth, and unmaterialed props do not); (b) a per-surface offset (unknown surface gets a larger offset) which still guesses the cloth position; (c) a class allowlist, the most work and the most to maintain. Recommended: (a) now, revisit tents in Phase 2 if players want them.
+- **NIMBY-T-009 (low, Tack, behavior):** `NimbyTackWorld.FindSingleSheet` returns the first single sheet in inventory order, so with the kit's written note and blank sheets the blank sheet went up first (pin 1, `length=0`). Plan T2 allows a blank sheet by design (a blank sheet on a wall is a legitimate "leave me a message"); Jay asks that a written sheet be preferred when both exist. Fix: a two-pass search, written sheet first, blank fallback; one rules case. Jeff rules on whether a blank pin stays allowed at all.
+- The read trace (`probe:` lines at about 30 Hz while a pinned note is under the cursor) is the Phase 2 cleanup item from the October 18 round; it stays until then.

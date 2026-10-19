@@ -86,3 +86,18 @@ None yet.
 ## Open
 
 - `PERMISSION.md` is a placeholder until Jeff supplies the Workshop text (release blocker, shared rules 9.3).
+
+## Jay session, October 19, 2026 (solo in the event)
+
+Build `@NIMBY-20261019-165705` (`main` `7a295a9`), profile `main-round1`, 17:37-18:16 Central. Jay watched and never connected: the `.ADM` lists one player (Road Dog), the server log holds two Hands lines (`loaded; server=true debug=false` at 17:37:57.450, listed twice), no `REQUESTED`, `pockets`, or `signal=` line. Client log `%LOCALAPPDATA%\DayZ\script_2026-10-19_17-38-28.log`. `profiles\main-round1\NimbyHands\debug` does not exist, so the P0-4 signal trace could not have printed even with a second player.
+
+| Step | Check | Result | Evidence |
+| --- | --- | --- | --- |
+| HD-010 | Self-test on the release build's client | PASS | `[NIMBY][Hands] selftest complete; failures=0` at 17:39:05.769 and 17:42:33.187; 104 `[NIMBY][Hands][SelfTest] PASS` lines over the two logins (52 each), 0 FAIL |
+| P0-4a to P0-4e | Signal ranking | NOT RUN | Needs a second player and the server debug flag |
+| HD-001 to HD-003, HD-012 to HD-014, HD-019 to HD-022 | Two-client rows | NOT RUN | Still owed to the two-player session |
+| HD-023 | Controls page | CORRECTED | Feedback from the session: the NIMBY bindings sit under UNSORTED, which matches the Ears record (row 4e, E11, October 17, 2026). The solo smoke row above and the comments in all three `Inputs.xml` say "Others"; that wording is wrong. See NIMBY-T-007 |
+
+Findings:
+
+- **NIMBY-T-007 (low, all three bound mods, documentation and packaging):** the `<sorting name="others">` block in `NimbyAutorun`, `NimbyEarplugs`, and `NimbyHands` `Data/Inputs.xml` is a sibling of `<inputs>` under `<modded_inputs>`. Vanilla nests `<sorting>` inside `<inputs>` (`vendor/dayz-1.30-scripts/bin/constants.xml:1`, `:812-937`), and Bohemia tracker T165909 reports the same symptom ("sorting block not recognized") resolved by moving `<sorting>` into the `<inputs>` sub-block. Inference, not yet proven here: the October 17 E11 result ("1.30 ignores `<sorting>` from `modded_inputs`") was the placement, not the engine. Fix candidate: move the block inside `<inputs>` in all three files, rebuild, open Options > Controls. Keep `others` rather than a new `nimby` group: the tracker's reporter notes the tab strip cuts off excess tabs. Reopens E11 if Jeff rules for it.
