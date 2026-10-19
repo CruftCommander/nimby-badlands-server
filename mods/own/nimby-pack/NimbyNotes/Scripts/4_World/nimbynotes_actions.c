@@ -32,16 +32,19 @@ class NimbyNotesMenuWatch
 {
     protected string m_Which;
     protected bool m_Seen;
+    protected bool m_Reported;
 
     void NimbyNotesMenuWatch(string which)
     {
         m_Which = which;
         m_Seen = false;
+        m_Reported = false;
     }
 
     void Reset()
     {
         m_Seen = false;
+        m_Reported = false;
     }
 
     // Ends the action the first frame the note menu is closed after having been open.
@@ -53,6 +56,10 @@ class NimbyNotesMenuWatch
         }
         if (MenuOpen())
         {
+            if (!m_Seen)
+            {
+                NimbyNotesLog.Debug(m_Which + " watcher: note menu seen");
+            }
             m_Seen = true;
             return;
         }
@@ -63,6 +70,12 @@ class NimbyNotesMenuWatch
         if (EndAction(action_data, m_Which))
         {
             m_Seen = false;
+            return;
+        }
+        if (action_data && !m_Reported)
+        {
+            m_Reported = true;
+            NimbyNotesLog.Debug(m_Which + " watcher: menu closed but not ending; state=" + action_data.m_State.ToString());
         }
     }
 

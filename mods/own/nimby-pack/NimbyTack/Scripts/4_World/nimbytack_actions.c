@@ -338,6 +338,9 @@ class ActionNimbyTackReadCB : ActionContinuousBaseCB
 class ActionNimbyTackRead : ActionContinuousBase
 {
     protected ref NimbyNotesMenuWatch m_NimbyMenuWatch;
+    // Debug trace of the client action state (October 18, 2026: the pose and the progress bar
+    // outlived the note menu). Written only with the debug flag.
+    protected int m_NimbyLastState = -99;
 
     void ActionNimbyTackRead()
     {
@@ -384,20 +387,40 @@ class ActionNimbyTackRead : ActionContinuousBase
     {
         super.OnStartClient(action_data);
         m_NimbyMenuWatch.Reset();
+        m_NimbyLastState = -99;
+        NimbyTackLog.Debug("read start-client");
     }
 
     override void OnUpdate(ActionData action_data)
     {
         super.OnUpdate(action_data);
+        if (action_data && action_data.m_State != m_NimbyLastState)
+        {
+            m_NimbyLastState = action_data.m_State;
+            NimbyTackLog.Debug("read state=" + action_data.m_State.ToString() + " menu=" + NimbyTackLog.Bool(NimbyNotesMenuWatch.MenuOpen()) + " server=" + NimbyTackLog.Bool(GetGame().IsServer()));
+        }
         m_NimbyMenuWatch.Update(action_data);
+    }
+
+    override void OnEndInput(ActionData action_data)
+    {
+        NimbyTackLog.Debug("read end-input state=" + action_data.m_State.ToString());
+        super.OnEndInput(action_data);
     }
 
     override void OnEndRequest(ActionData action_data)
     {
+        NimbyTackLog.Debug("read end-request state=" + action_data.m_State.ToString());
         if (action_data.m_Callback)
         {
             action_data.m_Callback.InternalCommand(DayZPlayerConstants.CMD_ACTIONINT_INTERRUPT);
         }
+    }
+
+    override void OnEnd(ActionData action_data)
+    {
+        NimbyTackLog.Debug("read end state=" + action_data.m_State.ToString() + " server=" + NimbyTackLog.Bool(GetGame().IsServer()));
+        super.OnEnd(action_data);
     }
 }
 
