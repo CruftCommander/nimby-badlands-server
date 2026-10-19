@@ -1,11 +1,24 @@
 # Plan 2 - Hands (`NimbyHands`, formerly `NimbyGiveTake`)
 
-Draft v0.4, October 16, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: ready for implementation once Plan 0 (shared tooling) is on `main`.
+Draft v0.5, October 19, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: Phase 1 and Phase 2 built in `@NIMBY-20261019-153354` (branch `feat/hands` at `8cc681b`, unreviewed until Jeff merges it); Phase 0 item 6 and Phase 3 await the two-client session.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
 Hands lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's inventory (cargo or an eligible attachment slot), never their hands. It has never moved an item between two real players; proving that comes before the rename.
+
+Changes since v0.4 (October 19, 2026, `feat/hands`):
+
+- Phase 0 items 1-5 done from the 1.30 reference: baseline `docs/baselines/2026-10-19-hands-phase0-baseline.md`; the API evidence, validation points, completion-signal ranking, and the G2 answer are in "Phase 0 evidence" below. Item 6 (two clients) is open.
+- Phase 1 built under the old name (`@NIMBY-20261019-152248`, commit `945fb6c`) and Phase 2 built after it (`@NIMBY-20261019-152838`, commit `e5eb20d`); the release candidate for the two-client session is `@NIMBY-20261019-153354` (commit `8cc681b`, which adds the reservation pre-check). All three SUMMARY PASS on Nasdara with the Hands self-test at 52 cases, 0 `SCRIPT (E)`.
+- G5 as built: the registry is keyed by the item's network id string, not the `EntityAI` reference, so an item deleted in flight cannot leave a null key that is never evicted. It still names exactly one item; G5 is otherwise unchanged. The timeout is a constant (5,000 ms, `NimbyHandsConstants.TRANSFER_TIMEOUT_MS`), not a config file.
+- New finding: `DayZPlayerInventory` is an engine class that cannot be modded on 1.30 (boot check `logs/build-20261019-152106`: "Engine class 'DayZPlayerInventory' cannot be modded"). The hand event result (Phase 0 item 4, third candidate) is therefore not observable; the tests it runs are asked before dispatch instead (`GameInventory.LocationCanMoveEntity`, `GameInventory.HasInventoryReservation`), and only a reservation taken after that check can refuse silently, ending `UNCONFIRMED`.
+- Revalidation also refuses a stale request whose item or player changed since the action started (the server records them at `OnStartServer`), a disconnected player, a busy giver inventory, a move the engine's own test refuses, and a reserved destination.
+- `REFUSED` also covers an item that leaves the giver for somewhere other than the receiver while the request is open (Phase 3, "giver swaps, drops").
+- Log format: player names are quoted and escaped, `giver="<name>" (<bi-id>, <steam64>)`, so a name cannot forge a field. Debug lines appear only with `$profile:NimbyHands\debug`.
+- Pocket lines: the toggle line (`reason=toggle`) is logged in production as a consent audit record; forced closes are logged only when pockets were actually open.
+- Phase 2 as built: the two input labels are plain text (`Hands: offer or request item`, `Hands: open or close pockets`), as Ears does, so their string keys were removed; the pocket notification adds the toggle's key, or where to bind it. `PERMISSION.md` is a marked placeholder until Jeff supplies the text.
+- `CLAUDE.md`, `AGENTS.md`, the root `NOTICE`, and the pack `README.md` name `NimbyHands` (commit `a04c6f0`), which the Phase 2 exit grep needs.
 
 Changes since v0.3: display name Hands (Jeff, October 16, 2026; was Gimme), so the rename target is `NimbyHands`, worktree `feat/hands`, inputs `UANimbyHands*`, string keys `STR_NIMBY_HANDS_*`, log prefix `[NIMBY][Hands]`; the pocket-toggle Controls label is "Hands: open or close pockets"; key bindings are player-configurable per shared rules 5.
 
@@ -19,6 +32,8 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 - Not a persistence change. No custom entity serialization and no persistent entity classes.
 
 ## Current state (verified October 15, 2026)
+
+The rows below describe `main` before Phase 1. On `feat/hands` the transfer routine, concurrency, logging, keys, pocket, and dead-code rows are superseded by "Changes since v0.4".
 
 | Item | State | Source |
 | --- | --- | --- |
@@ -58,6 +73,58 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 
 Exit: the native transfer path moves an item between two real clients; its validation points and completion signal are documented. If reliable transfer cannot be shown, stop and revise. Never compensate by deleting and recreating items or injecting synthetic hand-state changes.
 
+### Phase 0 evidence (October 19, 2026)
+
+Items 1-5, from the shared 1.30 reference (build `1.30.164078.38`, `scripts.pbo` hash re-checked in `docs/baselines/2026-10-19-hands-phase0-baseline.md`). Paths are relative to `vendor/dayz-1.30-scripts/`; `S/` stands for `scripts/`, `UAC/` for `scripts/4_World/DayZ/Classes/UserActionsComponent/`, `INV/` for `scripts/3_Game/DayZ/Systems/Inventory/`. A declaration is not proof of behavior; item 6 and Phase 3 exercise these in game.
+
+#### Item 2 - API evidence
+
+| API | Where (file:line) | What the reference shows | Used by Hands |
+| --- | --- | --- | --- |
+| `ActionBase` | `UAC/ActionBase.c:51`; `Can` `:929-973`; `CanContinue` `:975-999`; `CreateActionData` `:240`; `Start` calls `OnStartServer` `:775-800` (`:788`); `CanBeUsedInRestrain` default false `:356` | The server evaluates `Can` once when it accepts the action (`UAC/ActionManagerServer.c:168`); the condition mask (vehicle, restrained, swimming, ...) is computed there (`:875-927`) | `NimbyHandsActionData` via `CreateActionData`; `OnStartServer` records item and identities |
+| `AnimatedActionBase` | `UAC/AnimatedActionBase.c:188-210` (animation event runs `OnExecuteServer`, no `Can` re-check); `Do` `:395-455` (`CanContinue` per progress tick `:419`, at initialize `:443`) | An interact action executes on its animation event without re-checking its condition | Revalidation at dispatch closes this gap |
+| `ActionContinuousBase` | `UAC/Actions/ActionContinuousBase.c:120`; `OnFinishProgressServer` `:289`, called `:257` | Continuous actions re-check `ActionCondition` every tick through `CanContinue` | Put In Pockets, offer, request |
+| `ActionInteractBase`, `ActionInstantBase` | `UAC/Actions/ActionInteractBase.c:38`; `UAC/Actions/ActionInstantBase.c:1` | | Give, Take; pocket toggle |
+| `ActionConstructor` | `UAC/ActionConstructor.c:1`; `RegisterActions` `:27` | | All six actions registered |
+| `StandardActionInput`, `ContinuousDefaultActionInput` | `UAC/ActionInput.c:292`, `:627` (`ContinuousInteractActionInput` `:545`); `SetInput` `:77`; `AIT_SINGLE` `:4`, `AIT_CLICKCONTINUOUS` `:7` | | Offer/request input (click-continuous), toggle input (single) |
+| `FindFreeLocationFor` | `INV/Inventory.c:276` (`FindFreeLocationForEx` `:283`) | Native; returns a location, flip included | Destination at dispatch and in the action conditions (`ANY_CARGO | ATTACHMENT`) |
+| `CanAddEntityInCargo` and the flip change | `INV/Inventory.c:154` (native); `CreateEntityInCargo` `:143`, `CreateEntityInCargoEx` `:150`; `CreateInInventory` `:876-894` passes `loc.GetFlip()` `:886` | No script in `3_Game` or `4_World` calls `CanAddEntityInCargo`; the 1.30 flip-condition check is engine-side and cannot be read in script. The research doc cited in the current-state table has no text on it. Hands creates no entity; it moves one to a location the engine itself returned | Covered in game by the Phase 3 "rotated items" row |
+| `ServerTakeToDst` | `S/3_Game/DayZ/Entities/Man.c:757-760` -> `TakeToDstImpl` `:762-768` -> `HumanInventory.TakeToDst` `INV/HumanInventory.c:243-251`; `EntityAI.ServerTakeToDst` `S/3_Game/DayZ/Entities/EntityAI.c:2063` | A dead holder skips the hand event and falls through to a direct inventory move (`HumanInventory.c:247-250`); Hands refuses a dead giver before dispatch | The transfer path |
+| `HumanInventory.RedirectToHandEvent` | `INV/HumanInventory.c:200-241` | With the source in hands it clears the item's user-reserved location, calls the holder's `HandEvent`, and returns true without looking at that call's result (`:228-229`). A `ServerTakeToDst` true is not proof of anything | |
+| `DayZPlayerInventory.HandEvent` | `S/4_World/DayZ/Systems/Inventory/DayZPlayerInventory.c:4435-4475`: refuses while `IsProcessing` (`:4437`, `:4639-4642`), on `CanPerformEventEx` (`:4446`), or on reservation (`:4449`); then defers. `HandleInventoryManipulation` `:4623-4635` runs it next update; SERVER mode sends it as juncture `SJ_INVENTORY` (`:4587-4615`, `:4206-4277`, `:4259`); the execution result is discarded (`:1830`) | Class at `:147` is an engine class: modding it fails the boot (`logs/build-20261019-152106`) | Busy check and `LocationCanMoveEntity` before dispatch |
+| `HandEventMoveTo` | `INV/Hand_Events.c:268-338`; `CanPerformEvent` `:306-319` uses `GameInventory.LocationCanMoveEntity` (`INV/Inventory.c:373`) | | Same engine test asked before dispatch |
+| `InventoryLocation` | `INV/InventoryLocation.c:29`; types `:3-13` (`TEMP` "client side only" `:12`); `FindInventoryLocationType` `:17`; `IsValid` `:36`, `GetType` `:43`, `GetParent` `:52`, `GetItem` `:62`; `GetCurrentInventoryLocation` `INV/Inventory.c:268` | | Source check, destination text, signal classification |
+| `ActionTargetsCursor` | `S/5_Mission/DayZ/GUI/ActionTargetsCursor.c:53`; `GetItemDesc` `:742`, `GetItemHealth` `:815`, `GetItemCargoCount` `:950`, `AttachmentsWithInventoryOrCargoCount` `:1317` (all protected) | | Offered item's name, health, cargo count on the cursor |
+| `NotificationSystem.AddNotificationExtended` | `S/3_Game/DayZ/Client/Notifications/NotificationSystem.c:215` | | Pocket notification; text joined with `Widget.TranslateString` (`S/1_Core/DayZ/proto/EnWidgets.c:112`) |
+| Input API | `UAInput` `S/3_Game/DayZ/InputAPI/UAInput.c:33-103` (`LocalPress` `:60`, `BindCombo` `:43`, event limits `:71-81`, `Supress` `:84`, `Lock` `:88`, `ForceDisable` `:94`); `UAInputAPI` `:205-277` (`GetInputByName` `:218`, `SortingCount` `:258`); `GetUApi` `:279`; `InputUtils.GetButtonNameFromInput` `S/3_Game/DayZ/tools/InputUtils.c:17-30`; `bin/constants.xml:482` (`kO`), `:500` (`kLShift`), `:915` (Others sorting) | | Bindings in `Data/Inputs.xml`; notification names the toggle key |
+| `PlayerIdentity.GetPlainId()` | `S/3_Game/DayZ/gameplay.c:370` (`GetId` `:368`, `GetName` `:362`); vanilla reads it as the Steam UID in `S/3_Game/DayZ/Client/SyncPlayerList.c:18` and `ClientData.c:46` | The declaration's comment says "plaintext unique id of player (cannot be used in database or logs)". Shared rules 4.2 decides both ids go in the log; recorded here so the choice is visible | Second id on every line naming a player |
+
+#### Item 3 - where vanilla validates
+
+| Check | Vanilla point | Gap Hands closes |
+| --- | --- | --- |
+| Consent | None in vanilla. Hands' consent is the other player's state: offering (`NimbyHandsCCTManState`), requesting, or pockets open | Re-read at dispatch (`SetConsent`) |
+| Distance | `CCTMan.Can`: facing and `DistanceSq <= max^2` (`UAC/TargetConditionsComponents/CCTMan.c:12-22`); checked at server acceptance (`ActionManagerServer.c:168`) and, for continuous actions, every tick (`CCTBase.CanContinue` calls `Can`, `CCTBase.c:8-11`). Client-sent hand events are also bounded by `c_MaxItemDistanceRadius` 2.5 m (`INV/Hand_Events.c:298-304`, `INV/Inventory.c:815`); a server-mode event is not | Interact actions: rechecked at dispatch with the action's reach plus 0.5 m |
+| Source ownership | `ActionBase.Can` refuses a target item in another player's inventory unless the target is a player (`ActionBase.c:938-944`); `RedirectToHandEvent` acts only for a source in hands (`HumanInventory.c:202`); `CheckRequestSrc` for client requests (`Hand_Events.c:288-296`) | Item must be in the giver's hands and be the item seen at action start |
+| Destination availability | `FindFreeLocationFor` (`Inventory.c:276`); `LocationCanMoveEntity` in `CanPerformEvent` (`Hand_Events.c:306-319`); reservation (`DayZPlayerInventory.c:4449` -> `DeferredHandEvent.ReserveInventory` `:133-136` -> `INV/Hand_Events.c:177`; short timeout 3,000 ms `Inventory.c:715`); hand guard `HandGuardHasRoomForItem` (`INV/Hand_Guards.c:255`) | Both script-visible tests asked at dispatch |
+| Action continuation | `CanContinue` (`ActionBase.c:975-999`) -> `ActionConditionContinue` (`:436`; `AnimatedActionBase.c:239`) -> `ActionCondition`; `Do` interrupts on failure (`AnimatedActionBase.c:418-430`). The condition mask is only computed at acceptance | Player state (G4) rechecked at dispatch |
+
+#### Item 4 - completion signal
+
+Order for a successful move, read from the reference (server side): `ServerTakeToDst` queues the hand event (`DayZPlayerInventory.c:4448`); the next inventory update sends it as juncture `SJ_INVENTORY` (`:4604`, `:4259`); when the juncture is processed the hand state machine moves the item and the engine calls `EEItemLocationChanged` (`EntityAI.c:976`), which calls `OnItemLocationChanged` (`:980`; `ItemBase.c:1162`), which calls `OnInventoryExit` on the giver (`ItemBase.c:1231`) and then `OnInventoryEnter` on the receiver (`:1242`) for the item and each nested item; back in `EEItemLocationChanged` the giver's `OnItemInHandsChanged` runs (`EntityAI.c:1005-1010`). A refused move changes no location, so none of these fire. Which side fires each event is engine behavior the scripts do not state; P0-4b in the test record measures it.
+
+| Rank | Candidate | Reading | Wired as |
+| --- | --- | --- | --- |
+| 1 | `ItemBase.EEItemLocationChanged`, server | Carries the old and new location, fires once per move, before the other two. All 21 vanilla overrides call super | `CONFIRMED` when the new location's root player is the receiver; `REFUSED` when the item went anywhere else; ignored for the giver's hands and `TEMP` |
+| 2 | `OnInventoryExit` / `OnInventoryEnter` | Fire only from inside rank 1, once per nested item, and carry only the player | Traced behind the debug flag with a sequence number |
+| 3 | Hand event result on the holder | Not observable on 1.30: the queue-time result is dropped (`HumanInventory.c:228-229`), the execution result is discarded (`DayZPlayerInventory.c:1830`), and the class cannot be modded | Its refusal tests (busy inventory, `LocationCanMoveEntity`, `HasInventoryReservation` at `INV/Inventory.c:787`) are asked before dispatch; a reservation taken after that check ends `UNCONFIRMED` at the 5,000 ms reconcile. Action reservations are not a conflict on the server: `ActionBase.InventoryReservation` returns at once on a dedicated server (`UAC/ActionBase.c:1061-1062`) |
+
+The two-client run confirms the ranking when, for every successful transfer, the server debug trace shows `EEItemLocationChanged.begin`, `OnInventoryExit` (giver), `OnInventoryEnter` (receiver), `EEItemLocationChanged.end` in that order and the `CONFIRMED` line names `signal=EEItemLocationChanged`, well inside 5,000 ms of `REQUESTED`; and a refused transfer shows no signal lines (test record P0-4a to P0-4e).
+
+#### Item 5 - can `UANimbyHandsOfferRequest` ignore a press while Left Shift is held?
+
+No. The 1.30 input API has no per-input "not while another button is held" condition: `UAInput` offers bindings and combos, event limits, suppression, locking, and force-disable (`S/3_Game/DayZ/InputAPI/UAInput.c:33-103`); `modificator` entries are sensitivity modifiers (`bin/specific.xml:3-13`); exclude groups disable whole input sets by context (`bin/specific.xml:81` onward); and the vanilla Shift binding `UAADSToggle` is a plain click on `kLShift` (`bin/preset_X1MouseKey.xml:169-176`), not an exclusion. A combo (nested `btn`) fires its own input on Shift+O but nothing stops the plain-O input firing on the same press, which is NIMBY-T-002. A script could compare two inputs in the same frame, but that is unproven and frame-order dependent. G2 stands: the toggle ships unbound.
+
 ## Phase 1 - make transfers safe to validate and diagnose
 
 ### Validation and concurrency
@@ -91,8 +158,9 @@ A recipient moving the item afterward must not turn `CONFIRMED` into a failure. 
 
 | Event | Line |
 | --- | --- |
-| Lifecycle | `[NIMBY][Hands] id=<corr> action=<class> state=<REQUESTED|CONFIRMED|REFUSED|UNCONFIRMED> giver=<name> (<bi-id>, <steam64>) receiver=<name> (<bi-id>, <steam64>) item=<type> #<netid> detail=<text>` |
-| Pocket toggle | `[NIMBY][Hands] pockets player=<name> (<bi-id>, <steam64>) open=<bool> reason=<toggle|unconscious|restrained|respawn|reconnect>` |
+| Lifecycle | `[NIMBY][Hands] id=<corr> action=<class> state=<REQUESTED|CONFIRMED|REFUSED|UNCONFIRMED> giver="<name>" (<bi-id>, <steam64>) receiver="<name>" (<bi-id>, <steam64>) item=<type> #<netid> detail=<text>` |
+| Pocket toggle | `[NIMBY][Hands] pockets player="<name>" (<bi-id>, <steam64>) open=<bool> reason=<toggle|unconscious|restrained|respawn|reconnect>` |
+| Debug (flag only) | `[NIMBY][Hands][Debug] signal=<name> side=<server|client> seq=<n> t=<ms> id=<corr|-> item=<type> #<netid> <detail>` |
 | Self-test | `[NIMBY][Hands][SelfTest] PASS|FAIL <case>` |
 
 Escape player-supplied text. Keep logs bounded; one terminal line per request.
