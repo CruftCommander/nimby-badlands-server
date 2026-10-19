@@ -172,8 +172,10 @@ class NimbyAutorunRules
     // The client's speed while autorun stays on. The walk toggle (double tap Left Ctrl,
     // preset_X1MouseKey.xml:27-31) slows to walk; a single Left Ctrl press (UAWalkRunTemp, :24-26)
     // goes to run; sprint drops to run when sprint or stamina runs out. A Shift press no longer
-    // selects sprint: under A5 it stops autorun.
-    static int ClientSpeed(int currentIdx, bool canSprint, bool hasStamina, bool walkTogglePressed, bool walkTempPressed)
+    // selects sprint: under A5 it stops autorun. A6: run returns to sprint once sprint and
+    // stamina allow again, as a held Shift would, unless speedChosen says the player picked walk
+    // or run with Left Ctrl since the start; that choice holds until the next start.
+    static int ClientSpeed(int currentIdx, bool canSprint, bool hasStamina, bool speedChosen, bool walkTogglePressed, bool walkTempPressed)
     {
         if (walkTogglePressed)
         {
@@ -183,11 +185,48 @@ class NimbyAutorunRules
         {
             return DayZPlayerConstants.MOVEMENTIDX_RUN;
         }
-        if (currentIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT && (!canSprint || !hasStamina))
+        bool sprintAllowed = canSprint && hasStamina;
+        if (currentIdx == DayZPlayerConstants.MOVEMENTIDX_SPRINT && !sprintAllowed)
         {
             return DayZPlayerConstants.MOVEMENTIDX_RUN;
         }
+        if (currentIdx == DayZPlayerConstants.MOVEMENTIDX_RUN && sprintAllowed && !speedChosen)
+        {
+            return DayZPlayerConstants.MOVEMENTIDX_SPRINT;
+        }
         return currentIdx;
+    }
+
+    // Why a double tap does not start autorun, or "" when it starts. The first cause in this
+    // order wins: player state, ladder or water, an open menu or focus loss, disabled controls,
+    // the raised weapon (A7), then the double-tap guard (A5).
+    static string StartRefusal(string blockedCause, string movementCause, string menuCause, bool controlDisabled, bool raised, bool guardActive)
+    {
+        if (blockedCause != "")
+        {
+            return blockedCause;
+        }
+        if (movementCause != "")
+        {
+            return movementCause;
+        }
+        if (menuCause != "")
+        {
+            return menuCause;
+        }
+        if (controlDisabled)
+        {
+            return "control-disabled";
+        }
+        if (raised)
+        {
+            return "raised";
+        }
+        if (guardActive)
+        {
+            return "double-tap-guard";
+        }
+        return "";
     }
 
     // A5: the second press of a double tap that a UATurbo press just stopped is not a start.
@@ -303,13 +342,28 @@ class NimbyAutorunRules
         failures += Case(results, "start at run without stamina", StartIdx(true, false) == run);
         failures += Case(results, "start at run without sprint", StartIdx(false, true) == run);
 
-        failures += Case(results, "client sprint holds", ClientSpeed(sprint, true, true, false, false) == sprint);
-        failures += Case(results, "client sprint drops on stamina", ClientSpeed(sprint, true, false, false, false) == run);
-        failures += Case(results, "client sprint drops on cannot sprint", ClientSpeed(sprint, false, true, false, false) == run);
-        failures += Case(results, "client walk stays walk without stamina", ClientSpeed(walk, true, false, false, false) == walk);
-        failures += Case(results, "client walk toggle slows to walk", ClientSpeed(sprint, true, true, true, false) == walk);
-        failures += Case(results, "client walk toggle wins over walk temp", ClientSpeed(sprint, true, true, true, true) == walk);
-        failures += Case(results, "client walk temp goes to run", ClientSpeed(walk, true, true, false, true) == run);
+        failures += Case(results, "client sprint holds", ClientSpeed(sprint, true, true, false, false, false) == sprint);
+        failures += Case(results, "client sprint drops on stamina", ClientSpeed(sprint, true, false, false, false, false) == run);
+        failures += Case(results, "client sprint drops on cannot sprint", ClientSpeed(sprint, false, true, false, false, false) == run);
+        failures += Case(results, "client walk stays walk without stamina", ClientSpeed(walk, true, false, false, false, false) == walk);
+        failures += Case(results, "client walk toggle slows to walk", ClientSpeed(sprint, true, true, false, true, false) == walk);
+        failures += Case(results, "client walk toggle wins over walk temp", ClientSpeed(sprint, true, true, false, true, true) == walk);
+        failures += Case(results, "client walk temp goes to run", ClientSpeed(walk, true, true, false, false, true) == run);
+        failures += Case(results, "A6 run returns to sprint when allowed", ClientSpeed(run, true, true, false, false, false) == sprint);
+        failures += Case(results, "A6 run stays run without stamina", ClientSpeed(run, true, false, false, false, false) == run);
+        failures += Case(results, "A6 run stays run without sprint", ClientSpeed(run, false, true, false, false, false) == run);
+        failures += Case(results, "A6 Left Ctrl run choice holds", ClientSpeed(run, true, true, true, false, false) == run);
+        failures += Case(results, "A6 Left Ctrl walk choice holds", ClientSpeed(walk, true, true, true, false, false) == walk);
+        failures += Case(results, "A6 walk temp at sprint goes to run", ClientSpeed(sprint, true, true, true, false, true) == run);
+
+        failures += Case(results, "A7 start refused while raised", StartRefusal("", "", "", false, true, false) == "raised");
+        failures += Case(results, "A7 start allowed when lowered", StartRefusal("", "", "", false, false, false) == "");
+        failures += Case(results, "start refusal state wins over raised", StartRefusal("dead", "", "", false, true, false) == "dead");
+        failures += Case(results, "start refusal ladder", StartRefusal("", "ladder", "", false, false, false) == "ladder");
+        failures += Case(results, "start refusal menu", StartRefusal("", "", "inventory", true, false, false) == "inventory");
+        failures += Case(results, "start refusal control disabled", StartRefusal("", "", "", true, true, false) == "control-disabled");
+        failures += Case(results, "start refusal raised wins over guard", StartRefusal("", "", "", false, true, true) == "raised");
+        failures += Case(results, "start refusal double-tap guard", StartRefusal("", "", "", false, false, true) == "double-tap-guard");
 
         failures += Case(results, "double tap second press swallowed", SwallowStart(10.2, 10.0));
         failures += Case(results, "start allowed after guard", !SwallowStart(10.6, 10.0));

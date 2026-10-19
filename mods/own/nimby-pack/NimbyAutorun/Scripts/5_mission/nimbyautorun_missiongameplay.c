@@ -4,8 +4,11 @@
 //           override, and asks the server to mirror it, sending only changes.
 // Origin  : Fork of SchanaModAutorun missiongameplay.c (Apache-2.0). See NOTICE.
 // Behavior: A double tap of Left Shift starts autorun at sprint, or at run when
-//           the player cannot sprint; sprint drops to run when stamina runs out.
-//           Stamina drains normally; autorun is not a stamina cheat. A5: while
+//           the player cannot sprint; sprint drops to run when stamina runs out
+//           and returns once vanilla would let a held Shift sprint again, unless
+//           the player chose walk or run with Left Ctrl (A6). A double tap while
+//           the weapon is raised does nothing (A7). Stamina drains normally;
+//           autorun is not a stamina cheat. A5: while
 //           running, any Shift press, WASD, Space, fire, raise, lean (A2), or the
 //           toggle stops it, and so do focus loss, a dialog, any menu but chat,
 //           gestures, and the radial quickbar, disabled controls, a ladder, and
@@ -25,6 +28,9 @@ modded class MissionGameplay extends MissionBase
     protected PlayerBase m_NimbyAutorunPlayer;
     protected float m_NimbyAutorunTurboStopAt = -1000.0;
     protected float m_NimbyAutorunPassThroughAt = -1000.0;
+    // A6: true once the player picks walk or run with Left Ctrl during this run; cleared on the
+    // next start, so the choice holds until then and run never returns to sprint by itself.
+    protected bool m_NimbyAutorunSpeedChosen;
 
     override void OnInit()
     {
@@ -41,9 +47,9 @@ modded class MissionGameplay extends MissionBase
         m_NimbyAutorunStopInputs.Insert("UAGetOver");
         m_NimbyAutorunStopInputs.Insert("UAFire");
         m_NimbyAutorunStopInputs.Insert("UATempRaiseWeapon");
-        // A2, conditional: vanilla locks both lean inputs while sprinting
-        // (DayZPlayerImplement.c:3013-3020), so a lean press is expected to stop autorun at run
-        // or walk only. Phase 0 item 3 settles whether they stay in this list.
+        // A2, decided October 19, 2026: lean stays a stop input. The solo block showed a lean press
+        // stops autorun at sprint and at run on 1.30, although vanilla locks both lean inputs on
+        // sprint start (DayZPlayerImplement.c:3013-3020).
         m_NimbyAutorunStopInputs.Insert("UALeanLeft");
         m_NimbyAutorunStopInputs.Insert("UALeanRight");
     }
@@ -65,6 +71,7 @@ modded class MissionGameplay extends MissionBase
         m_NimbyAutorunPlayer = null;
         m_NimbyAutorunTurboStopAt = -1000.0;
         m_NimbyAutorunPassThroughAt = -1000.0;
+        m_NimbyAutorunSpeedChosen = false;
     }
 
     protected bool NimbyAutorunCheckInput(string inputName)
@@ -78,14 +85,12 @@ modded class MissionGameplay extends MissionBase
         return inp && inp.LocalPress();
     }
 
+    // The stamina half of vanilla's sprint gate for a held Shift (PlayerBase.c:3485, :4799-4810;
+    // consumer thresholds StaminaHandler.c:65-103, :876-879): false once stamina is depleted, and
+    // true again only above the sprint threshold, so sprint does not flicker at zero (A6).
     protected bool NimbyAutorunHasStamina(PlayerBase player)
     {
-        StaminaHandler stamina = player.GetStaminaHandler();
-        if (!stamina)
-        {
-            return false;
-        }
-        return stamina.GetStamina() > 0;
+        return player.CanConsumeStamina(EStaminaConsumers.SPRINT);
     }
 
     // Focus, dialogs, menus, and disabled controls (NimbyAutorunRules.MenuStopCause). Runs every
@@ -154,31 +159,14 @@ modded class MissionGameplay extends MissionBase
         return "";
     }
 
+    // Reads the facts NimbyAutorunRules.StartRefusal orders. A7: IsRaised is the movement state
+    // (DayZPlayerImplement.c:4005, updated each CommandHandler at :2321).
     protected string NimbyAutorunStartRefusal(PlayerBase player, string menuCause, float now)
     {
-        string cause = player.NimbyAutorunBlockedReason();
-        if (cause != "")
-        {
-            return cause;
-        }
-        cause = NimbyAutorunMovementCause(player);
-        if (cause != "")
-        {
-            return cause;
-        }
-        if (menuCause != "")
-        {
-            return menuCause;
-        }
-        if (IsControlDisabled())
-        {
-            return "control-disabled";
-        }
-        if (NimbyAutorunRules.SwallowStart(now, m_NimbyAutorunTurboStopAt))
-        {
-            return "double-tap-guard";
-        }
-        return "";
+        string blocked = player.NimbyAutorunBlockedReason();
+        string movement = NimbyAutorunMovementCause(player);
+        bool guardActive = NimbyAutorunRules.SwallowStart(now, m_NimbyAutorunTurboStopAt);
+        return NimbyAutorunRules.StartRefusal(blocked, movement, menuCause, IsControlDisabled(), player.IsRaised(), guardActive);
     }
 
     override void OnUpdate(float timeslice)
@@ -207,8 +195,14 @@ modded class MissionGameplay extends MissionBase
                 NimbyAutorunSync(player, false, DayZPlayerConstants.MOVEMENTIDX_IDLE, stopCause);
                 return;
             }
+            bool walkToggle = NimbyAutorunCheckInput("UAWalkRunToggle");
+            bool walkTemp = NimbyAutorunCheckInput("UAWalkRunTemp");
+            if (walkToggle || walkTemp)
+            {
+                m_NimbyAutorunSpeedChosen = true;
+            }
             int current = player.NimbyGetAutorunIdx();
-            int speed = NimbyAutorunRules.ClientSpeed(current, player.CanSprint(), NimbyAutorunHasStamina(player), NimbyAutorunCheckInput("UAWalkRunToggle"), NimbyAutorunCheckInput("UAWalkRunTemp"));
+            int speed = NimbyAutorunRules.ClientSpeed(current, player.CanSprint(), NimbyAutorunHasStamina(player), m_NimbyAutorunSpeedChosen, walkToggle, walkTemp);
             if (speed != current)
             {
                 NimbyAutorunSync(player, true, speed, "speed");
@@ -226,6 +220,7 @@ modded class MissionGameplay extends MissionBase
             NimbyAutorunLog.Debug("Start refused " + NimbyAutorunLog.Who(player.GetIdentity()) + " cause=" + refusal);
             return;
         }
+        m_NimbyAutorunSpeedChosen = false;
         int startIdx = NimbyAutorunRules.StartIdx(player.CanSprint(), NimbyAutorunHasStamina(player));
         NimbyAutorunSync(player, true, startIdx, "toggle");
     }
