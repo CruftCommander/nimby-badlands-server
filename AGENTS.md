@@ -60,7 +60,7 @@ One signed client-and-server mod, published as one public Steam Workshop item, t
 - `pack.json` drives everything: addon rows, `includePatterns`, the `bootCheck` and `testServer` settings, and the `dev` harness. To add an addon, add a row; the build script needs no change. A row with `"serverOnly": true` builds unsigned to `build\@NIMBY-Server-<stamp>\` and loads with `-servermod=`. It never enters the Workshop output, and no client script may reference a class defined in it.
 - An addon can start on `main` as a stub: a `config.cpp` with no scripts, so the pack builds with the row already in place while the real body lands from that addon's `feat/*` worktree. `NimbyEarplugs`, `NimbyNotes`, and `NimbyTack` were stubs until their `feat/*` merges on October 17, 2026; all five addons on `main` are real now.
 - Addon code follows the DayZ script-module layers `3_game`, `4_world`, and `5_mission`, declared in each `config.cpp` under `CfgMods.defs`. Key bindings go in the addon's `Inputs.xml` so players can rebind them in Options > Controls.
-- Two addons are forks of third-party mods: `NimbyAutorun` (SchanaModAutorun, Apache-2.0) and `NimbyGiveTake` (Give&Take, Workshop 2903112334). Each addon's `NOTICE` records its origin and every change made. Keep `NOTICE` current; attribution is a release requirement.
+- Two addons are forks of third-party mods: `NimbyAutorun` (SchanaModAutorun, Apache-2.0) and `NimbyHands` (Give&Take, Workshop 2903112334; its permission capture is `PERMISSION.md`). Each addon's `NOTICE` records its origin and every change made. Keep `NOTICE` current; attribution is a release requirement.
 
 ### Build pipeline (`scripts/Build-NimbyPack.ps1` and `scripts/modules/`)
 
@@ -91,7 +91,7 @@ Test persistence uses only `storage_998` and `storage_999`. Both scripts refuse 
 - **API evidence.** Cite a file and line in the unpacked 1.30 scripts at `vendor/dayz-1.30-scripts/` for any vanilla API you use (build `1.30.164078.38`; see `docs/baselines/`). 1.30 has no `inputs.xml`; default bindings are in `bin/preset_X1MouseKey.xml`.
 - **Release gate (9.2).** Boot the release artifact against a copy of live `storage_1` with `storageAutoFix = 0`. Compare the result to a same-build vanilla control (`-Vanilla`). Back up storage and every `$profile:Nimby*` folder together, then deploy at a scheduled restart.
 
-Display names differ from code prefixes: Legs is `NimbyAutorun`, Hands is still `NimbyGiveTake` on `main` (log prefix `[NIMBY][GiveTake]`) and is renamed to `NimbyHands` at Hands Phase 2, Ears is `NimbyEarplugs`, Scrawl is `NimbyNotes`, and Central Scrutinizer is `NimbyAdmin`.
+Display names differ from code prefixes: Legs is `NimbyAutorun`, Hands is `NimbyHands` (log prefix `[NIMBY][Hands]`; renamed from the fork's October 14 name at Hands Phase 2, see its `NOTICE`), Ears is `NimbyEarplugs`, Scrawl is `NimbyNotes`, and Central Scrutinizer is `NimbyAdmin`.
 
 ### Other docs
 

@@ -23,9 +23,9 @@
             "prefix": "NimbyAutorun"
         },
         {
-            "folder": "NimbyGiveTake",
-            "pboName": "NimbyGiveTake",
-            "prefix": "NimbyGiveTake"
+            "folder": "NimbyHands",
+            "pboName": "NimbyHands",
+            "prefix": "NimbyHands"
         },
         {
             "folder": "NimbyEarplugs",

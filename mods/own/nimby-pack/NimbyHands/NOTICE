@@ -1,0 +1,73 @@
+NimbyHands (display name Hands) is a fork of Give&Take.
+
+Original work: Give&Take, Steam Workshop item 2903112334
+  https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334
+Author: affenb3rt (contact listed on the Workshop page as Discord)
+Credited contributor (from the mod's config): Wardog
+Original build: PBO version 23040119, packed with Mikero DePbo 8.07; Workshop last updated April 1, 2023.
+Imported: October 14, 2026, from the copy recorded in
+  logs/Copy-WorkshopItem-2903112334-20261014-153144.log
+  (GiveAndTake.pbo sha256 EDBC6A285C15511CCF53FFFE2E3A3EF98C09759C00707B202496FF264C671574)
+
+Permission: the original ships no license file. The Workshop description, read October 14, 2026,
+grants permission to repack, reupload, modify, and redistribute the mod. The dated capture of that
+text is PERMISSION.md in this folder; if the author changes the terms, re-check before the next
+release.
+
+Import notes:
+- Scripts, inputs.xml, and languagecore/stringtable.csv are byte-for-byte copies.
+- config.cpp is the original config.bin decoded to text; values are unchanged.
+- logo.paa and Texheaders.bin were not imported; the NIMBY pack supplies its own mod presentation.
+
+Players: the input actions were renamed on October 19, 2026. Anyone who changed the offer/request
+key from O, or bound the pocket toggle, binds it once more under Options > Controls > Others
+("Hands: offer or request item", "Hands: open or close pockets").
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 19, 2026 (Hands plan Phase 2, decisions G1 and G2): renamed the addon from NimbyGiveTake
+  to NimbyHands - folder, PBO, CfgPatches and CfgMods classes, every custom class and member
+  (NimbyHands*), input actions (UANimbyOfferRequestItem to UANimbyHandsOfferRequest,
+  UANimbyTogglePocketAccess to UANimbyHandsTogglePockets), string keys (STR_NIMBY_GT_* to
+  STR_NIMBY_HANDS_*), log prefix ([NIMBY][GiveTake] to [NIMBY][Hands]), and profile folder
+  ($profile:NimbyHands). inputs.xml moved to Data/Inputs.xml and sorts into the vanilla Others
+  controls tab: offer/request stays on O; the pocket toggle ships unbound with the label "Hands: open
+  or close pockets" (the Left Shift + O combo also fired offer/request, test finding NIMBY-T-002).
+  The two input labels are plain text now, so their string keys were removed. The pocket
+  notification names the toggle's binding. Added PERMISSION.md for the Workshop permission text.
+- October 19, 2026 (Hands plan Phase 1):
+  - Every transfer is registered in a server-side in-flight registry with a correlation id before
+    it is dispatched; a second request for an item already in flight is refused. Nothing is
+    persisted.
+  - Consent, both players' state (alive, conscious, not restrained, not in a vehicle, not
+    swimming, still connected, not replaced), distance, the source item, the destination, and the
+    engine's own move test are checked again immediately before dispatch.
+  - The fixed one-second outcome check was replaced by lifecycle lines REQUESTED, CONFIRMED,
+    REFUSED, and UNCONFIRMED, one terminal line per request: CONFIRMED comes from the item's
+    location-change event on the server; a bounded 5-second timeout reconciles where the item is
+    and never retries, clones, restores, or deletes anything.
+  - Pockets (G4): the toggle cannot be used while restrained; the server closes open pockets on
+    unconsciousness, restraint, reconnect, and respawn; Put In Pockets refuses an unconscious or
+    restrained player. The toggle and every forced close write a pockets line.
+  - Log lines carry both player ids (BI id and Steam64); names are quoted and escaped; debug
+    lines appear only when $profile:<addon>\debug exists. A self-test runs when
+    $profile:<addon>\selftest exists.
+  - Removed the #ifdef DIAG blocks in the give and take actions, which set a state and never
+    cleared it.
+- October 14, 2026 (review CR-001): rewrote the transfer routine (NimbyMoveItemToPlayer). It now
+  asks the player holding the item to move it with the vanilla server path (ServerTakeToDst), which
+  runs through that player's own hand state machine, instead of deleting the item's network state
+  and injecting fake hand events on both players. Transfers land in the receiver's inventory
+  (cargo or an attachment slot), never their hands; Give now delivers to inventory and the
+  "take to hands" action was removed. Each transfer logs REQUESTED, then OK or FAILED once the
+  receiver has checked where the item ended up.
+- October 14, 2026 (review CR-005, CR-006, CR-003):
+  - Renamed every class, input action, string key, and member with a Nimby prefix so the fork
+    cannot collide with the original or another mod; fixed misspellings (Pocktes, Toggel, Cancle)
+    and renamed the two misspelled script files. The modded GameConstants member became
+    NimbyGiveTakeConstants. Addon, CfgMods class, and PBO prefix are now NimbyGiveTake.
+  - Every transfer now writes one [NIMBY][GiveTake] line to the server script log naming the
+    action, result, giver, receiver, and item. Expected refusals (no item, no space, item already
+    taken) are logged there instead of raising Error() with no context.
+  - The pocket-access toggle, unbound in the original, defaults to Left Shift + O.
+- October 14, 2026: removed the four CfgMods picture and logo entries that point at logo.paa,
+  which is not imported. Without this, the game logs a missing-file error for the image.

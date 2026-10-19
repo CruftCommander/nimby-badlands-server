@@ -8,10 +8,10 @@ Third-party and vendor pieces
 - mods/own/nimby-pack/NimbyAutorun: a modified fork of SchanaModAutorun
   (https://github.com/schana/dayz-mod-autorun), Apache License 2.0. The
   license and the list of changes are in that folder's LICENSE and NOTICE.
-- mods/own/nimby-pack/NimbyGiveTake: a fork of Give&Take (Steam Workshop
+- mods/own/nimby-pack/NimbyHands: a fork of Give&Take (Steam Workshop
   item 2903112334, author affenb3rt). Redistributed under the permission
-  stated on the Workshop page; the capture and the list of changes are in
-  that folder's NOTICE.
+  stated on the Workshop page; the capture is that folder's PERMISSION.md
+  and the list of changes is its NOTICE.
 - mods/own/nimby-pack/NimbyEarplugs, NimbyNotes, NimbyTack: original work
   for this server, MIT. Each folder's NOTICE names the vanilla classes it
   modifies.
