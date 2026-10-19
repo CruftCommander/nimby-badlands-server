@@ -218,6 +218,14 @@ class NimbyHandsMoveItemToPlayer
         {
             return "engine refuses the move to " + NimbyHandsServer.DescribeLocation(dst);
         }
+
+        // The reservation test HandEventBase.ReserveInventory makes (Hand_Events.c:185,
+        // Inventory.c:787). A reservation taken between here and the holder's next inventory
+        // update can still refuse silently; that request ends UNCONFIRMED at the timeout.
+        if (GameInventory.HasInventoryReservation(m_Item, dst))
+        {
+            return "destination reserved";
+        }
         return "";
     }
 

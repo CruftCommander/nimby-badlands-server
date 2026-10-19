@@ -15,8 +15,9 @@
 //              result (DayZPlayerInventory.c:1830). ServerTakeToDst returning true is
 //              therefore not proof of anything. Its refusal conditions are checked
 //              before dispatch instead (NimbyHandsMoveItemToPlayer.Revalidate): the busy
-//              inventory (DayZPlayerInventory.c:4437) and the engine move test the
-//              event itself runs (Hand_Events.c:306-319). Only a reservation refusal
+//              inventory (DayZPlayerInventory.c:4437), the engine move test the
+//              event itself runs (Hand_Events.c:306-319), and the reservation test
+//              (Hand_Events.c:185). Only a reservation taken after that check
 //              (DayZPlayerInventory.c:4449) stays invisible; it ends UNCONFIRMED.
 //           The bounded timeout is the fallback, not a signal: it reconciles where the
 //           item is, logs CONFIRMED or UNCONFIRMED, evicts, and never retries.
