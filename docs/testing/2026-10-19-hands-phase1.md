@@ -66,6 +66,19 @@ Jeff and Jay for ordinary transfers; a third tester or the dev harness for compe
 | HD-039 | Added latency and rapid repeats | Same guarantees | | Same evidence under 200 ms added latency |
 | HD-040 | Relog and graceful restart | Clients and server agree on ownership | | Inventories inspected after relog and after RCON `#shutdown` restart |
 
+## Solo smoke, October 19, 2026 (before the two-client session)
+
+Jeff solo on the replica `D:\DayZServer`, instance 999, profile `hands-phase1`, build `@NIMBY-20261019-153354`, 16:23-16:27 Central. Server log `logs\testserver-20261019-162308\nimby-events.log` (44 events), client log `%LOCALAPPDATA%\DayZ\script_2026-10-19_16-24-30.log` (0 `SCRIPT (E)`, 0 `GiveTake`). Debug flag on the server and the client; no transfer attempted, so no `[Debug]` signal lines were expected.
+
+| Step | Check | Result | Evidence |
+| --- | --- | --- | --- |
+| HD-010 | Self-test on the client as well as the build | PASS | Client: 52 `[NIMBY][Hands][SelfTest] PASS`, 0 FAIL, `selftest complete; failures=0` at 16:25:08 (the client line carries no case count; the build log does) |
+| HD-016 (pockets lines) | Both ids on every line naming a player | PASS | `pockets player="Road Dog" (h8o5rWLPVptWLIPrMHl9JnGQMT0bM8CfAyoaOMMnH5Q=, 76561198354705597) open=true reason=toggle` at 16:26:28.246, `open=false` at 16:26:28.614, `open=true` at 16:26:46.482; the name is quoted as the escaping rule requires |
+| HD-023 | Controls page and rebind | PASS (Jeff) | "Hands: offer or request item" on O and "Hands: open or close pockets" unbound under Others; pockets bound to a free key and used; notification named the key. No screenshot |
+| HD-024 | Old binding gone | PASS (Jeff, no log line) | No Give&Take entry listed; client log has 0 `GiveTake` hits |
+| Offer animation | Hold O with an item in hands | PASS (Jeff, no log line by design) | The offer animation played; no lifecycle line because no second player could take |
+| HD-022 (partial) | Pockets state across restart | NOT RUN | Pockets were left open at 16:26:46 and the server was stopped; the respawn and reconnect cases need the two-client session or a second solo start |
+
 ## Findings
 
 None yet.
