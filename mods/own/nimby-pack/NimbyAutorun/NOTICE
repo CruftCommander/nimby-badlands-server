@@ -13,6 +13,16 @@ Changes are listed newest first. Display name: Legs (decided October 15, 2026); 
 stays NimbyAutorun.
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 19, 2026 (Legs plan
+round 2 after the solo block, DayZ 1.30):
+- Players who ran a build before October 19, 2026 keep their old binding (numpad plus); reset
+  "Legs: toggle autorun" to default in Options > Controls > Others to get the double tap.
+- After sprint drops to run because stamina ran out, autorun returns to sprint once vanilla
+  would let a held Shift sprint again. It stays at walk or run if the player chose that speed
+  with Left Ctrl, until the next start.
+- A double tap while the weapon is raised does not start autorun; lower the weapon and double-tap
+  again.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 19, 2026 (Legs plan
 Phase 1, DayZ 1.30):
 - Default key is a double tap of Left Shift instead of numpad plus, listed in Options >
   Controls > Others as "Legs: toggle autorun" so players can rebind it.
