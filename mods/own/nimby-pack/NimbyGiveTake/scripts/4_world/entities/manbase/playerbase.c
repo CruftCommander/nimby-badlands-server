@@ -1,6 +1,7 @@
 modded class PlayerBase
 {
     protected ENimbyGiveOrTake m_NimbyGiveOrTakeState = ENimbyGiveOrTake.NONE;
+    // G3: off by default; a new character (respawn) starts closed because nothing is persisted.
     protected bool m_NimbyAllowsPocketAccess = false;
 
     override void Init()
@@ -35,6 +36,54 @@ modded class PlayerBase
         return m_NimbyAllowsPocketAccess;
     }
 
+    // G4 and G3: the server closes open pockets and writes the forced-clear line. Closed
+    // pockets stay closed silently, so the log carries only real changes.
+    void NimbyClosePockets( string reason )
+    {
+        if ( !GetGame().IsServer() || !m_NimbyAllowsPocketAccess )
+        {
+            return;
+        }
+
+        NimbySetAllowsPocketAccess( false );
+        NimbyGiveTakeServer.LogPockets( this, false, reason );
+    }
+
+    // G4: PlayerBase.c:3756.
+    override void OnUnconsciousStart()
+    {
+        super.OnUnconsciousStart();
+
+        NimbyClosePockets( "unconscious" );
+    }
+
+    // G4: PlayerBase.c:2206; the restrain actions call this on the server.
+    override void SetRestrained( bool is_restrained )
+    {
+        super.SetRestrained( is_restrained );
+
+        if ( is_restrained )
+        {
+            NimbyClosePockets( "restrained" );
+        }
+    }
+
+    // G3: missionServer.c:633-638 calls OnReconnect on the surviving character; OnConnect
+    // (PlayerBase.c:7623) runs for every new session on a character.
+    override void OnReconnect()
+    {
+        super.OnReconnect();
+
+        NimbyClosePockets( "reconnect" );
+    }
+
+    override void OnConnect()
+    {
+        super.OnConnect();
+
+        NimbyClosePockets( "reconnect" );
+    }
+
     override void SetActions( out TInputActionMap InputActionMap )
     {
         super.SetActions( InputActionMap );
@@ -52,30 +101,5 @@ modded class PlayerBase
         AddAction( NimbyActionPutInPockets, InputActionMap );
 
         super.SetActionsRemoteTarget( InputActionMap );
-    }
-
-    // Called on the receiver VERIFY_DELAY_MS after a transfer request (NimbyMoveItemToPlayer).
-    // Logs where the item actually ended up, because the hand event is processed later.
-    void NimbyVerifyTransfer( string action, Man giver, EntityAI item )
-    {
-        if ( !item )
-        {
-            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item no longer exists" );
-            return;
-        }
-
-        Man holder = item.GetHierarchyRootPlayer();
-        if ( holder == this )
-        {
-            NimbyGiveTakeLog.Transfer( action, "OK", giver, this, item, "item is in receiver inventory" );
-        }
-        else if ( holder == giver )
-        {
-            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item still with giver; the giver's inventory refused the move" );
-        }
-        else
-        {
-            NimbyGiveTakeLog.Transfer( action, "FAILED", giver, this, item, "item ended up elsewhere" );
-        }
     }
 }

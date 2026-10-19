@@ -13,6 +13,11 @@ class NimbyActionGiveItemInHands extends ActionInteractBase
         m_ConditionTarget = new NimbyCCTManGiveOrTake( UAMaxDistances.DEFAULT, true, ENimbyGiveOrTake.TAKE );
     }
 
+    override ActionData CreateActionData()
+    {
+        return new NimbyGiveTakeActionData;
+    }
+
     override bool HasProneException()
     {
         return true;
@@ -41,18 +46,35 @@ class NimbyActionGiveItemInHands extends ActionInteractBase
         return true;
     }
 
+    // Records the item in hands and both players for the dispatch-time staleness checks.
+    override void OnStartServer( ActionData action_data )
+    {
+        super.OnStartServer( action_data );
+
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
+        if ( data )
+        {
+            data.Capture( action_data.m_Player.GetItemInHands(), action_data.m_Player, tgt_player );
+        }
+    }
+
     override void OnExecuteServer( ActionData action_data )
     {
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
-
-        // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName() );
-        if ( move.Execute() )
+        bool requesting = false;
+        if ( tgt_player )
         {
-#ifdef DIAG
-            // debug purpose
-            tgt_player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.GIVE );
-#endif
+            requesting = tgt_player.NimbyGetGiveOrTakeState() == ENimbyGiveOrTake.TAKE;
         }
+
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.DEFAULT );
+        move.SetConsent( requesting, "receiver is no longer requesting" );
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        if ( data )
+        {
+            data.ApplyTo( move );
+        }
+        move.Execute();
     }
 }

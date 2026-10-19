@@ -6,6 +6,11 @@ class NimbyActionTakeItemBase extends ActionInteractBase
         m_ConditionTarget = new NimbyCCTManGiveOrTake( UAMaxDistances.DEFAULT, true, ENimbyGiveOrTake.GIVE );
     }
 
+    override ActionData CreateActionData()
+    {
+        return new NimbyGiveTakeActionData;
+    }
+
     override bool HasProneException()
     {
         return true;
@@ -45,19 +50,39 @@ class NimbyActionTakeItemBase extends ActionInteractBase
         return true;
     }
 
+    // Records the offered item and both players for the dispatch-time staleness checks.
+    override void OnStartServer( ActionData action_data )
+    {
+        super.OnStartServer( action_data );
+
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
+        if ( data && tgt_player )
+        {
+            data.Capture( tgt_player.GetItemInHands(), tgt_player, action_data.m_Player );
+        }
+    }
+
     override void OnExecuteServer( ActionData action_data )
     {
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
-
-        // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( action_data.m_Player, tgt_player.GetItemInHands(), ClassName() );
-        if ( move.Execute() )
+        ItemBase item = null;
+        bool offering = false;
+        if ( tgt_player )
         {
-#ifdef DIAG
-            // debug purpose
-            tgt_player.NimbySetGiveOrTakeState( ENimbyGiveOrTake.TAKE );
-#endif
+            item = tgt_player.GetItemInHands();
+            offering = tgt_player.NimbyGetGiveOrTakeState() == ENimbyGiveOrTake.GIVE;
         }
+
+        // The taker receives; the player holding the item is the giver.
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( action_data.m_Player, item, ClassName(), UAMaxDistances.DEFAULT );
+        move.SetConsent( offering, "giver is no longer offering" );
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        if ( data )
+        {
+            data.ApplyTo( move );
+        }
+        move.Execute();
     }
 }
 

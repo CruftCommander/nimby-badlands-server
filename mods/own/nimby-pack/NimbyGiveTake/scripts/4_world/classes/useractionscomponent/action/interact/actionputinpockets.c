@@ -25,15 +25,34 @@ class NimbyActionPutInPockets extends ActionContinuousBase
         m_ConditionTarget = new CCTMan( UAMaxDistances.SMALL );
     }
 
+    override ActionData CreateActionData()
+    {
+        return new NimbyGiveTakeActionData;
+    }
+
     override typename GetInputType()
     {
         return ContinuousInteractActionInput;
     }
 
+    // Evaluated on the client for the prompt, on the server at start, and on every progress
+    // tick through CanContinue (AnimatedActionBase.c:419), so closing pockets mid-action
+    // interrupts it.
     override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item )
     {
         PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
+        if ( !tgt_player )
+        {
+            return false;
+        }
+
         if ( !tgt_player.NimbyGetAllowsPocketAccess() )
+        {
+            return false;
+        }
+
+        // G4: no deposit into an unconscious or restrained player.
+        if ( tgt_player.IsUnconscious() || tgt_player.IsRestrained() )
         {
             return false;
         }
@@ -56,12 +75,35 @@ class NimbyActionPutInPockets extends ActionContinuousBase
         return true;
     }
 
+    // Records the item and both players for the dispatch-time staleness checks.
+    override void OnStartServer( ActionData action_data )
+    {
+        super.OnStartServer( action_data );
+
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
+        if ( data )
+        {
+            data.Capture( action_data.m_MainItem, action_data.m_Player, tgt_player );
+        }
+    }
+
     override void OnFinishProgressServer( ActionData action_data )
     {
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
+        bool open = false;
+        if ( tgt_player )
+        {
+            open = tgt_player.NimbyGetAllowsPocketAccess();
+        }
 
-        // setup custom move item "lambda" and execute it
-        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName() );
+        NimbyMoveItemToPlayer move = new NimbyMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.SMALL );
+        move.SetConsent( open, "receiver's pockets are closed" );
+        NimbyGiveTakeActionData data = NimbyGiveTakeActionData.Cast( action_data );
+        if ( data )
+        {
+            data.ApplyTo( move );
+        }
         move.Execute();
     }
 }

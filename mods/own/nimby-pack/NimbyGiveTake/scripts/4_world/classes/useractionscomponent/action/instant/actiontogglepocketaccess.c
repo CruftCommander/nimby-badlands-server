@@ -11,9 +11,10 @@ class NimbyActionTogglePocketAccess extends ActionInstantBase
         return false;
     }
 
+    // G4: a restrained player cannot open (or close) their pockets; restraint closes them.
     override bool CanBeUsedInRestrain()
     {
-        return true;
+        return false;
     }
 
     override bool CanBeUsedInVehicle()
@@ -54,7 +55,9 @@ class NimbyActionTogglePocketAccess extends ActionInstantBase
     override void OnStartServer( ActionData action_data )
     {
         PlayerBase player = action_data.m_Player;
+        bool open = !player.NimbyGetAllowsPocketAccess();
 
-        player.NimbySetAllowsPocketAccess( !player.NimbyGetAllowsPocketAccess() );
+        player.NimbySetAllowsPocketAccess( open );
+        NimbyGiveTakeServer.LogPockets( player, open, "toggle" );
     }
 }
