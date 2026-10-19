@@ -9,6 +9,40 @@ Original NOTICE:
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
+Changes are listed newest first. Display name: Legs (decided October 15, 2026); the code prefix
+stays NimbyAutorun.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 19, 2026 (Legs plan
+round 2 after the solo block, DayZ 1.30):
+- Players who ran a build before October 19, 2026 keep their old binding (numpad plus); reset
+  "Legs: toggle autorun" to default in Options > Controls > Others to get the double tap.
+- After sprint drops to run because stamina ran out, autorun returns to sprint once vanilla
+  would let a held Shift sprint again. It stays at walk or run if the player chose that speed
+  with Left Ctrl, until the next start.
+- A double tap while the weapon is raised does not start autorun; lower the weapon and double-tap
+  again.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 19, 2026 (Legs plan
+Phase 1, DayZ 1.30):
+- Default key is a double tap of Left Shift instead of numpad plus, listed in Options >
+  Controls > Others as "Legs: toggle autorun" so players can rebind it.
+- Autorun stops when the player takes control back: any Shift press, W, A, S, D, Space (jump
+  or vault), fire, weapon raise, lean, or the toggle. The second press of a double tap that
+  stopped autorun does not start it again. Chat, gestures, and the radial quickbar do not stop
+  it. Shift no longer selects sprint while running.
+- Focus loss, a dialog, the inventory, the pause menu, any other input-capturing menu,
+  disabled controls, a ladder, and water stop autorun; it never resumes on its own.
+- Client state resets on respawn, player replacement, disconnect, and mission teardown.
+- New server-to-client RPC 6550102: the server tells the owning client to stop on every
+  forced clear and every refused request, and the client does not re-send start.
+- Server clears autorun itself on vehicle entry, unconsciousness, restraint, death, disconnect,
+  and deletion, and drops sprint to run when the player can no longer sprint.
+- Server limits requests to 10 per second per player (config.json requestsPerSecond); a stop
+  is never limited. Ownership is checked before the payload is read.
+- Validation, the request limit, and the stop rules moved to engine-free classes with a
+  self-test. Logs carry the BI id and the Steam64 id; toggle lines only with the debug flag.
+- Movement overrides use the 1.30 HumanInputControllerOverrideType values.
+
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 14, 2026:
 - Renamed the addon, classes, members, input action, and RPC id to the Nimby prefix so the
   fork cannot collide with the original if both are loaded.

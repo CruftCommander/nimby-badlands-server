@@ -15,6 +15,8 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 | `NimbyGiveTake` | Fork of Give&Take, Workshop [2903112334](https://steamcommunity.com/sharedfiles/filedetails/?id=2903112334) | Author permits repacking, modification, and redistribution (Workshop description; re-confirm before release) | Imported October 14, 2026; review fixes CR-001, CR-003, CR-005, CR-006 applied (see `NimbyGiveTake/NOTICE`). Boot-checked; two-client test pending |
 | Zens Core, Zens Zippo Lighter, Zens Music | Repack of Zenarchist's Workshop items | Author permits repacking; Zippo model is CC BY-NC | Theme drop 1; not started |
 
+Legs: if you played on a build before October 19, 2026, reset "Legs: toggle autorun" to default in Options > Controls > Others; the game keeps your old binding (numpad plus) otherwise (NIMBY-T-004).
+
 ## Layout when built
 
 ```

@@ -1,14 +1,30 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Legs key binding (shared rules 5, Legs plan A1 and A3).
+  Default: double tap Left Shift. kLShift is bin/constants.xml:500. Vanilla holds kLShift for
+  UATurbo (bin/preset_X1MouseKey.xml:21-23); a doubleclick event on a key vanilla uses as a hold
+  does not shadow the hold, and vanilla does the same with UAWalkRunToggle, a doubleclick on
+  kLControl beside the UAWalkRunTemp hold (bin/preset_X1MouseKey.xml:24-31). The doubleclick limit
+  on the PC keyboard is 0.5 s (bin/constants.xml:457). Kept in mind for the in-game check: Left
+  Shift also carries UAADSToggle as a click (:169-172), which acts only with the weapon raised.
+  The binding sorts into the vanilla Others tab (bin/constants.xml:915), where the player rebinds
+  it; a new <sorting> group from modded_inputs is not honored on 1.30 (Ears EP-005, October 17,
+  2026).
+-->
 <modded_inputs>
     <inputs>
         <actions>
-            <input name="UANimbyAutorunToggle" loc="Autorun Toggle" />
+            <input name="UANimbyAutorunToggle" loc="Legs: toggle autorun" />
         </actions>
     </inputs>
+    <sorting name="others" loc="layout_pc_keybinding_others">
+        <input name="UANimbyAutorunToggle" />
+    </sorting>
     <preset>
-        <!-- Default binding: numpad plus. Players can rebind under Controls. -->
         <input name="UANimbyAutorunToggle">
-            <btn name="kAdd" />
+            <btn name="kLShift">
+                <event name="doubleclick" />
+            </btn>
         </input>
     </preset>
 </modded_inputs>
