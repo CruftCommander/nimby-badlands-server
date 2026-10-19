@@ -12,11 +12,11 @@ Server: local replica `D:\DayZServer`, instance 999, profile `main-round1` (`Nim
 | R1-2 | Take-down, nail: sheet back, health 10 | PASS | `takedown fastener=nail sheet=inventory health=10 damage=5` |
 | TK-007 | Tape pins, loses 10; take-down costs 3 | PASS | `pin fastener=tape ... health=10`, `takedown fastener=tape ... health=7 damage=3` |
 | TK-008 | Epoxy pins, loses 10; take-down costs 7 | PASS | `pin fastener=epoxy`, take-down 7 (Jeff) |
-| TK-010 | Wrench with a nail offers the nail action; Screwdriver does not | PASS (wrench half) | No screwdriver in the kit; the refusal half stays open |
+| TK-010 | Wrench with a nail offers the nail action; Screwdriver does not | PASS | Run 5 (`testserver-20261019-134820`, screwdriver added to the connect kit): screwdriver in hands offers nothing, wrench offers "Nail note to wall" |
 | TK-009 | Knife pins wood, refuses mud brick, knife returns | PASS, with a limitation | Pin and refusal PASS. The knife is an inventory attachment of the pinned note and the Paper model has no proxy for the slot, so it does not render on the wall; it shows in vicinity. The "visible on the wall" wording in the October 17 record is withdrawn |
 | S5 | Burn a knifed note | PASS | `burn class=NimbyTack_PinnedNote_Knife source=Matchbox knife=ground player=...`: note gone, knife on the ground |
 | R1-8 | Burn a nailed note | PASS | `burn class=NimbyTack_PinnedNote_Nail source=Matchbox player=...` |
-| TK-005 | Area cap | NOT RUN | Skipped by Jeff (paper and patience); the cap is self-tested |
+| TK-005 | Area cap | PASS | Run 5 with `areaCapCount` 2 in the profile: four pins at three buildings inside 50 m of the shed cluster refused, `refuse pin fastener=nail reason=area-cap nearby=6 cap=2` (also `nearby=4`), message shown; pins under the cap went through in every earlier run. Run 6 (`-135945`) on a wiped `storage_999`: three nail pins at 1 cm, `nearby=0`, on a mud-brick house, `Land_Shed_W1`, and `Land_Shed_Closed_Small1` (`metalPlate.bisurf`), all outside the wall. The sheets seen "inside the mud brick" before the wipe were the run 1 notes pinned 6 cm along the ray |
 | N11 | Write a note; controls return at once | PASS | Scrawl write path on the merged build |
 | TK-001 | Read a written note on the wall | FAIL, then PASS in run 2, pose fixed in run 4 | Run 1: no read action offers on a wall; vanilla `ActionReadPaper` is in-hands only (`CCTNone`, `HasTarget` false). Fix `ced91c5`: `ActionNimbyTackRead`, hold-F target action, vanilla `RPC_READ_NOTE` to the reader, NoteMenu opens in place. Run 2: text shows; after closing, an empty progress bar and the note pose stayed until a jump or right click. Run 3 client trace: `state=2`, `end-input` the frame the menu opened (the menu takes the held key), `state=4` (finished), menu closed, `watcher: menu closed but not ending; state=4`. Fix `9d1ecf8`: the shared watcher ends `UA_FINISHED` as well as `UA_PROCESSING`, as vanilla `ActionReadPaper.OnUpdate` does. Run 4: `tack-read ended: note menu closed`, `read end-request state=4`, `read end state=4` 33 ms after the close, every read; controls back with no input |
 | TK-003 | Take down a written note: text intact | PASS | Jeff, run 1 |
@@ -35,7 +35,7 @@ Server: local replica `D:\DayZServer`, instance 999, profile `main-round1` (`Nim
 
 ## Open
 
-- TK-010 screwdriver half, TK-005 area cap in game, S1 two-player take-down, EP-002 with Jay, Scrawl step 4 (`storage_998` round trip).
+- S1 two-player take-down, EP-002 with Jay. TK-010, TK-005, and Scrawl step 4 closed October 19, 2026 (runs 5 and 6; Scrawl record step 4).
 - Knife render on a knifed note: needs a model proxy or a separate frozen object; Phase 2 or 3.
 - Default `wallOffsetMeters` stays 0.03 (Jeff, October 19, 2026); the profile ran 0.01.
 
