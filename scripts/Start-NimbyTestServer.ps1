@@ -10,8 +10,8 @@
        The build log also names the -Server and -Dev companion outputs, loaded when present.
     2. Copies nimby.bikey (and the dev key when a -Dev build is loaded) into the server's keys
        folder so clients that load the pack pass signature verification (verifySignatures = 2).
-    3. Writes a throwaway server config from pack.json "testServer" with a random join password,
-       BattlEye = 1 and storageAutoFix = 0 (a qualification run must show corruption, not hide
+    3. Writes a throwaway server config from pack.json "testServer" with the join password from
+       -JoinPassword, else the one saved in the reusable profile, else a random one; BattlEye = 1 and storageAutoFix = 0 (a qualification run must show corruption, not hide
        it), writes <profile>\BattlEye\BEServer_x64.cfg with a random RCON password, starts the
        server, and waits for you to press Enter.
     4. Sends "#shutdown" over RCON, waits up to -ShutdownTimeoutSeconds for the server to exit,
@@ -29,10 +29,13 @@
               <server>\keys\<authority>.bikey (added, never overwritten if different). The server
               writes its test persistence to mpmissions\<mission>\storage_<instanceId>; pack.json
               must name 998 or 999.
-    Secrets : the join and RCON passwords are random throwaway values. The join password is shown
-              once on screen; the RCON password is never shown or logged. Both sit in config files
-              under the git-ignored logs or profiles folder while the server runs and are redacted
-              once it stops.
+    Secrets : the RCON password is a random throwaway value, never shown or logged. The join
+              password is random unless -JoinPassword or a saved profile value supplies it; it is
+              shown once on screen and, with -ProfileName, kept in <profile>\join-password.txt
+              (git-ignored) so the next run of that profile reuses it. The manifest records only
+              where the join password came from, never the value. Both passwords sit in config
+              files under the git-ignored logs or profiles folder while the server runs and are
+              redacted once it stops.
     Never   : opens a firewall port, touches storage_1, or deletes a file.
 
     Runs in Windows PowerShell 5.1 and PowerShell 7. No elevation needed. Windows Firewall may
@@ -50,6 +53,13 @@
 
 .PARAMETER ProfileName
     Reuse <repo>\profiles\<ProfileName> as the server profile instead of a per-run folder.
+
+.PARAMETER JoinPassword
+    A fixed join password (8 to 32 printable characters, no space, double quote, or semicolon)
+    instead of a random one, for a tester who
+    connects across sessions. With -ProfileName it is saved to <profile>\join-password.txt and
+    reused by later runs of that profile that omit -JoinPassword. Delete that file to go back to
+    random passwords.
 
 .PARAMETER ShutdownTimeoutSeconds
     How long to wait for the server to exit after the RCON #shutdown before stopping the process.
@@ -78,6 +88,7 @@ param(
     [string]$DevPath,
     [string]$ServerPath,
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$ProfileName,
+    [ValidatePattern('^[\x21\x23-\x3a\x3c-\x7e]{8,32}$')][string]$JoinPassword,
     [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
     [ValidateSet(998, 999)][int]$InstanceId,
     [switch]$Vanilla
@@ -176,6 +187,29 @@ function Get-RandomJoinPassword {
     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     $chars = foreach ($b in $bytes) { $alphabet[$b % $alphabet.Length] }
     return -join $chars
+}
+
+function Resolve-JoinPassword {
+    # The join password for this run and where it came from: the -JoinPassword value (saved into
+    # a reusable profile), else the value saved by an earlier run of that profile, else random.
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Requested', Justification = 'serverDZ.cfg requires plaintext; local test value.')]
+    param(
+        [string]$Requested,
+        [Parameter(Mandatory)][string]$ProfilePath,
+        [bool]$UseProfile
+    )
+
+    $file = Join-Path $ProfilePath 'join-password.txt'
+    if ($Requested) {
+        if ($UseProfile) { Set-Content -LiteralPath $file -Value $Requested -Encoding ascii -NoNewline }
+        return [pscustomobject]@{ Password = $Requested; Source = 'parameter' }
+    }
+    if ($UseProfile -and (Test-Path -LiteralPath $file)) {
+        $saved = (Get-Content -LiteralPath $file -Raw).Trim()
+        if ($saved -match '^[\x21\x23-\x3a\x3c-\x7e]{8,32}$') { return [pscustomobject]@{ Password = $saved; Source = 'profile' } }
+        Write-Warning ("Ignoring {0}: not 8 to 32 printable characters without space, double quote, or semicolon." -f $file)
+    }
+    return [pscustomobject]@{ Password = (Get-RandomJoinPassword); Source = 'random' }
 }
 
 function Get-TestServerConfigLine {
@@ -453,7 +487,9 @@ try {
     New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
 
     # Configs -----------------------------------------------------------------
-    $password = Get-RandomJoinPassword
+    $join = Resolve-JoinPassword -Requested $JoinPassword -ProfilePath $profileDir -UseProfile ([bool]$ProfileName)
+    $password = $join.Password
+    Write-Manifest -LogPath $manifest -Line ("JOIN PASSWORD source={0}" -f $join.Source)
     $config = Join-Path $runDir 'serverDZ.test.cfg'
     Set-Content -LiteralPath $config -Value (Get-TestServerConfigLine -Hostname $test.hostname -Password $password -MaxPlayers ([int]$test.maxPlayers) -InstanceId ([int]$test.instanceId) -Mission $test.mission) -Encoding utf8
 
