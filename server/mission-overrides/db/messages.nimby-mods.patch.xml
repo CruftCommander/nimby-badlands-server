@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  messages.nimby-mods.patch.xml - on-connect how-to lines for the NIMBY mods.
+  DRAFT. Nothing here is live. Each <message> block is copied into db/messages.xml (then deployed
+  per the README) at the restart that releases that mod, and never before: no instructions for a
+  mod that is not on the server (Jeff, October 19, 2026). Keep each text at or under 160 characters
+  (the engine cap). Bindings named here are the defaults; players rebind under Options > Controls > Others.
+-->
+<messages>
+    <!-- Legs: apply at the Legs release. 155 characters. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Legs: double tap Left Shift to autorun. Any movement key, Shift, Space, fire, or raising your weapon stops it. Rebind it under Options > Controls > Others.</text>
+    </message>
+    <!-- Hands: apply at the Hands release. 158 characters. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Hands: hold O with an item in hands to offer it, or with empty hands to request one. Bind 'open or close pockets' in Controls so others can fill your pockets.</text>
+    </message>
+    <!-- Ears: apply at the Ears release. 95 characters. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Ears: press N to put earplugs in or take them out. Rebind it under Options > Controls > Others.</text>
+    </message>
+    <!-- Scrawl: apply at the Scrawl release. 83 characters. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Scrawl: find paper and a pen to write a note. Look at a note and hold F to read it.</text>
+    </message>
+    <!-- Tack: apply at the Tack release. 138 characters. -->
+    <message>
+        <delay>0</delay>
+        <onConnect>1</onConnect>
+        <text>Tack: pin a note to a wall with a hammer and nail, duct tape, epoxy putty, or a knife. Hold F on a pinned note to read it or take it down.</text>
+    </message>
+</messages>
