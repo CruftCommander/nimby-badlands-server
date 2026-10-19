@@ -20,18 +20,21 @@ Import notes:
 - logo.paa and Texheaders.bin were not imported; the NIMBY pack supplies its own mod presentation.
 
 Players: the input actions were renamed on October 19, 2026. Anyone who changed the offer/request
-key from O, or bound the pocket toggle, binds it once more under Options > Controls > Others
+key from O, or bound the pocket toggle, binds it once more under Options > Controls > NIMBY
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 20, 2026 (test finding NIMBY-T-007): Data/Inputs.xml declares the sorting group "nimby"
+  (label NIMBY) inside <inputs>, where 1.30 reads it; both Hands bindings now appear under a NIMBY tab
+  in Options > Controls instead of Unsorted. No input names or defaults changed.
 - October 19, 2026 (Hands plan Phase 2, decisions G1 and G2): renamed the addon from NimbyGiveTake
   to NimbyHands - folder, PBO, CfgPatches and CfgMods classes, every custom class and member
   (NimbyHands*), input actions (UANimbyOfferRequestItem to UANimbyHandsOfferRequest,
   UANimbyTogglePocketAccess to UANimbyHandsTogglePockets), string keys (STR_NIMBY_GT_* to
   STR_NIMBY_HANDS_*), log prefix ([NIMBY][GiveTake] to [NIMBY][Hands]), and profile folder
-  ($profile:NimbyHands). inputs.xml moved to Data/Inputs.xml and sorts into the vanilla Others
-  controls tab: offer/request stays on O; the pocket toggle ships unbound with the label "Hands: open
-  or close pockets" (the Left Shift + O combo also fired offer/request, test finding NIMBY-T-002).
+  ($profile:NimbyHands). inputs.xml moved to Data/Inputs.xml (sorted into the vanilla Others
+  controls tab at the time, which 1.30 did not honor; see October 20): offer/request stays on O;
+  the pocket toggle ships unbound with the label "Hands: open or close pockets" (the Left Shift + O combo also fired offer/request, test finding NIMBY-T-002).
   The two input labels are plain text now, so their string keys were removed. The pocket
   notification names the toggle's binding. Added PERMISSION.md for the Workshop permission text.
 - October 19, 2026 (Hands plan Phase 1):
