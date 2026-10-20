@@ -490,7 +490,7 @@ class NimbyAutorunRules
         NimbyAutorunConfig defaults = new NimbyAutorunConfig();
         failures += Case(results, "config default version 2", defaults.version == CONFIG_VERSION && CONFIG_VERSION == 2);
         failures += Case(results, "config default ten per second", defaults.requestsPerSecond == 10);
-        failures += Case(results, "config default stopOnSwim true", defaults.stopOnSwim);
+        failures += Case(results, "config default stopOnSwim false", !defaults.stopOnSwim);
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
         NimbyAutorunConfig wet = new NimbyAutorunConfig();
         wet.stopOnSwim = false;

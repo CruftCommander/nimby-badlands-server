@@ -13,6 +13,15 @@ Changes are listed newest first. Display name: Legs (decided October 15, 2026); 
 stays NimbyAutorun.
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
+decision A8, DayZ 1.30):
+- stopOnSwim now defaults to false: autorun carries into water and keeps swimming until a stop
+  input (any Shift press, W, A, S, D), a menu, or a server clear ends it; fast swim drains
+  stamina and drops to the slower stroke the way sprint drops to run. The October 19 dam run
+  proved the movement override drives the swim command. A server that wants water to stop
+  autorun sets "stopOnSwim": 1 in $profile:NimbyAutorun\config.json; existing files keep
+  their own value.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
 round 4, DayZ 1.30):
 - With stopOnSwim false, the vanilla swimming input exclude no longer counts as disabled
   controls. Vanilla adds it on every swim start and it blocks only the weapon raise, but it

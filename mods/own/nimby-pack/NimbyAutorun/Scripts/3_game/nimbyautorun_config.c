@@ -23,7 +23,9 @@ class NimbyAutorunConfig
     // Round 3, NIMBY-T-006 experiment: true stops autorun when the swim command starts and
     // refuses a start while swimming (plan v0.6 behavior); false leaves the override applied in
     // water. The server sends it to the owning client with RPC 6550103 on every start.
-    bool stopOnSwim = true;
+    // Default false since October 19, 2026 (Jeff, after the R4 dam run proved the override drives
+    // the swim command): autorun carries into water. Servers that want the old rule set true.
+    bool stopOnSwim = false;
 }
 
 class NimbyAutorunLog

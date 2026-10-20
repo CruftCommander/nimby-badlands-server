@@ -31,9 +31,9 @@ modded class PlayerBase extends ManBase
     protected string m_NimbyAutorunWhoName;
     protected string m_NimbyAutorunWhoId;
     protected string m_NimbyAutorunWhoPlain;
-    // Client only: the server's stopOnSwim, from RPC 6550103. True until the first accepted start
-    // brings the server value, which is the v0.6 behavior.
-    protected bool m_NimbyAutorunStopOnSwim = true;
+    // Client only: the server's stopOnSwim, from RPC 6550103. Starts at the shipped default
+    // (false, swim carries on) until the first accepted start brings the server value.
+    protected bool m_NimbyAutorunStopOnSwim = false;
 
     bool NimbyIsAutorunning()
     {
