@@ -13,6 +13,14 @@ Changes are listed newest first. Display name: Legs (decided October 15, 2026); 
 stays NimbyAutorun.
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
+round 4, DayZ 1.30):
+- With stopOnSwim false, the vanilla swimming input exclude no longer counts as disabled
+  controls. Vanilla adds it on every swim start and it blocks only the weapon raise, but it
+  made the October 19 run stop with cause=control-disabled on entering water. Any other
+  exclude, any restriction, or the legacy disable still stops autorun and refuses a start; with
+  stopOnSwim true (the default) nothing changes.
+
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
 round 3, DayZ 1.30):
 - Data/Inputs.xml now declares the nimby sorting group inside <inputs>; bindings appear under
   a NIMBY tab in Options > Controls (NIMBY-T-007, proven October 19, 2026).

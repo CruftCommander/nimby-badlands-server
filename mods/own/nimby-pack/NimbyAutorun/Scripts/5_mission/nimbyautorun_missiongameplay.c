@@ -13,8 +13,9 @@
 //           toggle stops it, and so do focus loss, a dialog, any menu but chat,
 //           gestures, and the radial quickbar, disabled controls, a ladder, and
 //           water while the server's stopOnSwim is true (NIMBY-T-006 experiment;
-//           with it false, autorun carries on into the water). Nothing resumes
-//           on its own; the player double-taps again.
+//           with it false, autorun carries on into the water, and the vanilla
+//           swimming exclude group does not count as disabled controls). Nothing
+//           resumes on its own; the player double-taps again.
 // Plan    : docs/plans/2026-10-15-autorun-plan.md, Phase 1.
 // -----------------------------------------------------------------------------
 
@@ -98,9 +99,32 @@ modded class MissionGameplay extends MissionBase
         return player.CanConsumeStamina(EStaminaConsumers.SPRINT);
     }
 
+    // Vanilla IsControlDisabled (missionGameplay.c:1119-1131) is true while any input exclude
+    // group is active, and every swim start adds "swimming" (PlayerBase.c:4248), which excludes
+    // only the weapon raise (bin/specific.xml:407-410). Round 3 stopped on it with
+    // cause=control-disabled although stopOnSwim was false, so the groups are read here and
+    // NimbyAutorunRules.ControlDisabledForAutorun decides (NIMBY-T-006).
+    protected bool NimbyAutorunControlDisabled(PlayerBase player)
+    {
+        int excludeCount = 0;
+        bool swimmingActive = false;
+        if (m_ActiveInputExcludeGroups)
+        {
+            excludeCount = m_ActiveInputExcludeGroups.Count();
+            swimmingActive = m_ActiveInputExcludeGroups.Find("swimming") != -1;
+        }
+        int restrictionCount = 0;
+        if (m_ActiveInputRestrictions)
+        {
+            restrictionCount = m_ActiveInputRestrictions.Count();
+        }
+        bool legacyDisabled = m_ControlDisabledMode >= INPUT_EXCLUDE_ALL;
+        return NimbyAutorunRules.ControlDisabledForAutorun(excludeCount, swimmingActive, restrictionCount, legacyDisabled, player.NimbyAutorunStopOnSwim());
+    }
+
     // Focus, dialogs, menus, and disabled controls (NimbyAutorunRules.MenuStopCause). Runs every
     // frame so the pass-through grace window is tracked while autorun is off as well.
-    protected string NimbyAutorunMenuCause(float now)
+    protected string NimbyAutorunMenuCause(PlayerBase player, float now)
     {
         UIManager ui = GetGame().GetUIManager();
         UIScriptedMenu menu = ui.GetMenu();
@@ -114,7 +138,7 @@ modded class MissionGameplay extends MissionBase
                 m_NimbyAutorunPassThroughAt = now;
             }
         }
-        return NimbyAutorunRules.MenuStopCause(GetGame().IsAppActive(), ui.IsDialogVisible(), hasMenu, menuId, IsControlDisabled(), now, m_NimbyAutorunPassThroughAt);
+        return NimbyAutorunRules.MenuStopCause(GetGame().IsAppActive(), ui.IsDialogVisible(), hasMenu, menuId, NimbyAutorunControlDisabled(player), now, m_NimbyAutorunPassThroughAt);
     }
 
     // A ladder hands control back to vanilla movement; water does only while the server's
@@ -186,7 +210,8 @@ modded class MissionGameplay extends MissionBase
         string blocked = player.NimbyAutorunBlockedReason();
         string movement = NimbyAutorunMovementCause(player);
         bool guardActive = NimbyAutorunRules.SwallowStart(now, m_NimbyAutorunTurboStopAt);
-        return NimbyAutorunRules.StartRefusal(blocked, movement, menuCause, IsControlDisabled(), player.IsRaised(), guardActive);
+        bool controlDisabled = NimbyAutorunControlDisabled(player);
+        return NimbyAutorunRules.StartRefusal(blocked, movement, menuCause, controlDisabled, player.IsRaised(), guardActive);
     }
 
     override void OnUpdate(float timeslice)
@@ -207,7 +232,7 @@ modded class MissionGameplay extends MissionBase
         float now = GetGame().GetTickTime();
         // Before the stop check, so with stopOnSwim true the Swim line precedes cause=swim.
         NimbyAutorunTrackSwim(player);
-        string menuCause = NimbyAutorunMenuCause(now);
+        string menuCause = NimbyAutorunMenuCause(player, now);
 
         if (player.NimbyIsAutorunning())
         {

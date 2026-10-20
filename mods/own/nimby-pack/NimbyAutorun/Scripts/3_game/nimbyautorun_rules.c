@@ -221,6 +221,34 @@ class NimbyAutorunRules
         return "";
     }
 
+    // Whether disabled controls count against autorun, from the facts vanilla
+    // MissionGameplay.IsControlDisabled reads (missionGameplay.c:1119-1131): any input exclude
+    // group, any restriction, or the legacy mode. Vanilla adds the "swimming" group on every swim
+    // start (PlayerBase.c:4248) and it excludes only the weapon raise (bin/specific.xml:407-410),
+    // so movement stays live; that group alone counts only while stopOnSwim is true (NIMBY-T-006
+    // round 4). "ladderclimbing" needs no case: the ladder is a movement cause first.
+    static bool ControlDisabledForAutorun(int excludeCount, bool swimmingActive, int restrictionCount, bool legacyDisabled, bool stopOnSwim)
+    {
+        if (restrictionCount > 0)
+        {
+            return true;
+        }
+        if (legacyDisabled)
+        {
+            return true;
+        }
+        int otherExcludes = excludeCount;
+        if (swimmingActive)
+        {
+            otherExcludes = otherExcludes - 1;
+        }
+        if (otherExcludes > 0)
+        {
+            return true;
+        }
+        return swimmingActive && stopOnSwim;
+    }
+
     // Why a double tap does not start autorun, or "" when it starts. The first cause in this
     // order wins: player state, ladder or water, an open menu or focus loss, disabled controls,
     // the raised weapon (A7), then the double-tap guard (A5).
@@ -399,6 +427,15 @@ class NimbyAutorunRules
         failures += Case(results, "dry land no movement cause", MovementCause(false, false, true) == "");
         failures += Case(results, "swim start refused with stopOnSwim true", StartRefusal("", MovementCause(false, true, true), "", false, false, false) == "swim");
         failures += Case(results, "swim start allowed with stopOnSwim false", StartRefusal("", MovementCause(false, true, false), "", false, false, false) == "");
+
+        failures += Case(results, "swimming group alone not disabled with stopOnSwim false", !ControlDisabledForAutorun(1, true, 0, false, false));
+        failures += Case(results, "swimming group alone disabled with stopOnSwim true", ControlDisabledForAutorun(1, true, 0, false, true));
+        failures += Case(results, "swimming group plus menu disabled", ControlDisabledForAutorun(2, true, 0, false, false));
+        failures += Case(results, "restriction alone disabled", ControlDisabledForAutorun(0, false, 1, false, false));
+        failures += Case(results, "nothing active not disabled", !ControlDisabledForAutorun(0, false, 0, false, true));
+        failures += Case(results, "legacy mode alone disabled", ControlDisabledForAutorun(0, false, 0, true, false));
+        failures += Case(results, "swimming with stopOnSwim false is no menu stop", MenuStopCause(true, false, false, 0, ControlDisabledForAutorun(1, true, 0, false, false), 5.0, -1000.0) == "");
+        failures += Case(results, "swim start allowed past swimming group", StartRefusal("", MovementCause(false, true, false), "", ControlDisabledForAutorun(1, true, 0, false, false), false, false) == "");
 
         failures += Case(results, "double tap second press swallowed", SwallowStart(10.2, 10.0));
         failures += Case(results, "start allowed after guard", !SwallowStart(10.6, 10.0));
