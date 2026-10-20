@@ -151,6 +151,14 @@ class NimbyTackWorld
 
     // T2: one sheet of paper anywhere in the player's inventory, hands included. A pinned
     // note is never a candidate (it is not in an inventory anyway).
+    // NIMBY-T-009 (Jeff, October 19, 2026): a written sheet goes up before a blank one. One walk
+    // of the enumeration does what two passes would (first written single sheet, else the first
+    // single sheet): the first candidate is kept until NimbyTackRules.PreferWritten replaces it,
+    // and the walk stops at the first written one. A blank pin stays legal by plan T2: a sheet
+    // left on a wall for someone else to write on.
+    // The text lives on the server (WrittenNoteData.c:6,73; a client holds it only after a write
+    // or read RPC, :22,:50), so the choice is the server's. The client's per-frame condition only
+    // asks whether any sheet exists, which the order does not change.
     static Paper FindSingleSheet(PlayerBase player)
     {
         if (!player)
@@ -159,6 +167,8 @@ class NimbyTackWorld
         }
         array<EntityAI> items = new array<EntityAI>;
         player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+        Paper chosen = null;
+        bool chosenWritten = false;
         foreach (EntityAI entity : items)
         {
             Paper sheet = Paper.Cast(entity);
@@ -174,12 +184,38 @@ class NimbyTackWorld
             {
                 continue;
             }
-            if (NimbyTackRules.IsSingleSheet(sheet.HasQuantity(), sheet.GetQuantity()))
+            if (!NimbyTackRules.IsSingleSheet(sheet.HasQuantity(), sheet.GetQuantity()))
             {
-                return sheet;
+                continue;
+            }
+            bool written = IsWritten(sheet);
+            if (!chosen || NimbyTackRules.PreferWritten(written, chosenWritten))
+            {
+                chosen = sheet;
+                chosenWritten = written;
+            }
+            if (chosenWritten)
+            {
+                break;
             }
         }
-        return null;
+        return chosen;
+    }
+
+    // A sheet carries text when its WrittenNoteData (Paper.c:30) holds a non-empty string
+    // (WrittenNoteData.c:73).
+    static bool IsWritten(Paper sheet)
+    {
+        if (!sheet)
+        {
+            return false;
+        }
+        WrittenNoteData data = sheet.GetWrittenNoteData();
+        if (!data)
+        {
+            return false;
+        }
+        return data.GetNoteText() != "";
     }
 
     // T2: a Nail item with at least one nail in it. Nails stack to 999 in one item.
@@ -319,18 +355,19 @@ class NimbyTackWorld
         return "";
     }
 
-    // T3: create the pinned class at the hit point, wallOffsetMeters off the wall along the
-    // normal, facing out, with the sheet's text and health. No ECE_CREATEPHYSICS; ECE_KEEPHEIGHT
-    // so the engine does not drop it to the ground (CentralEconomy.c:28).
-    static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackHit hit, Paper sheet)
+    // T3: create the pinned class at the hit point, offsetMeters off the wall along the normal,
+    // facing out, with the sheet's text and health. The caller picks the offset with
+    // NimbyTackRules.OffsetFor (wall or unknown surface) and logs the same value. No
+    // ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the engine does not drop it to the ground
+    // (CentralEconomy.c:28).
+    static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackHit hit, Paper sheet, float offsetMeters)
     {
         string className = NimbyTackFastener.PinnedClass(fastener);
         if (className == "")
         {
             return null;
         }
-        NimbyTackConfig config = NimbyTackConfigLoader.Get();
-        vector position = NimbyTackRules.PinPosition(hit.position, hit.normal, config.wallOffsetMeters);
+        vector position = NimbyTackRules.PinPosition(hit.position, hit.normal, offsetMeters);
         Object created = GetGame().CreateObjectEx(className, position, ECE_KEEPHEIGHT | ECE_SETUP);
         NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(created);
         if (!pinned)

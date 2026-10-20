@@ -3,8 +3,9 @@
 // Purpose : The predicates and arithmetic of Tack as pure functions, so the
 //           self-test covers them and the 4_World layer only feeds them facts it
 //           reads from the world: the wall-angle test (T2), the fastener lists
-//           (T2, T7), the wood test for the knife (T2), the sheet's facing (T3),
-//           take-down damage (T4), the per-area cap (T6), and the config clamps (T6).
+//           (T2, T7), the wood test for the knife (T2), the written-first sheet
+//           choice (T2), the sheet's facing and offset (T3), take-down damage (T4),
+//           the per-area cap (T6), and the config clamps (T6).
 // -----------------------------------------------------------------------------
 class NimbyTackFastener
 {
@@ -61,8 +62,9 @@ class NimbyTackRules
 {
     // Paper has 15 hitpoints (DZ/gear/consumables/config.cpp:40).
     static const float PAPER_HITPOINTS = 15.0;
-    // The wall offset (T3) has one home: NimbyTackConfig.wallOffsetMeters. Callers read it from
-    // the loaded config, or from a fresh NimbyTackConfig for the client-side default.
+    // The two offsets (T3) have one home each: NimbyTackConfig.wallOffsetMeters and
+    // NimbyTackConfig.unknownSurfaceOffsetMeters. Callers read them from the loaded config, or
+    // from a fresh NimbyTackConfig for the client-side default, and pick one with OffsetFor.
 
     // T7: every class that drives a nail. Vanilla 1.30 classes: DZ/gear/tools/config.cpp:1660
     // (Hammer), :1806, :1884, :1497; DZ/weapons/melee/blade/config.cpp:171; DZ/weapons/melee/blunt/config.cpp:329.
@@ -163,6 +165,19 @@ class NimbyTackRules
         return hitPosition + normal * offsetMeters;
     }
 
+    // T3, NIMBY-T-008: the offset for one pin. A wall with no surface name after both lookups
+    // (the Afghan tent's cloth, October 19, 2026) gets the larger unknown-surface offset, because
+    // its physics shell can sit centimeters behind what is drawn; every named surface keeps the
+    // wall offset.
+    static float OffsetFor(string surfaceName, float wallOffset, float unknownOffset)
+    {
+        if (surfaceName == "")
+        {
+            return unknownOffset;
+        }
+        return wallOffset;
+    }
+
     // T4: health taken from the sheet by one take-down.
     static float TakeDownDamage(int fastener, NimbyTackConfig config)
     {
@@ -223,6 +238,24 @@ class NimbyTackRules
         return quantity == 1.0;
     }
 
+    // T2, NIMBY-T-009: which single sheet goes up. A written sheet wins over a blank one; among
+    // sheets of the same kind the first one found stays. True means the candidate replaces the
+    // sheet chosen so far (the caller takes the first candidate unconditionally).
+    static bool PreferWritten(bool candidateWritten, bool haveWritten)
+    {
+        return candidateWritten && !haveWritten;
+    }
+
+    // The pin log's text= token. Kept here so the log never calls bool.ToString().
+    static string TextTag(bool written)
+    {
+        if (written)
+        {
+            return "written";
+        }
+        return "blank";
+    }
+
     // T2: a roll or tube pins only when it still holds a full portion.
     static bool HasPortion(float quantity, float portion)
     {
@@ -253,6 +286,9 @@ class NimbyTackRules
         before = config.wallOffsetMeters;
         config.wallOffsetMeters = Math.Clamp(before, 0.005, 0.2);
         changed = changed + Changed(before, config.wallOffsetMeters);
+        before = config.unknownSurfaceOffsetMeters;
+        config.unknownSurfaceOffsetMeters = Math.Clamp(before, 0.005, 0.2);
+        changed = changed + Changed(before, config.unknownSurfaceOffsetMeters);
         before = config.takeDownDamageNail;
         config.takeDownDamageNail = Math.Clamp(before, 0.0, PAPER_HITPOINTS);
         changed = changed + Changed(before, config.takeDownDamageNail);
@@ -342,6 +378,22 @@ class NimbyTackRules
         Sanitize(highOffset);
         failures += Case(results, "offset above 20 cm clamps to 20 cm", Math.AbsFloat(highOffset.wallOffsetMeters - 0.2) < 0.0001);
 
+        // NIMBY-T-008: an empty surface name takes the unknown-surface offset.
+        float unknownPicked = OffsetFor("", defaults.wallOffsetMeters, defaults.unknownSurfaceOffsetMeters);
+        failures += Case(results, "empty surface takes the unknown-surface offset", Math.AbsFloat(unknownPicked - defaults.unknownSurfaceOffsetMeters) < 0.0001);
+        float concretePicked = OffsetFor("concrete.bisurf", defaults.wallOffsetMeters, defaults.unknownSurfaceOffsetMeters);
+        failures += Case(results, "concrete surface keeps the wall offset", Math.AbsFloat(concretePicked - defaults.wallOffsetMeters) < 0.0001);
+        float woodPicked = OffsetFor("wood.bisurf", defaults.wallOffsetMeters, defaults.unknownSurfaceOffsetMeters);
+        failures += Case(results, "wood surface keeps the wall offset", Math.AbsFloat(woodPicked - defaults.wallOffsetMeters) < 0.0001);
+        NimbyTackConfig lowUnknown = new NimbyTackConfig();
+        lowUnknown.unknownSurfaceOffsetMeters = 0.0;
+        Sanitize(lowUnknown);
+        failures += Case(results, "unknown-surface offset below 5 mm clamps to 5 mm", Math.AbsFloat(lowUnknown.unknownSurfaceOffsetMeters - 0.005) < 0.0001);
+        NimbyTackConfig highUnknown = new NimbyTackConfig();
+        highUnknown.unknownSurfaceOffsetMeters = 1.0;
+        Sanitize(highUnknown);
+        failures += Case(results, "unknown-surface offset above 20 cm clamps to 20 cm", Math.AbsFloat(highUnknown.unknownSurfaceOffsetMeters - 0.2) < 0.0001);
+
         failures += Case(results, "nail damage default 5", TakeDownDamage(NimbyTackFastener.NAIL, defaults) == 5.0);
         failures += Case(results, "tape damage default 3", TakeDownDamage(NimbyTackFastener.TAPE, defaults) == 3.0);
         failures += Case(results, "epoxy damage default 7", TakeDownDamage(NimbyTackFastener.EPOXY, defaults) == 7.0);
@@ -354,6 +406,11 @@ class NimbyTackRules
         failures += Case(results, "vanilla sheet without quantity is one sheet", IsSingleSheet(false, 0.0));
         failures += Case(results, "Scrawl sheet at quantity 1 is one sheet", IsSingleSheet(true, 1.0));
         failures += Case(results, "Scrawl stack of 2 is not one sheet", !IsSingleSheet(true, 2.0));
+        // NIMBY-T-009: written first, blank as the fallback.
+        failures += Case(results, "written sheet replaces a blank choice", PreferWritten(true, false));
+        failures += Case(results, "blank sheet does not replace a written choice", !PreferWritten(false, true));
+        failures += Case(results, "second written sheet does not replace the first", !PreferWritten(true, true));
+        failures += Case(results, "text tag names a blank sheet", TextTag(false) == "blank");
         failures += Case(results, "full roll has a portion", HasPortion(100.0, defaults.tapeQuantityPerPin));
         failures += Case(results, "nine of tape has no portion", !HasPortion(9.0, defaults.tapeQuantityPerPin));
         failures += Case(results, "exact portion pins", HasPortion(10.0, defaults.tapeQuantityPerPin));
