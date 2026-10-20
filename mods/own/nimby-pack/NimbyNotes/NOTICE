@@ -1,3 +1,18 @@
 NimbyNotes (Scrawl) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
 Overrides the vanilla DayZ 1.30 Paper config (Bohemia Interactive) and re-registers
 Bohemia's own ActionWritePaper and ActionReadPaper classes; no third-party mod code.
+
+Changes, newest first:
+
+- October 19, 2026, Phase 2a (plan v0.7, N9 and N12): ActionWritePaper is also
+  added to Paper, so the vanilla inventory Combine (drop on the item in hands,
+  then the action key) writes in either order. Scrawl handles the vanilla
+  RPC_WRITE_NOTE_CLIENT itself to cap a stored note at vanilla's own 512
+  characters and log over-cap writes; the note editor holds at most 512
+  characters. Debug lines on the vanilla ActionManagerClient.ForceTarget and
+  ActionWritePaperCB.OnStateChange. Still no third-party code.
+- October 19, 2026: pen and paper references in the vanilla WrittenNoteData are
+  cleared when a write completes and before every save (live-copy round trip).
+- October 16-17, 2026, Phase 1: vanilla Paper config gains a quantity of 1-5; a
+  written sheet never combines or splits; ActionWritePaper and ActionReadPaper
+  registered and reachable; note menu close restores mouse look and jump (N11).
