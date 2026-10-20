@@ -31,6 +31,17 @@ class NimbyNotesLog
         return "false";
     }
 
+    // Shared rules 4.2: a line that names a player carries both ids, BI hash and Steam64
+    // (PlayerIdentity.GetId and GetPlainId, gameplay.c:368,370).
+    static string PlayerTag(PlayerIdentity identity)
+    {
+        if (!identity)
+        {
+            return "player=none";
+        }
+        return "player=" + identity.GetId() + "/" + identity.GetPlainId();
+    }
+
     static void Info(string line)
     {
         Print(PREFIX + " " + line);
