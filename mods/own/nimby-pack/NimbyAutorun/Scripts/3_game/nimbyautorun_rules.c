@@ -4,7 +4,8 @@
 //           functions and two small state classes, so the self-test checks them
 //           without a client (shared rules 8): request validation (movement index,
 //           angle), the server's speed resolution, the client's speed and start
-//           rules, the menu and focus stop rule, the double-tap guard (A5), the
+//           rules, the ladder and swim rule (stopOnSwim, NIMBY-T-006), the menu
+//           and focus stop rule, the double-tap guard (A5), the
 //           per-sender request throttle with its stop bypass, the log gate, and
 //           the config clamp. The 4_world and 5_mission layers only feed them
 //           facts they read from the game.
@@ -17,6 +18,10 @@ class NimbyAutorunRpc
     // Server to the owning client (A4): Param1<string reason>. The client clears its override
     // and remembered state and does not re-send start.
     static const int CANCEL = 6550102;
+    // Server to the owning client, round 3: Param1<bool stopOnSwim>, sent with every accepted
+    // start so the client's swim rule follows the server config. Inside the Legs block (shared
+    // rules 4.1 lists 6550101 and 6550102; this id is reported to the orchestrator).
+    static const int SETTINGS = 6550103;
 }
 
 // Request budget per sender. A fixed one-second window: the first `limit` requests in a window
@@ -110,6 +115,8 @@ class NimbyAutorunRules
     static const float MENU_GRACE_SECONDS = 0.5;
     static const int REQUESTS_PER_SECOND_MIN = 1;
     static const int REQUESTS_PER_SECOND_MAX = 100;
+    // NimbyAutorunConfig.version written by this build.
+    static const int CONFIG_VERSION = 2;
 
     static bool IsValidMovement(int movementIdx)
     {
@@ -195,6 +202,23 @@ class NimbyAutorunRules
             return DayZPlayerConstants.MOVEMENTIDX_SPRINT;
         }
         return currentIdx;
+    }
+
+    // A ladder always hands control back to vanilla movement. Water does so only while
+    // stopOnSwim is true (NIMBY-T-006 experiment); with it false the swim command is not a stop
+    // and not a start refusal, and only the in-game run shows whether the override moves the
+    // swimmer.
+    static string MovementCause(bool onLadder, bool swimming, bool stopOnSwim)
+    {
+        if (onLadder)
+        {
+            return "ladder";
+        }
+        if (swimming && stopOnSwim)
+        {
+            return "swim";
+        }
+        return "";
     }
 
     // Why a double tap does not start autorun, or "" when it starts. The first cause in this
@@ -291,7 +315,9 @@ class NimbyAutorunRules
         return "";
     }
 
-    // Clamp the config; returns how many fields were changed.
+    // Clamp the config; returns how many fields were changed. stopOnSwim needs no clamp: a bool
+    // has no out-of-range value, and a value JSON cannot read as a bool fails the whole load,
+    // which falls back to the defaults (NimbyAutorunConfigLoader.Load).
     static int Sanitize(NimbyAutorunConfig config)
     {
         int changed = 0;
@@ -365,6 +391,15 @@ class NimbyAutorunRules
         failures += Case(results, "start refusal raised wins over guard", StartRefusal("", "", "", false, true, true) == "raised");
         failures += Case(results, "start refusal double-tap guard", StartRefusal("", "", "", false, false, true) == "double-tap-guard");
 
+        failures += Case(results, "ladder stops with stopOnSwim true", MovementCause(true, false, true) == "ladder");
+        failures += Case(results, "ladder stops with stopOnSwim false", MovementCause(true, false, false) == "ladder");
+        failures += Case(results, "ladder wins over swim", MovementCause(true, true, true) == "ladder");
+        failures += Case(results, "swim stops with stopOnSwim true", MovementCause(false, true, true) == "swim");
+        failures += Case(results, "swim ignored with stopOnSwim false", MovementCause(false, true, false) == "");
+        failures += Case(results, "dry land no movement cause", MovementCause(false, false, true) == "");
+        failures += Case(results, "swim start refused with stopOnSwim true", StartRefusal("", MovementCause(false, true, true), "", false, false, false) == "swim");
+        failures += Case(results, "swim start allowed with stopOnSwim false", StartRefusal("", MovementCause(false, true, false), "", false, false, false) == "");
+
         failures += Case(results, "double tap second press swallowed", SwallowStart(10.2, 10.0));
         failures += Case(results, "start allowed after guard", !SwallowStart(10.6, 10.0));
         failures += Case(results, "start allowed with no turbo stop", !SwallowStart(10.0, -1000.0));
@@ -416,9 +451,19 @@ class NimbyAutorunRules
         failures += Case(results, "log gate allows after interval", gate.Allow(110.0, LOG_INTERVAL_SECONDS));
 
         NimbyAutorunConfig defaults = new NimbyAutorunConfig();
-        failures += Case(results, "config default version 1", defaults.version == 1);
+        failures += Case(results, "config default version 2", defaults.version == CONFIG_VERSION && CONFIG_VERSION == 2);
         failures += Case(results, "config default ten per second", defaults.requestsPerSecond == 10);
+        failures += Case(results, "config default stopOnSwim true", defaults.stopOnSwim);
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
+        NimbyAutorunConfig wet = new NimbyAutorunConfig();
+        wet.stopOnSwim = false;
+        failures += Case(results, "sanitize leaves stopOnSwim false alone", Sanitize(wet) == 0);
+        failures += Case(results, "sanitize keeps stopOnSwim false", !wet.stopOnSwim);
+        NimbyAutorunConfig dry = new NimbyAutorunConfig();
+        dry.stopOnSwim = true;
+        dry.requestsPerSecond = 0;
+        Sanitize(dry);
+        failures += Case(results, "sanitize keeps stopOnSwim true beside a clamp", dry.stopOnSwim);
         NimbyAutorunConfig low = new NimbyAutorunConfig();
         low.requestsPerSecond = 0;
         failures += Case(results, "sanitize counts low budget", Sanitize(low) == 1);
@@ -430,6 +475,11 @@ class NimbyAutorunRules
 
         failures += Case(results, "toggle rpc id", NimbyAutorunRpc.TOGGLE == 6550101);
         failures += Case(results, "cancel rpc id", NimbyAutorunRpc.CANCEL == 6550102);
+        failures += Case(results, "settings rpc id", NimbyAutorunRpc.SETTINGS == 6550103);
+
+        failures += Case(results, "who from cache names the player", NimbyAutorunLog.WhoFrom("Road Dog", "BIHASH=", "76561190000000000") == "player=Road Dog (BIHASH=, 76561190000000000)");
+        failures += Case(results, "who from empty cache is unknown", NimbyAutorunLog.WhoFrom("", "", "") == "player=unknown (unknown, unknown)");
+        failures += Case(results, "who without identity is unknown", NimbyAutorunLog.Who(null) == "player=unknown (unknown, unknown)");
         return failures;
     }
 

@@ -12,6 +12,22 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Changes are listed newest first. Display name: Legs (decided October 15, 2026); the code prefix
 stays NimbyAutorun.
 
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
+round 3, DayZ 1.30):
+- Data/Inputs.xml now declares the nimby sorting group inside <inputs>; bindings appear under
+  a NIMBY tab in Options > Controls (NIMBY-T-007, proven October 19, 2026).
+- Swim experiment (NIMBY-T-006): new config.json key stopOnSwim, default true. True keeps the
+  earlier behavior (autorun stops on entering water and does not start while swimming); false
+  lets autorun carry on into the water. The server sends the value to the owning client with
+  the new RPC 6550103 on every start. A debug line marks each swim start and end while
+  autorun is on. config.json moves to version 2; a version 1 file is rewritten once with the
+  new key, keeping its other values.
+- The forced-clear line on disconnect or removal names the player again: the name, BI id, and
+  Steam64 are kept from connect and from each request, because the identity can be gone by the
+  time the removal hook runs (NIMBY-T-005).
+- The config line at server start is always written and shows requestsPerSecond and
+  stopOnSwim.
+
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 19, 2026 (Legs plan
 round 2 after the solo block, DayZ 1.30):
 - Players who ran a build before October 19, 2026 keep their old binding (numpad plus); reset

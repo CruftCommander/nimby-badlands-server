@@ -12,7 +12,9 @@
 //           running, any Shift press, WASD, Space, fire, raise, lean (A2), or the
 //           toggle stops it, and so do focus loss, a dialog, any menu but chat,
 //           gestures, and the radial quickbar, disabled controls, a ladder, and
-//           water. Nothing resumes on its own; the player double-taps again.
+//           water while the server's stopOnSwim is true (NIMBY-T-006 experiment;
+//           with it false, autorun carries on into the water). Nothing resumes
+//           on its own; the player double-taps again.
 // Plan    : docs/plans/2026-10-15-autorun-plan.md, Phase 1.
 // -----------------------------------------------------------------------------
 
@@ -31,6 +33,8 @@ modded class MissionGameplay extends MissionBase
     // A6: true once the player picks walk or run with Left Ctrl during this run; cleared on the
     // next start, so the choice holds until then and run never returns to sprint by itself.
     protected bool m_NimbyAutorunSpeedChosen;
+    // The swim command as seen last frame (NimbyAutorunTrackSwim).
+    protected bool m_NimbyAutorunSwimming;
 
     override void OnInit()
     {
@@ -72,6 +76,7 @@ modded class MissionGameplay extends MissionBase
         m_NimbyAutorunTurboStopAt = -1000.0;
         m_NimbyAutorunPassThroughAt = -1000.0;
         m_NimbyAutorunSpeedChosen = false;
+        m_NimbyAutorunSwimming = false;
     }
 
     protected bool NimbyAutorunCheckInput(string inputName)
@@ -112,18 +117,33 @@ modded class MissionGameplay extends MissionBase
         return NimbyAutorunRules.MenuStopCause(GetGame().IsAppActive(), ui.IsDialogVisible(), hasMenu, menuId, IsControlDisabled(), now, m_NimbyAutorunPassThroughAt);
     }
 
-    // A ladder or water hands control back to vanilla movement (human.c:1512, :1520).
+    // A ladder hands control back to vanilla movement; water does only while the server's
+    // stopOnSwim is true (human.c:1512, :1520; NimbyAutorunRules.MovementCause, NIMBY-T-006).
     protected string NimbyAutorunMovementCause(PlayerBase player)
     {
-        if (player.GetCommand_Ladder())
+        bool onLadder = player.GetCommand_Ladder() != null;
+        bool swimming = player.GetCommand_Swim() != null;
+        return NimbyAutorunRules.MovementCause(onLadder, swimming, player.NimbyAutorunStopOnSwim());
+    }
+
+    // NIMBY-T-006 evidence: one line when the swim command starts or ends while autorun is on, so
+    // the record can tell whether the override drove the swimmer. Tracked every frame, so a
+    // transition while autorun is off is not reported later.
+    protected void NimbyAutorunTrackSwim(PlayerBase player)
+    {
+        bool swimming = player.GetCommand_Swim() != null;
+        if (swimming == m_NimbyAutorunSwimming)
         {
-            return "ladder";
+            return;
         }
-        if (player.GetCommand_Swim())
+        m_NimbyAutorunSwimming = swimming;
+        if (!player.NimbyIsAutorunning())
         {
-            return "swim";
+            return;
         }
-        return "";
+        string line = "Swim " + NimbyAutorunLog.Who(player.GetIdentity()) + " entered=" + NimbyAutorunLog.Bool(swimming);
+        line = line + " running=" + NimbyAutorunLog.Bool(player.NimbyIsAutorunning()) + " idx=" + player.NimbyGetAutorunIdx().ToString();
+        NimbyAutorunLog.Debug(line);
     }
 
     protected string NimbyAutorunStopCause(PlayerBase player, string menuCause, float now)
@@ -185,6 +205,8 @@ modded class MissionGameplay extends MissionBase
         }
 
         float now = GetGame().GetTickTime();
+        // Before the stop check, so with stopOnSwim true the Swim line precedes cause=swim.
+        NimbyAutorunTrackSwim(player);
         string menuCause = NimbyAutorunMenuCause(now);
 
         if (player.NimbyIsAutorunning())
