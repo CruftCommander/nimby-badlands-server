@@ -1,11 +1,13 @@
 # Plan 2 - Hands (`NimbyHands`, formerly `NimbyGiveTake`)
 
-Draft v0.5, October 19, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: Phase 1 and Phase 2 built in `@NIMBY-20261019-153354` (branch `feat/hands` at `8cc681b`, unreviewed until Jeff merges it); Phase 0 item 6 and Phase 3 await the two-client session.
+Draft v0.6, October 20, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: Phase 1 and Phase 2 built in `@NIMBY-20261019-153354` (branch `feat/hands` at `8cc681b`, unreviewed until Jeff merges it); Phase 0 item 6 and Phase 3 await the two-client session.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
 Hands lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's inventory (cargo or an eligible attachment slot), never their hands. It has never moved an item between two real players; proving that comes before the rename.
+
+Changes since v0.5 (October 20, 2026, `study/hands-t010`): the first two-client run moved no item (NIMBY-T-010, open, release blocker) and showed players nothing when a request ends `UNCONFIRMED` or `REFUSED` (NIMBY-T-012, open); the feasibility study `docs/design/2026-10-20-hands-t010-feasibility.md` ranks the causes, compares the candidate dispatch paths, and proposes a diagnostic session for Jeff's ruling before any build.
 
 Changes since v0.4 (October 19, 2026, `feat/hands`):
 
