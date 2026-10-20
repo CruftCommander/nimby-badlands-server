@@ -134,6 +134,8 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             }
         }
         NimbyTackHit hit;
+        // wantSurface is true here, so hit.surface already holds the view lookup or, when that is
+        // empty, the fire-geometry lookup. OffsetFor below reads it; no further raycast is needed.
         if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, true, hit))
         {
             NimbyTackLog.Info("refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " " + who);
@@ -153,7 +155,11 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             player.MessageStatus("Too many notes on these walls already.");
             return;
         }
-        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, hit, sheet);
+        // NIMBY-T-008: a surface with no name (the tent's cloth) takes the larger offset.
+        float pinOffset = NimbyTackRules.OffsetFor(hit.surface, config.wallOffsetMeters, config.unknownSurfaceOffsetMeters);
+        // Read before the sheet is deleted (NIMBY-T-009: the log tells which sheet went up).
+        string textTag = NimbyTackRules.TextTag(NimbyTackWorld.IsWritten(sheet));
+        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, hit, sheet, pinOffset);
         if (!pinned)
         {
             NimbyTackLog.Info("failed pin fastener=" + name + " reason=create " + who + " " + NimbyTackWorld.PositionTag(hit.position));
@@ -162,8 +168,8 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         ConsumeFastener(player, tool, nail, pinned, config);
         GetGame().ObjectDelete(sheet);
         // Built in two statements: one concatenation this long is "Formula too complex" to Enforce.
-        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + config.wallOffsetMeters.ToString();
-        line = line + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
+        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
+        line = line + " text=" + textTag + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
         NimbyTackLog.Info(line);
     }
 

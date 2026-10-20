@@ -1,3 +1,15 @@
 NimbyTack (Tack) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
-Defines four Paper subclasses and five user actions on the vanilla DayZ 1.30 action framework
+Defines four Paper subclasses and six user actions on the vanilla DayZ 1.30 action framework
 (Bohemia Interactive); depends on NimbyNotes (Scrawl) from the same pack; no third-party mod code.
+
+Changes, newest first.
+- October 20, 2026 (Tack plan v0.10, round 3, from the October 19 Jay session):
+  - NIMBY-T-008: new config key unknownSurfaceOffsetMeters (default 0.06, clamped 5 mm to 20 cm).
+    A wall that reports no surface material after the view and fire-geometry lookups (the
+    Land_TradTent_Small cloth) is pinned at that offset instead of wallOffsetMeters (unchanged,
+    0.03). Rule NimbyTackRules.OffsetFor; the pin log offset= shows the value used.
+  - NIMBY-T-009: the pin takes a written sheet before a blank one; a blank sheet is still pinned
+    when it is the only one (plan T2). Rule NimbyTackRules.PreferWritten; the pin log gains
+    text=written|blank.
+  - Self-test gains nine cases (offset choice, the two clamps, written-first, the text tag).
+- October 17-19, 2026: Phases 0 and 1 (plan v0.1 to v0.9), built on feat/tack and merged to main; not released.

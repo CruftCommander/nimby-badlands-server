@@ -26,6 +26,11 @@ class NimbyTackConfig
     // the ray, into the wall (see NimbyTackWorld). Re-measured with the physics normal on
     // October 18, 2026; moves only once a value is confirmed in game.
     float wallOffsetMeters = 0.03;
+    // T3: the offset used instead when the wall reports no surface material from either
+    // lookup (view and fire geometry). NIMBY-T-008, October 19, 2026: Land_TradTent_Small reports
+    // none, and its physics shell sits 3 to 5 cm behind the visible cloth, so 1 cm from the view
+    // hit showed through to the inside. Jeff ruled tents stay pinnable with a larger offset.
+    float unknownSurfaceOffsetMeters = 0.06;
     // T4: health taken from the sheet per take-down, by fastener. Paper has 15 hitpoints.
     float takeDownDamageNail = 5.0;
     float takeDownDamageTape = 3.0;
@@ -126,6 +131,8 @@ class NimbyTackConfigLoader
             NimbyTackLog.Info("config clamped; fields=" + clamped.ToString());
         }
         s_Config = loaded;
-        NimbyTackLog.Debug("config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " offset=" + loaded.wallOffsetMeters.ToString() + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m");
+        string line = "config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " offset=" + loaded.wallOffsetMeters.ToString();
+        line = line + " unknown-offset=" + loaded.unknownSurfaceOffsetMeters.ToString() + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m";
+        NimbyTackLog.Debug(line);
     }
 }
