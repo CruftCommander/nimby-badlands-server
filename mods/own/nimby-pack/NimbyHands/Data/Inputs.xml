@@ -7,10 +7,16 @@
   Shift + O combo also fired the offer input (NIMBY-T-002), and the 1.30 input API has no way
   to make one input ignore a press while a modifier is held (UAInput.c:33-103). The player
   binds it under the label below.
-  Both sort into the vanilla Others tab (bin/constants.xml:915), where the player rebinds
-  them; a new <sorting> group is not honored on 1.30 (Ears EP-005, October 17, 2026).
   Renamed from UANimbyOfferRequestItem and UANimbyTogglePocketAccess on October 19, 2026:
   players who changed O rebind it once.
+  Sorting: the <sorting> block sits INSIDE <inputs>, beside <actions>, the way vanilla
+  bin/constants.xml:1-937 nests it. The October 17, 2026 attempts (Ears EP-005, E11) put the
+  block beside <inputs> under <modded_inputs>, and 1.30 ignored it; Bohemia tracker T165909
+  reports the same symptom resolved by this nesting. Group "nimby" is declared in every NIMBY
+  addon with the same name and label, since each addon releases on its own; whether 1.30 merges
+  the three declarations into one tab, shows one tab per addon, or clips the tab strip is what
+  the October 20, 2026 Controls check decides (NIMBY-T-007). If the tab does not appear, the
+  fallback is the vanilla "others" group with this same nesting.
 -->
 <modded_inputs>
     <inputs>
@@ -18,11 +24,11 @@
             <input name="UANimbyHandsOfferRequest" loc="Hands: offer or request item" />
             <input name="UANimbyHandsTogglePockets" loc="Hands: open or close pockets" />
         </actions>
+        <sorting name="nimby" loc="NIMBY">
+            <input name="UANimbyHandsOfferRequest" />
+            <input name="UANimbyHandsTogglePockets" />
+        </sorting>
     </inputs>
-    <sorting name="others" loc="layout_pc_keybinding_others">
-        <input name="UANimbyHandsOfferRequest" />
-        <input name="UANimbyHandsTogglePockets" />
-    </sorting>
     <preset>
         <input name="UANimbyHandsOfferRequest">
             <btn name="kO" />
