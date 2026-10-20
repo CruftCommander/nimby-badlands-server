@@ -99,3 +99,17 @@ Build `@NIMBY-20261019-215218` (`main` `bb59038`), replica `D:\DayZServer`, inst
 Findings:
 
 - **NIMBY-T-011 (medium, Tack, persistence):** pinned notes from the October 19 evening are absent at the October 20 start, though one survived the first restart on October 19. No `NimbyTack` type exists in the replica mission's `db` folder, so the Central Economy has no entry for the pinned classes; storage keeps class names in a binary form, so their presence in `storage_999` could not be checked directly. Hypothesis, not proven: CE cleanup of entities with no types entry. The release gate already lists live loot rows for Tack's four pinned classes; verify the cause (types entries on the replica, then two restarts) before the release-gate restart-survival claim.
+
+## NIMBY-T-011 verification and mud-brick walls, October 20, 2026 (evening)
+
+Replica `types.xml` carries the four rows from `server/mission-overrides/db/types.tack.patch.xml` (lifetime 2592000; backup `logs\types.xml.bak-20261020-tack`). Server starts 18:05:44, 18:21:40, 18:24:46 (`profiles\main-round1`); D client `script_2026-10-20_18-25-58.log`.
+
+| Row | Result | Evidence |
+| --- | --- | --- |
+| T-011 restarts | PASS (two restarts) | Taped note on mud brick `pin fastener=tape ... surface=dz\data_takistan\data\penetration\mud_brick.bisurf ... offset=0.03 text=written health=12 nearby=1` 18:17:01.518 (4026.13 299.118 14111.5); after the 18:21:40 start, `read class=NimbyTack_PinnedNote_Tape length=34` 18:23:41.565 and `read class=NimbyTack_PinnedNote_Nail length=29` 18:23:56.512 (4039.81 298.9 14103.7); both still hang after the 18:24:46 start (Jeff) |
+| T-011 lifetime (2 h 20 min run, loose blank Paper as the control) | Running | Expected: notes hang, the loose Paper (replica `Paper` lifetime 7200) is gone |
+
+Findings:
+
+- **NIMBY-T-013 (low, Tack, rendering):** on the Takistan mud-brick wall the taped note clips into the stones that stand proud of the face (Jeff's screenshot, 18:17 note). The note hangs flat at `offset=0.03` from the single probe point, and the masonry relief is deeper than 3 cm. The 3 cm default is not reopened; candidate approaches for a feasibility study: a per-material offset for rough materials (as `unknownSurfaceOffsetMeters` does for surfaces with no material), or probing the sheet's corners and standing the note off the highest point. The same pin's physics normal `<0.821324, -0.074629, -0.565560>` and fire-geometry normal `<-0.706387, -0.005025, 0.707808>` point almost opposite ways (`probe:` lines 18:17:01.329 to .517); the pin uses the physics normal, and the note renders on the face the player stood at.
+- **NIMBY-T-014 (medium, Tack):** some mud-brick walls offer no Tape or Nail prompt at all (Jeff's screenshot, Epoxy Putty in hands, no prompt), with no server line (the action never started) and no client `probe:` line. `NimbyTackWorld.ProbeWall` (`nimbytack_world.c:62-150`) logs only `no-hit` and `not-wall-angle`; `no-target`, `no-object`, `target-not-building`, `out-of-reach`, and `no-physics-normal` return without a line, so the cause cannot be read from any log. Next: a feasibility study, starting with debug lines for every probe refusal reason and the wall's class and position.
