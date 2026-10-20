@@ -1,7 +1,8 @@
 // -----------------------------------------------------------------------------
 // NimbyAutorun - Legs. Server configuration and logging.
-// Purpose : The one tunable of Legs, the per-sender request budget, read once at
-//           mission start from $profile:NimbyAutorun\config.json on the server.
+// Purpose : The tunables of Legs, the per-sender request budget and the swim rule
+//           (stopOnSwim), read once at mission start from
+//           $profile:NimbyAutorun\config.json on the server.
 //           The file is written with defaults when it does not exist, so the
 //           operator edits a real file.
 // Safety  : The file controls nothing about access or admission, so a plain
@@ -14,10 +15,15 @@
 // -----------------------------------------------------------------------------
 class NimbyAutorunConfig
 {
-    int version = 1;
+    // 2 since round 3 (stopOnSwim). A version 1 file is rewritten once with the new key.
+    int version = 2;
     // Phase 1: requests a sender may make in one second before the rest are dropped. An
     // authenticated stop is never counted or dropped.
     int requestsPerSecond = 10;
+    // Round 3, NIMBY-T-006 experiment: true stops autorun when the swim command starts and
+    // refuses a start while swimming (plan v0.6 behavior); false leaves the override applied in
+    // water. The server sends it to the owning client with RPC 6550103 on every start.
+    bool stopOnSwim = true;
 }
 
 class NimbyAutorunLog
@@ -60,9 +66,21 @@ class NimbyAutorunLog
     {
         if (!identity)
         {
+            return WhoFrom("", "", "");
+        }
+        return WhoFrom(identity.GetName(), identity.GetId(), identity.GetPlainId());
+    }
+
+    // Who() from strings, for a line written after the identity is gone (NIMBY-T-005): the
+    // player caches its name and both ids while the identity is attached. An empty BI id means
+    // nothing was cached.
+    static string WhoFrom(string name, string biId, string plainId)
+    {
+        if (biId == "")
+        {
             return "player=unknown (unknown, unknown)";
         }
-        return "player=" + identity.GetName() + " (" + Ids(identity) + ")";
+        return "player=" + name + " (" + biId + ", " + plainId + ")";
     }
 
     static void Info(string line)
@@ -114,6 +132,16 @@ class NimbyAutorunConfigLoader
             else
             {
                 NimbyAutorunLog.Info("config loaded; path=" + PATH);
+                // A file from an older build keeps its values and gains the new keys at their
+                // defaults (absent keys keep the class default on load), so the operator edits a
+                // file that names every key.
+                if (loaded.version < NimbyAutorunRules.CONFIG_VERSION)
+                {
+                    int oldVersion = loaded.version;
+                    loaded.version = NimbyAutorunRules.CONFIG_VERSION;
+                    JsonFileLoader<NimbyAutorunConfig>.JsonSaveFile(PATH, loaded);
+                    NimbyAutorunLog.Info("config upgraded; from=" + oldVersion.ToString() + " to=" + loaded.version.ToString() + " path=" + PATH);
+                }
             }
         }
         else
@@ -128,6 +156,7 @@ class NimbyAutorunConfigLoader
             NimbyAutorunLog.Info("config clamped; fields=" + clamped.ToString());
         }
         s_Config = loaded;
-        NimbyAutorunLog.Debug("config requestsPerSecond=" + loaded.requestsPerSecond.ToString());
+        // Always on since round 3: the line shows which way the swim experiment runs (R3-6).
+        NimbyAutorunLog.Info("config requestsPerSecond=" + loaded.requestsPerSecond.ToString() + " stopOnSwim=" + NimbyAutorunLog.Bool(loaded.stopOnSwim));
     }
 }

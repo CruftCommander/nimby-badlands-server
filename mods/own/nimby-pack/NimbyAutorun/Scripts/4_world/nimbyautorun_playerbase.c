@@ -4,7 +4,9 @@
 //           validated request from the owning client on the server, clears the
 //           override from server-side hooks when the player enters a vehicle,
 //           falls unconscious, is restrained, dies, or is removed, and tells the
-//           owning client with RPC 6550102 (A4).
+//           owning client with RPC 6550102 (A4). Sends the server's stopOnSwim to
+//           the owning client with RPC 6550103 on every start, and caches the
+//           player's name and ids for lines written after the identity is gone.
 // Origin  : Fork of SchanaModAutorun playerbase.c (Apache-2.0). See NOTICE.
 // Security: A client can target any network object with an RPC, so ownership is
 //           derived from the authenticated sender before anything is read, and
@@ -23,6 +25,15 @@ modded class PlayerBase extends ManBase
     protected ref NimbyAutorunThrottle m_NimbyAutorunThrottle;
     protected ref NimbyAutorunLogGate m_NimbyAutorunRejectGate;
     protected ref NimbyAutorunLogGate m_NimbyAutorunThrottleGate;
+    // Server only, NIMBY-T-005: the name and both ids, cached while the identity is attached, so
+    // a forced clear after the identity is gone still names the player (shared rules 4.2). In
+    // memory only; nothing is saved.
+    protected string m_NimbyAutorunWhoName;
+    protected string m_NimbyAutorunWhoId;
+    protected string m_NimbyAutorunWhoPlain;
+    // Client only: the server's stopOnSwim, from RPC 6550103. True until the first accepted start
+    // brings the server value, which is the v0.6 behavior.
+    protected bool m_NimbyAutorunStopOnSwim = true;
 
     bool NimbyIsAutorunning()
     {
@@ -32,6 +43,37 @@ modded class PlayerBase extends ManBase
     int NimbyGetAutorunIdx()
     {
         return m_NimbyAutorunIdx;
+    }
+
+    bool NimbyAutorunStopOnSwim()
+    {
+        return m_NimbyAutorunStopOnSwim;
+    }
+
+    // Caches the name and both ids. Called wherever the identity is known to be attached:
+    // connect, reconnect, every request, and every forced clear that still has it.
+    protected void NimbyAutorunRememberIdentity(PlayerIdentity identity)
+    {
+        if (!identity)
+        {
+            return;
+        }
+        m_NimbyAutorunWhoName = identity.GetName();
+        m_NimbyAutorunWhoId = identity.GetId();
+        m_NimbyAutorunWhoPlain = identity.GetPlainId();
+    }
+
+    // "player=<name> (<bi-id>, <steam64>)" from the live identity, or from the cache once the
+    // identity is gone (NIMBY-T-005: the removal hooks run after it is detached).
+    string NimbyAutorunWho()
+    {
+        PlayerIdentity identity = GetIdentity();
+        if (identity)
+        {
+            NimbyAutorunRememberIdentity(identity);
+            return NimbyAutorunLog.Who(identity);
+        }
+        return NimbyAutorunLog.WhoFrom(m_NimbyAutorunWhoName, m_NimbyAutorunWhoId, m_NimbyAutorunWhoPlain);
     }
 
     // Applies the state to this machine's input controller (human.c:253-256, enum at :7-12).
@@ -98,6 +140,14 @@ modded class PlayerBase extends ManBase
             }
             return;
         }
+        if (rpc_type == NimbyAutorunRpc.SETTINGS)
+        {
+            if (GetGame().IsClient())
+            {
+                NimbyAutorunHandleSettings(ctx);
+            }
+            return;
+        }
 
         super.OnRPC(sender, rpc_type, ctx);
     }
@@ -123,6 +173,7 @@ modded class PlayerBase extends ManBase
             NimbyAutorunLogReject(sender, "sender does not own this player");
             return;
         }
+        NimbyAutorunRememberIdentity(owner);
 
         float now = GetGame().GetTickTime();
         Param3<bool, int, int> request = new Param3<bool, int, int>(false, 0, 0);
@@ -178,6 +229,11 @@ modded class PlayerBase extends ManBase
         if (m_NimbyAutorunning && resolved == m_NimbyAutorunIdx)
         {
             return;
+        }
+        if (!m_NimbyAutorunning)
+        {
+            // A start, not a speed change: the client learns the swim rule before it can matter.
+            NimbyAutorunSendSettings();
         }
         NimbyAutorunApply(true, resolved);
         NimbyAutorunLogToggle(owner, "server", "client-request");
@@ -243,6 +299,18 @@ modded class PlayerBase extends ManBase
         GetGame().RPCSingleParam(this, NimbyAutorunRpc.CANCEL, payload, true, owner);
     }
 
+    // RPC 6550103 to the owner only, carrying the server's stopOnSwim.
+    protected void NimbyAutorunSendSettings()
+    {
+        PlayerIdentity owner = GetIdentity();
+        if (!owner)
+        {
+            return;
+        }
+        Param1<bool> payload = new Param1<bool>(NimbyAutorunConfigLoader.Get().stopOnSwim);
+        GetGame().RPCSingleParam(this, NimbyAutorunRpc.SETTINGS, payload, true, owner);
+    }
+
     // A server-side clear that does not wait for the client. via is "hook" for the state hooks
     // below and "tick" for the CommandHandler backstop. A hook that fires while autorun is off
     // does nothing and logs nothing.
@@ -253,7 +321,7 @@ modded class PlayerBase extends ManBase
             return;
         }
         NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
-        NimbyAutorunLog.Info("Forced clear " + NimbyAutorunLog.Who(GetIdentity()) + " reason=" + reason + " via=" + via);
+        NimbyAutorunLog.Info("Forced clear " + NimbyAutorunWho() + " reason=" + reason + " via=" + via);
         NimbyAutorunSendCancel(reason);
     }
 
@@ -300,7 +368,23 @@ modded class PlayerBase extends ManBase
         super.EEKilled(killer);
     }
 
-    // Before super, while the identity is still attached.
+    // NIMBY-T-005: cache the identity as soon as the server attaches the player to it
+    // (PlayerBase.c:7623 and :7638, called from MissionServer.InvokeOnConnect,
+    // missionServer.c:435-440, and OnClientReconnectEvent, :637). Server only.
+    override void OnConnect()
+    {
+        super.OnConnect();
+        NimbyAutorunRememberIdentity(GetIdentity());
+    }
+
+    override void OnReconnect()
+    {
+        super.OnReconnect();
+        NimbyAutorunRememberIdentity(GetIdentity());
+    }
+
+    // Before super. The October 19 kill test (R2-7b) showed the identity can already be gone
+    // here; the line then names the player from the cache (NIMBY-T-005).
     override void OnDisconnect()
     {
         NimbyAutorunForceClear("removed", "hook");
@@ -351,5 +435,21 @@ modded class PlayerBase extends ManBase
         bool wasRunning = m_NimbyAutorunning;
         NimbyAutorunApply(false, DayZPlayerConstants.MOVEMENTIDX_IDLE);
         NimbyAutorunLog.Debug("Cancel received " + NimbyAutorunLog.Who(GetIdentity()) + " reason=" + reason + " wasRunning=" + NimbyAutorunLog.Bool(wasRunning));
+    }
+
+    // RPC 6550103: the server's swim rule. Changes no movement state; a later swim start reads it.
+    protected void NimbyAutorunHandleSettings(ParamsReadContext ctx)
+    {
+        Param1<bool> payload = new Param1<bool>(true);
+        if (!ctx.Read(payload))
+        {
+            return;
+        }
+        bool changed = m_NimbyAutorunStopOnSwim != payload.param1;
+        m_NimbyAutorunStopOnSwim = payload.param1;
+        if (changed)
+        {
+            NimbyAutorunLog.Debug("Settings received " + NimbyAutorunLog.Who(GetIdentity()) + " stopOnSwim=" + NimbyAutorunLog.Bool(m_NimbyAutorunStopOnSwim));
+        }
     }
 }
