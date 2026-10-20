@@ -1,6 +1,6 @@
 # NIMBY pack shared rules
 
-Version 1.2. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
+Version 1.3. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
 
 These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), and Ears (`NimbyEarplugs`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
 
@@ -67,7 +67,7 @@ Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `te
 
 | Mod | Display name | Code and PBO prefix | Log prefix | RPC id block |
 | --- | --- | --- | --- | --- |
-| Legs | Legs | `NimbyAutorun` | `[NIMBY][Autorun]` | `65501xx` (`6550101` toggle, `6550102` server cancellation) |
+| Legs | Legs | `NimbyAutorun` | `[NIMBY][Autorun]` | `65501xx` (`6550101` toggle, `6550102` server cancellation, `6550103` settings: server to the owning client, `stopOnSwim`, round 3 October 20, 2026) |
 | Hands | Hands (Gimme until October 16, 2026) | `NimbyHands` | `[NIMBY][Hands]` | `65502xx` (reserved; Hands uses the action framework today) |
 | Central Scrutinizer | Central Scrutinizer (Golden God until October 16, 2026) | `NimbyAdmin` | `[NIMBY][Admin]` | `65503xx` (`6550350`-`6550399` reserved for observation feeds, N9) |
 | Puff | Puff | `NimbySmoke` | `[NIMBY][Smoke]` | `65504xx` (reserved; Puff uses the action framework and a script event) |
