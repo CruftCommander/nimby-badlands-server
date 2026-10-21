@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Builds or refreshes the local replica of the NIMBY Badlands HostHavoc server at D:\DayZServer
@@ -21,7 +22,7 @@
         -ResetFreshWorld after a zip).
       - <RepoRoot>\server\live\: the mission's loot and gameplay files (types.xml, globals.xml,
         economy.xml, events.xml, messages.xml, cfgspawnabletypes.xml, cfggameplay.json,
-        cfgeconomycore.xml, cfglimitsdefinition.xml).
+        cfgeconomycore.xml, cfglimitsdefinition.xml) and SOURCE.txt (when and where they were copied).
       - <RepoRoot>\logs\replica-<stamp>\: a manifest and one robocopy log per step. -WhatIf still writes
         the manifest and runs every robocopy step with /L (list only); nothing else is written.
 
@@ -63,7 +64,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepoRoot,
     [string]$MirrorRoot = 'D:\HostHavoc\NIMBY Badlands\104.192.227.46_2302',
     [string]$ReplicaRoot = 'D:\DayZServer',
     [ValidateSet('Steam', 'Mirror')][string]$BinarySource = 'Steam',
@@ -73,7 +74,13 @@ param(
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
+
+# Write-Manifest, Test-PathInside, and Get-RunningServerProcess come from NimbyCommon.psm1.
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 
 # Shared rules, section 8: test storage is storage_998 (live world) and storage_999 (fresh world).
 $script:LiveInstanceId = 998
@@ -85,40 +92,11 @@ $script:BinaryExcludeDirs = @('mpmissions', 'HostHavocDayZServer', 'profiles', '
 # battleye\ stays in: the server needs <root>\battleye\BEServer_x64.dll or it fails with
 # "BattlEye initialization failed" (first replica boot, October 16, 2026). Only the BE config files,
 # which carry the RCON password on the live server, are excluded; the test script writes its own.
-$script:BinaryExcludeFiles = @('serverDZ.cfg', 'serverDZ_By_HostHavoc.cfg', 'ban.txt', 'bans.txt', 'whitelist.txt', 'BEServer*.cfg', 'beserver*.cfg', '*.log', '*.RPT', '*.mdmp', '*.ADM')
+# serverDZ*.cfg as a wildcard: shared rules 8.2 promise that no serverDZ variant is ever copied.
+$script:BinaryExcludeFiles = @('serverDZ*.cfg', '*.cfg.bak', 'ban.txt', 'bans.txt', 'whitelist.txt', 'BEServer*.cfg', 'beserver*.cfg', '*.log', '*.RPT', '*.mdmp', '*.ADM')
 
 # Mission files copied into the repo for the plans' Phase 0 sections. Relative to the mission folder.
 $script:LiveReferenceFiles = @('db\types.xml', 'db\globals.xml', 'db\economy.xml', 'db\events.xml', 'db\messages.xml', 'cfgspawnabletypes.xml', 'cfggameplay.json', 'cfgeconomycore.xml', 'cfglimitsdefinition.xml')
-
-function Write-Manifest {
-    param([Parameter(Mandatory)][string]$LogPath, [Parameter(Mandatory)][string]$Line)
-    # The manifest is the record of the run, including a -WhatIf run, so it is never suppressed.
-    Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8 -WhatIf:$false
-}
-
-function Test-PathInside {
-    <#
-    .SYNOPSIS
-        True when Candidate equals Root or lies under it (case-insensitive, separator-normalized).
-    #>
-    [OutputType([bool])]
-    param([Parameter(Mandatory)][string]$Candidate, [Parameter(Mandatory)][string]$Root)
-
-    $c = $Candidate.Replace('/', '\').TrimEnd('\').ToLowerInvariant()
-    $r = $Root.Replace('/', '\').TrimEnd('\').ToLowerInvariant()
-    return ($c -eq $r) -or $c.StartsWith($r + '\')
-}
-
-function Get-ReplicaServerProcess {
-    <#
-    .SYNOPSIS
-        Returns any running DayZServer_x64 process whose image lives under the replica root.
-    #>
-    param([Parameter(Mandatory)][string]$ReplicaRoot)
-
-    $procs = @(Get-Process -Name 'DayZServer_x64' -ErrorAction SilentlyContinue)
-    return @($procs | Where-Object { $_.Path -and (Test-PathInside -Candidate $_.Path -Root $ReplicaRoot) })
-}
 
 function Get-MissionTemplate {
     <#
@@ -303,7 +281,7 @@ try {
     if (-not (Test-Path -LiteralPath $replicaDrive)) { throw "Replica drive not found: $replicaDrive" }
     if ((Test-PathInside -Candidate $ReplicaRoot -Root $MirrorRoot) -or (Test-PathInside -Candidate $MirrorRoot -Root $ReplicaRoot)) { throw "Replica root '$ReplicaRoot' and mirror root '$MirrorRoot' overlap; the mirror is never written." }
     if (Test-PathInside -Candidate $ReplicaRoot -Root $RepoRoot) { throw "Replica root '$ReplicaRoot' is inside the repo '$RepoRoot'; keep server data out of the repository." }
-    $running = @(Get-ReplicaServerProcess -ReplicaRoot $ReplicaRoot)   # @() because a one-element return unwraps
+    $running = @(Get-RunningServerProcess -Root $ReplicaRoot)   # @() because a one-element return unwraps
     if ($running.Count -gt 0) { throw ("A DayZServer_x64 process is running from the replica (pid {0}); stop it before syncing storage." -f (($running | ForEach-Object { $_.Id }) -join ',')) }
     $mission = Get-MissionTemplate -ConfigPath (Join-Path $MirrorRoot 'serverDZ_By_HostHavoc.cfg')
     $mirrorMission = Join-Path $MirrorRoot ('mpmissions\{0}' -f $mission)

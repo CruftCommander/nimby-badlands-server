@@ -1,4 +1,5 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Copies the live HostHavoc server's logs into the repo over SFTP so they can be analyzed
@@ -14,7 +15,9 @@
        with -IncludeCrashDumps) into logs\server-<stamp>\, then writes manifest.log: one line
        per file with a verdict, remote size, local size and path, and a summary.
 
-    Reads   : the remote profile folder (read only; nothing on the server is changed).
+    Reads   : the remote profile folder (read only; nothing on the server is changed), and
+              <repo>\scripts\testserver.local.json (git-ignored by *.local.json) for the
+              connection: "sftpHost", "sftpPort", "sftpUser", and optionally "sftpProfileDir".
     Writes  : <repo>\logs\server-<stamp>\ (git-ignored). Each run gets its own folder, so a
               re-run never overwrites an earlier pull.
     Never   : uploads, renames or deletes anything on the server; stores the password.
@@ -23,31 +26,37 @@
         Install-Module Posh-SSH -Scope CurrentUser
     The first connection asks you to trust the server's host key; check the fingerprint.
 
+    The host, port, account name, and profile folder are not in this script (the repository is
+    to be made public). Pass -ComputerName, -Port, -UserName, and -RemoteProfileDir, or put them
+    in scripts\testserver.local.json once, for example:
+        { "sftpHost": "<address>", "sftpPort": <port>, "sftpUser": "<account>",
+          "sftpProfileDir": "/<folder>/HostHavocDayZServer" }
+    Without sftpProfileDir the script searches the SFTP tree for the profile folder.
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Get-ServerLogs.ps1
 #>
 [CmdletBinding()]
 param(
-    [string]$ComputerName = '104.192.227.46',
-    [int]$Port = 8822,
-    [string]$UserName = 'jeff1',
-    # Found by the first run on 2026-10-14. If HostHavoc moves it, the script searches again.
-    [string]$RemoteProfileDir = '/104.192.227.46_2302/HostHavocDayZServer',
+    # No literal defaults: each comes from the parameter or scripts\testserver.local.json.
+    [string]$ComputerName,
+    [int]$Port,
+    [string]$UserName,
+    # If the folder is gone or empty, or this is '', the script searches the SFTP tree.
+    [string]$RemoteProfileDir,
     [int]$SearchDepth = 4,
     [switch]$IncludeCrashDumps,
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
-function Write-Manifest {
-    param(
-        [Parameter(Mandatory)][string]$LogPath,
-        [Parameter(Mandatory)][string]$Line
-    )
-    Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8
-}
+# Write-Manifest and Get-NimbyLocalSetting come from NimbyCommon.psm1.
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 
 function Get-RemoteLeafName {
     # Last segment of a remote (forward-slash) path.
@@ -154,6 +163,23 @@ if (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
     throw 'Posh-SSH is not installed. Run: Install-Module Posh-SSH -Scope CurrentUser'
 }
 Import-Module Posh-SSH
+
+# Connection settings: parameter, else scripts\testserver.local.json. The manifest records host
+# and user as before (it stays under the git-ignored logs\); nothing here is printed.
+if (-not $ComputerName) { $ComputerName = [string](Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'sftpHost') }
+if (-not $Port) {
+    $settingPort = Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'sftpPort'
+    if ($null -ne $settingPort) { $Port = [int]$settingPort }
+}
+if (-not $UserName) { $UserName = [string](Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'sftpUser') }
+if (-not $PSBoundParameters.ContainsKey('RemoteProfileDir')) { $RemoteProfileDir = [string](Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'sftpProfileDir') }
+$missing = @()
+if (-not $ComputerName) { $missing += '-ComputerName (sftpHost)' }
+if (-not $Port) { $missing += '-Port (sftpPort)' }
+if (-not $UserName) { $missing += '-UserName (sftpUser)' }
+if ($missing.Count -gt 0) {
+    throw ("Missing {0}. Pass them, or set them in {1}." -f ($missing -join ', '), (Get-NimbyLocalSettingPath -RepoRoot $RepoRoot))
+}
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $outDir = Join-Path $RepoRoot "logs\server-$stamp"

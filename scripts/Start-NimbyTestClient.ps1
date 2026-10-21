@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Starts the DayZ client with an @NIMBY build loaded, optionally connecting straight to the
@@ -41,10 +42,13 @@ param(
     [ValidateRange(1, 65535)][int]$Port = 2302,
     [string]$Password,
     [string]$DayZPath,
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbySteam.psm1') -Force

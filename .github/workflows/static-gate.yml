@@ -1,0 +1,75 @@
+# Static gate for the NIMBY tooling and pack (ruled by Jeff, October 21, 2026: a hosted static CI
+# gate now, a self-hosted boot-check runner later).
+#
+# Runs on GitHub's windows-latest runner under both Windows PowerShell 5.1 and PowerShell 7:
+#   - pester: the Pester 5 suite in scripts\tests (verdict functions, PBO packer, BERCon, Steam
+#     lookup, replica copy guards, join-password sources).
+#   - static: scripts\Test-NimbyRepo.ps1 (secrets, em dashes, double ampersands, CfgMods coverage
+#     and NOTICE per addon, unsigned PBO pack of every addon, CRLF per .gitattributes).
+# No step needs Steam, DayZ Server, DayZ Tools, the signing key, or any secret. The boot check
+# (a real DayZ server) is not here; it needs the self-hosted runner.
+
+name: static-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pester:
+    name: Pester (${{ matrix.shell }})
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Pester 5.9.1
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          if (-not (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue)) {
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null
+          }
+          Install-Module -Name Pester -RequiredVersion 5.9.1 -Repository PSGallery -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 5.9.1
+          "PowerShell $($PSVersionTable.PSVersion), Pester $((Get-Module Pester).Version)"
+
+      - name: Run Pester
+        run: |
+          Import-Module Pester -RequiredVersion 5.9.1
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'scripts/tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+  static:
+    name: Static checks (${{ matrix.shell }})
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Test-NimbyRepo.ps1
+        run: |
+          & .\scripts\Test-NimbyRepo.ps1
+          exit $LASTEXITCODE

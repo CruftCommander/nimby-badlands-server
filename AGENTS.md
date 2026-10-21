@@ -19,9 +19,18 @@ The decision record is the Notion hub "DayZ Badlands Server - Project Hub". This
 
 ## Commands
 
-There is no unit-test suite. The quality gate is the build script's boot check: it starts a real local DayZ server with the built pack and scans the logs.
+Pester covers the tooling; the boot check covers the addons. The Pester 5 suite in `scripts\tests\` tests the PowerShell that decides PASS, packs PBOs, speaks BERCon, resolves the join password, and guards the replica, under both Windows PowerShell 5.1 and PowerShell 7. The boot check starts a real local DayZ server with the built pack, scans the logs, and fails when any addon's self-test fails or stays silent.
+
+The hosted static gate (`.github/workflows/static-gate.yml`, GitHub `windows-latest`) runs Pester under both shells and `scripts\Test-NimbyRepo.ps1` on every push to `main` and every pull request. It needs no Steam, DayZ, signing key, or secret, so it cannot boot the pack; the boot check stays local until the self-hosted runner exists.
 
 ```powershell
+# Pester suite (Pester 5.9.1: Install-Module Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck), in both shells
+pwsh -NoProfile -Command "Invoke-Pester .\scripts\tests"
+powershell.exe -NoProfile -Command "Import-Module Pester -RequiredVersion 5.9.1; Invoke-Pester .\scripts\tests"
+
+# Static checks the CI gate runs: secrets, em dashes, double ampersands, CfgMods coverage and NOTICE, unsigned pack, CRLF
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-NimbyRepo.ps1
+
 # Build, sign, verify, and boot-check @NIMBY (exit 0 = PASS, 1 = FAIL, 2 = UNKNOWN)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1
 
@@ -34,6 +43,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -Dev
 # Interactive in-game test server: newest SUMMARY PASS build, or a specific one
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -BuildPath .\build\@NIMBY-<stamp> -ProfileName <name>
+# A -BuildPath build that is not SUMMARY PASS, or whose PBOs differ from its build log, needs -Force
 
 # Against the live replica: 998 = copy of live storage_1, 999 = fresh world; -Vanilla = no mods (control boot)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath D:\DayZServer -InstanceId 998
@@ -42,12 +52,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps
 # Refresh the local replica at D:\DayZServer from the WinSCP mirror of the live server (-WhatIf lists only)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Sync-LiveReplica.ps1
 
-# Pull live RPT, ADM, and log files over SFTP (needs Posh-SSH; Jeff types the password)
+# Pull live RPT, ADM, and log files over SFTP (needs Posh-SSH; Jeff types the password;
+# host, port, and account come from scripts\testserver.local.json or the parameters)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Get-ServerLogs.ps1
 
 # Copy a subscribed Workshop item into vendor\workshop\<id>\<stamp>\ for reading
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Copy-WorkshopItem.ps1 -WorkshopId <id>
 ```
+
+Script help: `Get-Help .\scripts\<Script>.ps1 -Full`. Under Windows PowerShell 5.1, `powershell.exe -File <script> -?` prints nothing; use `powershell.exe -Command "& .\scripts\<Script>.ps1 -?"`.
+
+Per-machine values live in the git-ignored `scripts\testserver.local.json` (matched by `*.local.json`): `joinPassword` (the standing test-server join password; the `NIMBY_JOIN_PASSWORD` environment variable wins over it), and `sftpHost`, `sftpPort`, `sftpUser`, `sftpProfileDir` for `Get-ServerLogs.ps1`. No script holds these as literals.
 
 Read the verdict from `logs\build-<stamp>\build.log`, which ends in `SUMMARY PASS|FAIL|UNKNOWN mod=<path>`. Output goes to `build\@NIMBY-<stamp>\`. `build\`, `logs\`, `profiles\`, and `vendor\` are git-ignored.
 
@@ -68,9 +83,10 @@ One signed client-and-server mod, published as one public Steam Workshop item, t
 2. DayZ Tools `DSSignFile` signs each PBO with the `nimby` key.
 3. Each PBO is verified: checksum, `.bisign` present, prefix matches `pack.json`, and every source file that matches `includePatterns` is inside.
 4. `DSCheckSignatures` verifies the signatures. It is calibrated on every run against an unsigned control PBO; if the control is not flagged, the result is UNKNOWN.
-5. The boot check starts the local DayZ Server on `dayzOffline.nasdara`, creates `$profile:<Prefix>\selftest` for each addon, and fails on any `bootCheck.failurePatterns` match in the RPT or script log. This includes `SCRIPT (E)`, `Scripted variables corrupted`, and `[NIMBY][<Prefix>][SelfTest] FAIL`.
+5. The boot check starts the local DayZ Server on `dayzOffline.nasdara`, creates `$profile:<Prefix>\selftest` for each addon, and fails on any `bootCheck.failurePatterns` match in the RPT or script log. This includes `SCRIPT (E)`, `Scripted variables corrupted`, and `[NIMBY][<logPrefix>][SelfTest] FAIL`.
+6. The self-test gate maps each addon's code prefix to its `pack.json` `logPrefix` and reads the script log once (the RPT repeats every line). Every flagged addon must print `[NIMBY][<logPrefix>] selftest complete; cases=N failures=M` with N above zero and PASS plus FAIL lines equal to N. A silent addon is `BOOT FAIL self-test gate: <logPrefix> ran=no`. `build.log` gets `SELFTEST <logPrefix> ran=yes|no cases=N pass=N fail=M` per addon and `SELFTEST TOTAL` (250 unique cases on October 21, 2026).
 
-`NimbySteam.psm1` finds DayZ Tools (Steam app 830640) and DayZ Server through Steam app manifests. `NimbyRcon.psm1` sends the graceful `#shutdown` that the test server uses before it stops any process.
+`NimbySteam.psm1` finds DayZ Tools (Steam app 830640) and DayZ Server through Steam app manifests, then `D:\DayZServer`. `NimbyRcon.psm1` sends the graceful `#shutdown` that the test server uses before it stops any process. `NimbyCommon.psm1` holds the helpers every script shares: the manifest writer, the instance guard, the server argument list, the log reader, the running-server guard (no script starts a DayZ server while one runs), the random generator, and the local settings file. `NimbyPbo.psm1` stamps each entry with its source file's last-write time, so unchanged sources give the same PBO hash from build to build.
 
 Test persistence uses only `storage_998` and `storage_999`. Both scripts refuse any other instance ID, so `storage_1` is never written.
 
