@@ -31,6 +31,12 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     string itemText;
     string giverText;
     string receiverText;
+    // Diagnostic only (diag/hands-t010, NimbyHandsDiag): the variant read at dispatch, the
+    // V3 stage (1 = hands to the giver's own inventory in flight, 2 = server move to the
+    // receiver scheduled), and the action's reach for the V3 step 2 revalidation.
+    int diagVariant;
+    int diagStage;
+    float diagReach;
 }
 
 class NimbyHandsServer
@@ -47,6 +53,30 @@ class NimbyHandsServer
             s_Registry = new NimbyHandsTransfers(NimbyHandsConstants.TRANSFER_TIMEOUT_MS);
         }
         return s_Registry;
+    }
+
+    // Diagnostic lookups (NimbyHandsDiag).
+    static NimbyHandsWorldTransfer FindTransfer(int id)
+    {
+        if (!s_Registry)
+        {
+            return null;
+        }
+        return NimbyHandsWorldTransfer.Cast(s_Registry.FindById(id));
+    }
+
+    static int FindIdByItem(EntityAI item)
+    {
+        if (!s_Registry || !item)
+        {
+            return 0;
+        }
+        NimbyHandsTransfer transfer = s_Registry.Find(ItemKey(item));
+        if (!transfer)
+        {
+            return 0;
+        }
+        return transfer.id;
     }
 
     // ---- descriptions -------------------------------------------------------
@@ -207,6 +237,15 @@ class NimbyHandsServer
         bool atReceiver = newRoot != null && newRoot == transfer.receiver;
         bool inGiverHands = newLoc.GetType() == InventoryLocationType.HANDS && newLoc.GetParent() == transfer.giver;
         bool isTemporary = newLoc.GetType() == InventoryLocationType.TEMP;
+        // Diagnostic V3: step 1 landed in the giver's own inventory; schedule step 2 for the
+        // next frame instead of classifying this as the item going elsewhere.
+        if (transfer.diagStage == 1 && newRoot != null && newRoot == transfer.giver && !inGiverHands && !isTemporary)
+        {
+            transfer.diagStage = 2;
+            NimbyHandsDiag.Line("step1", transfer.id.ToString(), "result=arrived dst=" + DescribeLocation(newLoc));
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsDiag.RunStep2, 0, false, transfer.id);
+            return;
+        }
         int verdict = NimbyHandsRules.ClassifyMove(atReceiver, inGiverHands, isTemporary);
         if (verdict == NimbyHandsRules.NO_CHANGE)
         {

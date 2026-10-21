@@ -104,6 +104,8 @@ class NimbyHandsActionPutInPockets extends ActionContinuousBase
         {
             data.ApplyTo( move );
         }
+        // Diagnostic (diag/hands-t010): reads the server variant; V1 clears this action's target juncture.
+        NimbyHandsDiag.BeforeExecute( this, action_data, move );
         move.Execute();
     }
 }

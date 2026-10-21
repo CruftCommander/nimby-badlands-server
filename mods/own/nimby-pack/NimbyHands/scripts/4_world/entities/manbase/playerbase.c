@@ -84,6 +84,15 @@ modded class PlayerBase
         NimbyHandsClosePockets( "reconnect" );
     }
 
+    // Diagnostic DG3 (diag/hands-t010): SJ_INVENTORY and SJ_INVENTORY_FAILURE, after vanilla
+    // has read them (PlayerBase.c:8496-8500). Debug lines only.
+    override void OnSyncJuncture( int pJunctureID, ParamsReadContext pCtx )
+    {
+        super.OnSyncJuncture( pJunctureID, pCtx );
+
+        NimbyHandsDiag.OnJuncture( this, pJunctureID );
+    }
+
     override void SetActions( out TInputActionMap InputActionMap )
     {
         super.SetActions( InputActionMap );
