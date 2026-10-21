@@ -99,3 +99,7 @@ Get-ChildItem "$env:LOCALAPPDATA\DayZ\script_*.log" | Where-Object LastWriteTime
 3. Desktop: `Copy-Item -Path '\\Purgatory\server\laptop-hands-diag' -Destination "$wt\logs\" -Recurse -Force`
 
 The session that reads the result needs: the server RPT in `$prof`, D's client logs from `%LOCALAPPDATA%\DayZ`, the laptop logs in `$wt\logs\laptop-hands-diag`, and the attempt times.
+
+## 7. Result (October 20, 2026)
+
+Run 23:29 to 23:50 on profile `hands-t010-diag`. H-C true: `cmtd=false` on every V0, V1 and V2 dispatch, V2 included with both players idle. V3 (P3) `CONFIRMED` for Take both ways, Give and Put In Pockets; B0 PASS. Jeff ruled J2: P3; J3 is moot. Full record, ids and times: the "Hands T-010 diagnostic, October 20, 2026" section of `docs/testing/2026-10-19-hands-phase1.md` on `main`.
