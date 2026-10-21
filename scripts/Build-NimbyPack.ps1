@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Builds, signs, verifies, and boot-tests the @NIMBY client-and-server mod.
@@ -27,11 +28,18 @@
 
     Self-test: before the boot check the script creates <profile>\<Prefix>\selftest for every
     addon it built. Each addon runs its engine-free validators at mission start when that flag
-    exists and prints "[NIMBY][<Log prefix>][SelfTest] PASS|FAIL <case>". Any FAIL line fails
-    the boot check; the counts land in build.log.
+    exists, prints "[NIMBY][<logPrefix>][SelfTest] PASS|FAIL <case>" per case, and ends with
+    "[NIMBY][<logPrefix>] selftest complete; cases=N failures=M". pack.json maps each addon's
+    code prefix to its logPrefix. Lines are counted from the script log (the RPT carries the
+    same lines, so reading both would count each twice), and an identical line counts once.
+    The boot check fails on any FAIL line, and also when a flagged addon stayed silent: no
+    complete line, cases=0 or no cases=N, no PASS line, or PASS plus FAIL not equal to cases.
+    build.log gets one "SELFTEST <logPrefix> ran=yes|no cases=N pass=N fail=M" line per addon.
 
     Reads   : pack.json, the addon folders, DayZ Tools (DsUtils), a local DayZ Server install,
-              the private key(s) in -KeyDirectory.
+              the private key(s) in -KeyDirectory, HKCU:\Software\Valve\Steam,
+              libraryfolders.vdf and appmanifest_*.acf (to find DayZ Tools and the server), and
+              the process list (no second DayZ server is started while one runs).
     Writes  : <repo>\build\@NIMBY-<stamp>\ (and the -Server and -Dev siblings when produced),
               <repo>\logs\build-<stamp>\ (manifest, tool logs, server profile and logs), and the
               key pair(s) in -KeyDirectory on first run. The boot check writes the server's
@@ -40,7 +48,8 @@
     Never   : copies a private key anywhere, deletes anything, or contacts a remote server.
 
     Exit codes: 0 = PASS, 1 = FAIL, 2 = UNKNOWN (built and verified, but the boot check was
-    skipped or could not reach a verdict).
+    skipped, could not start because a DayZServer_x64 process was already running, or could not
+    reach a verdict).
 
     Runs in Windows PowerShell 5.1 and PowerShell 7. No elevation needed.
 
@@ -74,7 +83,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepoRoot,
     [string]$KeyDirectory = 'D:\Keys\nimby',
     [string]$DayZToolsPath,
     [string]$ServerPath,
@@ -84,22 +93,21 @@ param(
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbySteam.psm1') -Force
-Import-Module (Join-Path $PSScriptRoot 'modules\NimbyPbo.psm1') -Force
+# Build is an approved verb from PowerShell 6 only; 5.1 would warn about Build-PboArchive.
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyPbo.psm1') -Force -DisableNameChecking
 
 # ---------------------------------------------------------------------------
 # Logic kept in functions so it can be smoke-tested with the tools stubbed.
+# Write-Manifest, Test-TestInstanceId, Get-ServerArgument, Read-ServerLogText, and the
+# running-server guard come from NimbyCommon.psm1.
 # ---------------------------------------------------------------------------
-
-function Write-Manifest {
-    param(
-        [Parameter(Mandatory)][string]$LogPath,
-        [Parameter(Mandatory)][string]$Line
-    )
-    Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8
-}
 
 function Get-OptionalProperty {
     # Reads a property that pack.json may omit. Strict mode throws on a missing member otherwise.
@@ -120,12 +128,6 @@ function Test-AddonServerOnly {
     return [bool](Get-OptionalProperty -Object $Addon -Name 'serverOnly' -Default $false)
 }
 
-function Test-TestInstanceId {
-    # Shared rules, section 8: test storage is storage_998 and storage_999 only.
-    param([Parameter(Mandatory)][int]$InstanceId)
-    return ($InstanceId -eq 998 -or $InstanceId -eq 999)
-}
-
 function Get-PackDefinition {
     # Loads and validates pack.json. Throws with a precise message on any problem.
     param([Parameter(Mandatory)][string]$Path)
@@ -139,23 +141,32 @@ function Get-PackDefinition {
     if (@($pack.addons).Count -eq 0) { throw 'pack.json lists no addons.' }
     if ($pack.keyAuthority -notmatch '^[A-Za-z0-9_]+$') { throw "keyAuthority '$($pack.keyAuthority)' must be letters, digits, or underscore." }
 
+    # logPrefix is the <name> in the addon's "[NIMBY][<name>]" log lines; the self-test gate maps
+    # each flagged code prefix to it, so it must be present and unique.
+    $logPrefixPattern = '^[A-Za-z0-9_-]+$'
     $names = @{}
+    $logPrefixes = @{}
     foreach ($addon in $pack.addons) {
-        foreach ($field in 'folder', 'pboName', 'prefix') {
+        foreach ($field in 'folder', 'pboName', 'prefix', 'logPrefix') {
             if (-not (Get-OptionalProperty -Object $addon -Name $field)) { throw "An addon in pack.json is missing '$field'." }
         }
         if ($names.ContainsKey($addon.pboName)) { throw "Duplicate pboName '$($addon.pboName)' in pack.json." }
         $names[$addon.pboName] = $true
+        if ($addon.logPrefix -notmatch $logPrefixPattern) { throw "logPrefix '$($addon.logPrefix)' must be letters, digits, underscore, or hyphen." }
+        if ($logPrefixes.ContainsKey($addon.logPrefix)) { throw "Duplicate logPrefix '$($addon.logPrefix)' in pack.json." }
+        $logPrefixes[$addon.logPrefix] = $true
     }
 
     $dev = Get-OptionalProperty -Object $pack -Name 'dev'
     if ($null -ne $dev) {
-        foreach ($field in 'folder', 'pboName', 'prefix', 'keyAuthority') {
+        foreach ($field in 'folder', 'pboName', 'prefix', 'logPrefix', 'keyAuthority') {
             if (-not (Get-OptionalProperty -Object $dev -Name $field)) { throw "pack.json 'dev' is missing '$field'." }
         }
         if ($dev.keyAuthority -notmatch '^[A-Za-z0-9_]+$') { throw "dev.keyAuthority '$($dev.keyAuthority)' must be letters, digits, or underscore." }
         if ($dev.keyAuthority -eq $pack.keyAuthority) { throw 'dev.keyAuthority must differ from keyAuthority: the harness is signed with a separate key.' }
         if ($names.ContainsKey($dev.pboName)) { throw "dev.pboName '$($dev.pboName)' collides with an addon; the harness is never an addon row." }
+        if ($dev.logPrefix -notmatch $logPrefixPattern) { throw "dev.logPrefix '$($dev.logPrefix)' must be letters, digits, underscore, or hyphen." }
+        if ($logPrefixes.ContainsKey($dev.logPrefix)) { throw "dev.logPrefix '$($dev.logPrefix)' collides with an addon." }
     }
 
     foreach ($field in 'mission', 'port', 'instanceId', 'timeoutSeconds', 'failurePatterns', 'readyPatterns') {
@@ -175,28 +186,6 @@ function Resolve-ToolPath {
         if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
     }
     return $null
-}
-
-function Get-ServerArgument {
-    # Builds the DayZ server argument list for the boot check. Several -mod folders join with ';'
-    # inside one argument; -servermod= is present only when a server-only output exists.
-    param(
-        [Parameter(Mandatory)][string]$ConfigPath,
-        [Parameter(Mandatory)][string]$ProfilePath,
-        [Parameter(Mandatory)][string[]]$ModPath,
-        [string]$ServerModPath,
-        [Parameter(Mandatory)][int]$Port
-    )
-
-    $arguments = @(
-        "-config=$ConfigPath",
-        "-port=$Port",
-        "-profiles=$ProfilePath",
-        ("-mod={0}" -f ($ModPath -join ';'))
-    )
-    if ($ServerModPath) { $arguments += "-servermod=$ServerModPath" }
-    $arguments += '-dologs', '-adminlog', '-freezecheck'
-    return $arguments
 }
 
 function Write-BootConfig {
@@ -230,7 +219,8 @@ function Write-BootConfig {
         '    };',
         '};'
     )
-    Set-Content -LiteralPath $Path -Value $lines -Encoding utf8
+    # ascii, not utf8: 5.1 writes utf8 with a BOM, and the server reads this file.
+    Set-Content -LiteralPath $Path -Value $lines -Encoding ascii
 }
 
 function Initialize-SelfTestFlag {
@@ -276,42 +266,65 @@ function Get-BootVerdict {
 }
 
 function Get-SelfTestVerdict {
-    # Counts "[NIMBY][<component>][SelfTest] PASS|FAIL <case>" lines per component.
-    param([Parameter(Mandatory)][AllowEmptyString()][string]$LogText)
+    # Reads "[NIMBY][<component>][SelfTest] PASS|FAIL <case>" lines and each component's
+    # "[NIMBY][<component>] selftest complete; cases=N failures=M" line. An identical line seen
+    # twice counts once. Every component in Expected, and every component that printed anything,
+    # must keep the contract: a complete line, cases=N above zero, at least one PASS line, and
+    # PASS plus FAIL equal to cases. Problems names each component that broke it; Verdict is FAIL
+    # when there is a FAIL line or a problem, else PASS.
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$LogText,
+        [AllowEmptyCollection()][string[]]$Expected = @()
+    )
 
-    $pattern = '\[NIMBY\]\[(?<c>[^\]]+)\]\[SelfTest\]\s+(?<r>PASS|FAIL)\b(?<rest>.*)$'
+    $casePattern = '\[NIMBY\]\[(?<c>[^\]]+)\]\[SelfTest\]\s+(?<r>PASS|FAIL)\b'
+    $completePattern = '\[NIMBY\]\[(?<c>[^\]]+)\]\s+selftest complete;(?<rest>.*)$'
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
     $counts = [ordered]@{}
+    foreach ($name in $Expected) {
+        if (-not $counts.Contains($name)) { $counts[$name] = [PSCustomObject]@{ Pass = 0; Fail = 0; Complete = $false; Cases = $null } }
+    }
     $failures = @()
-    foreach ($line in ($LogText -split "\r?\n")) {
-        $match = [regex]::Match($line, $pattern)
-        if (-not $match.Success) { continue }
+    foreach ($raw in ($LogText -split "\r?\n")) {
+        $line = $raw.Trim()
+        if (-not $line) { continue }
+        $case = [regex]::Match($line, $casePattern)
+        $complete = [regex]::Match($line, $completePattern)
+        if (-not $case.Success -and -not $complete.Success) { continue }
+        if (-not $seen.Add($line)) { continue }
+
+        $match = $complete
+        if ($case.Success) { $match = $case }
         $component = $match.Groups['c'].Value
-        if (-not $counts.Contains($component)) { $counts[$component] = [PSCustomObject]@{ Pass = 0; Fail = 0 } }
-        if ($match.Groups['r'].Value -eq 'PASS') { $counts[$component].Pass++ } else { $counts[$component].Fail++; $failures += $line.Trim() }
+        if (-not $counts.Contains($component)) { $counts[$component] = [PSCustomObject]@{ Pass = 0; Fail = 0; Complete = $false; Cases = $null } }
+        $entry = $counts[$component]
+        if ($case.Success) {
+            if ($case.Groups['r'].Value -eq 'PASS') { $entry.Pass++ } else { $entry.Fail++; $failures += $line }
+        }
+        else {
+            $entry.Complete = $true
+            $cases = [regex]::Match($complete.Groups['rest'].Value, '\bcases=(?<n>\d+)')
+            if ($cases.Success) { $entry.Cases = [int]$cases.Groups['n'].Value }
+        }
     }
+
     $pass = 0; $fail = 0
-    foreach ($key in $counts.Keys) { $pass += $counts[$key].Pass; $fail += $counts[$key].Fail }
-    return [PSCustomObject]@{ Pass = $pass; Fail = $fail; Components = $counts; Failures = $failures }
-}
-
-function Read-ServerLogText {
-    # Concatenates every RPT and script log in the profile folder. Shared-read so a running
-    # server's open files can be read.
-    param([Parameter(Mandatory)][string]$ProfilePath)
-
-    $builder = New-Object System.Text.StringBuilder
-    if (-not (Test-Path -LiteralPath $ProfilePath)) { return '' }
-    foreach ($file in Get-ChildItem -LiteralPath $ProfilePath -File | Where-Object { $_.Extension -ieq '.rpt' -or $_.Name -like 'script*.log' }) {
-        $stream = New-Object System.IO.FileStream($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        try {
-            $reader = New-Object System.IO.StreamReader($stream)
-            [void]$builder.AppendLine($reader.ReadToEnd())
-        }
-        finally {
-            $stream.Dispose()
-        }
+    $problems = @()
+    foreach ($key in $counts.Keys) {
+        $entry = $counts[$key]
+        $pass += $entry.Pass; $fail += $entry.Fail
+        $ran = ($entry.Complete -or ($entry.Pass + $entry.Fail) -gt 0)
+        if (-not $ran) { $problems += "$key ran=no" }
+        elseif (-not $entry.Complete) { $problems += "$key no 'selftest complete' line" }
+        elseif ($null -eq $entry.Cases) { $problems += "$key complete line has no cases=N" }
+        elseif ($entry.Cases -eq 0) { $problems += "$key cases=0" }
+        elseif ($entry.Pass -eq 0) { $problems += "$key no PASS line" }
+        elseif (($entry.Pass + $entry.Fail) -ne $entry.Cases) { $problems += ("{0} pass+fail={1} but cases={2}" -f $key, ($entry.Pass + $entry.Fail), $entry.Cases) }
     }
-    return $builder.ToString()
+
+    $verdict = 'PASS'
+    if ($fail -gt 0 -or $problems.Count -gt 0) { $verdict = 'FAIL' }
+    return [PSCustomObject]@{ Verdict = $verdict; Pass = $pass; Fail = $fail; Components = $counts; Failures = $failures; Problems = $problems }
 }
 
 function Get-SignatureVerdict {
@@ -370,7 +383,14 @@ function Invoke-Native {
     $global:LASTEXITCODE = $null
     Push-Location -LiteralPath $WorkingDirectory
     try {
-        & $FilePath @ArgumentList *>&1 | Out-File -LiteralPath $LogPath -Encoding utf8
+        # Local to this function: in 5.1, 7.0, and 7.1 each stderr line of a redirected native
+        # command is an ErrorRecord, and the script's 'Stop' would make the first one terminating.
+        # Flatten ErrorRecords to their text so the log reads the same on both shells.
+        $ErrorActionPreference = 'Continue'
+        $lines = @(& $FilePath @ArgumentList 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { [string]$_ }
+            })
+        Set-Content -LiteralPath $LogPath -Value $lines -Encoding utf8
         return $LASTEXITCODE
     }
     finally {
@@ -485,7 +505,8 @@ function Write-ModCpp {
         "tooltip = `"$Name`";",
         "overview = `"$Overview`";"
     )
-    Set-Content -LiteralPath (Join-Path $ModRoot 'mod.cpp') -Value $modCpp -Encoding utf8
+    # ascii, not utf8: 5.1 writes utf8 with a BOM, and the game reads mod.cpp.
+    Set-Content -LiteralPath (Join-Path $ModRoot 'mod.cpp') -Value $modCpp -Encoding ascii
 }
 
 function Invoke-SignatureCheck {
@@ -583,10 +604,12 @@ try {
     New-Item -ItemType Directory -Path $addonsOut, $keysOut -Force | Out-Null
 
     $failures = 0
+    # Code prefix (flag folder) to log prefix (the [NIMBY][<name>] in its lines), per built PBO.
     $prefixes = @()
+    $logPrefixOf = @{}
     foreach ($addon in $clientAddons) {
         $ok = Build-NimbyAddon -SourceFolder (Join-Path $packRoot $addon.folder) -PboName $addon.pboName -Prefix $addon.prefix -Patterns $pack.includePatterns -AddonsOut $addonsOut -SignFile $signFile -PrivateKey $releaseKey.PrivateKey -KeyAuthority $pack.keyAuthority -Label 'client' -LogDir $logDir -Manifest $manifest
-        if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix }
+        if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix; $logPrefixOf[$addon.prefix] = $addon.logPrefix }
     }
     Copy-Item -LiteralPath $releaseKey.PublicKey -Destination $keysOut
     Write-ModCpp -ModRoot $modRoot -Name $pack.modName -Author $pack.author -Overview "$($pack.modName) server pack"
@@ -601,7 +624,7 @@ try {
         foreach ($addon in $serverAddons) {
             # Unsigned: verifySignatures checks client PBOs only, and this folder never reaches clients.
             $ok = Build-NimbyAddon -SourceFolder (Join-Path $packRoot $addon.folder) -PboName $addon.pboName -Prefix $addon.prefix -Patterns $pack.includePatterns -AddonsOut $serverAddonsOut -SignFile $null -PrivateKey $null -KeyAuthority $null -Label 'server' -LogDir $logDir -Manifest $manifest
-            if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix }
+            if (-not $ok) { $failures++ } else { $prefixes += $addon.prefix; $logPrefixOf[$addon.prefix] = $addon.logPrefix }
         }
         Write-ModCpp -ModRoot $serverRoot -Name "$($pack.modName) Server" -Author $pack.author -Overview "$($pack.modName) server-only addons; load with -servermod="
         Write-Manifest -LogPath $manifest -Line "SERVERMOD $serverRoot"
@@ -619,7 +642,7 @@ try {
         New-Item -ItemType Directory -Path $devAddonsOut, $devKeysOut -Force | Out-Null
         $devSource = [System.IO.Path]::GetFullPath((Join-Path $packRoot $devDefinition.folder))
         $ok = Build-NimbyAddon -SourceFolder $devSource -PboName $devDefinition.pboName -Prefix $devDefinition.prefix -Patterns $pack.includePatterns -AddonsOut $devAddonsOut -SignFile $signFile -PrivateKey $devKey.PrivateKey -KeyAuthority $devDefinition.keyAuthority -Label 'dev' -LogDir $logDir -Manifest $manifest
-        if (-not $ok) { $failures++ } else { $prefixes += $devDefinition.prefix }
+        if (-not $ok) { $failures++ } else { $prefixes += $devDefinition.prefix; $logPrefixOf[$devDefinition.prefix] = $devDefinition.logPrefix }
         Copy-Item -LiteralPath $devKey.PublicKey -Destination $devKeysOut
         Write-ModCpp -ModRoot $devRoot -Name "$($pack.modName) Dev" -Author $pack.author -Overview "$($pack.modName) dev harness; never released"
         Write-Manifest -LogPath $manifest -Line "DEV $devRoot"
@@ -655,20 +678,15 @@ try {
         $exitCode = 2
     }
     else {
-        if (-not $ServerPath) {
-            $candidates = @()
-            if ($libraries.Count -gt 0) {
-                $candidates += Find-SteamInstalledAppPath -LibraryPaths $libraries -AppId '223350' -RequiredFile 'DayZServer_x64.exe'
-                $candidates += Find-SteamAppPath -LibraryPaths $libraries -FolderName 'DayZServer' -RequiredFile 'DayZServer_x64.exe'
-            }
-            $candidates += 'D:\DayZServer'
-            foreach ($candidate in $candidates) {
-                if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'DayZServer_x64.exe'))) { $ServerPath = $candidate; break }
-            }
-        }
+        if (-not $ServerPath) { $ServerPath = Find-DayZServerPath -LibraryPaths $libraries }
 
         $boot = $pack.bootCheck
-        if (-not $ServerPath) {
+        $runningServer = Get-RunningServerMessage
+        if ($runningServer) {
+            Write-Manifest -LogPath $manifest -Line "BOOT UNKNOWN $runningServer"
+            $exitCode = 2
+        }
+        elseif (-not $ServerPath) {
             Write-Manifest -LogPath $manifest -Line 'BOOT UNKNOWN no DayZ Server install found; pass -ServerPath'
             $exitCode = 2
         }
@@ -686,7 +704,9 @@ try {
             Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId ([int]$boot.instanceId) -StorageAutoFix $storageAutoFix
             Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $boot.instanceId)))
 
+            # Every flagged addon is expected to report under its logPrefix (shared rules 8.2).
             $flags = @(Initialize-SelfTestFlag -ProfilePath $profileDir -Prefix $prefixes)
+            $expectedLogPrefixes = @($prefixes | ForEach-Object { $logPrefixOf[$_] })
             Write-Manifest -LogPath $manifest -Line ("SELFTEST FLAGS {0}" -f ($prefixes -join ','))
 
             $modPaths = @($modRoot)
@@ -722,13 +742,32 @@ try {
                         if ($again.Verdict -eq 'FAIL') { $verdict = $again; break }
                         if ($process.HasExited) { $verdict = [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = "server exited after ready with code $($process.ExitCode)" }; break }
                     }
-                    $selfTest = Get-SelfTestVerdict -LogText (Read-ServerLogText -ProfilePath $profileDir)
-                    foreach ($component in $selfTest.Components.Keys) {
-                        Write-Manifest -LogPath $manifest -Line ("SELFTEST {0} pass={1} fail={2}" -f $component, $selfTest.Components[$component].Pass, $selfTest.Components[$component].Fail)
+                    # One source: the RPT repeats every script-log line. The RPT is the fallback only
+                    # when no script log was written.
+                    $selfTestSource = 'script'
+                    $selfTestText = Read-ServerLogText -ProfilePath $profileDir -Kind Script
+                    if (-not $selfTestText.Trim()) {
+                        $selfTestSource = 'rpt'
+                        $selfTestText = Read-ServerLogText -ProfilePath $profileDir -Kind Rpt
                     }
-                    Write-Manifest -LogPath $manifest -Line ("SELFTEST TOTAL pass={0} fail={1} flags={2}" -f $selfTest.Pass, $selfTest.Fail, $flags.Count)
-                    if ($selfTest.Fail -gt 0 -and $verdict.Verdict -ne 'FAIL') {
-                        $verdict = [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = $selfTest.Failures[0] }
+                    $selfTest = Get-SelfTestVerdict -LogText $selfTestText -Expected $expectedLogPrefixes
+                    foreach ($component in $selfTest.Components.Keys) {
+                        $entry = $selfTest.Components[$component]
+                        $ran = 'no'
+                        if ($entry.Complete -or ($entry.Pass + $entry.Fail) -gt 0) { $ran = 'yes' }
+                        $cases = 'none'
+                        if ($null -ne $entry.Cases) { $cases = $entry.Cases }
+                        Write-Manifest -LogPath $manifest -Line ("SELFTEST {0} ran={1} cases={2} pass={3} fail={4}" -f $component, $ran, $cases, $entry.Pass, $entry.Fail)
+                    }
+                    Write-Manifest -LogPath $manifest -Line ("SELFTEST TOTAL pass={0} fail={1} flags={2} expected={3} source={4}" -f $selfTest.Pass, $selfTest.Fail, $flags.Count, $expectedLogPrefixes.Count, $selfTestSource)
+                    foreach ($problem in $selfTest.Problems) {
+                        Write-Manifest -LogPath $manifest -Line "SELFTEST PROBLEM $problem"
+                    }
+                    if ($selfTest.Verdict -eq 'FAIL' -and $verdict.Verdict -ne 'FAIL') {
+                        $evidence = ''
+                        if ($selfTest.Failures.Count -gt 0) { $evidence = $selfTest.Failures[0] }
+                        else { $evidence = "self-test gate: {0}" -f ($selfTest.Problems -join '; ') }
+                        $verdict = [PSCustomObject]@{ Verdict = 'FAIL'; Evidence = $evidence }
                     }
                 }
 

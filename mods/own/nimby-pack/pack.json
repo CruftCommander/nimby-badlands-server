@@ -20,33 +20,39 @@
         {
             "folder": "NimbyAutorun",
             "pboName": "NimbyAutorun",
-            "prefix": "NimbyAutorun"
+            "prefix": "NimbyAutorun",
+            "logPrefix": "Autorun"
         },
         {
             "folder": "NimbyHands",
             "pboName": "NimbyHands",
-            "prefix": "NimbyHands"
+            "prefix": "NimbyHands",
+            "logPrefix": "Hands"
         },
         {
             "folder": "NimbyEarplugs",
             "pboName": "NimbyEarplugs",
-            "prefix": "NimbyEarplugs"
+            "prefix": "NimbyEarplugs",
+            "logPrefix": "Earplugs"
         },
         {
             "folder": "NimbyNotes",
             "pboName": "NimbyNotes",
-            "prefix": "NimbyNotes"
+            "prefix": "NimbyNotes",
+            "logPrefix": "Notes"
         },
         {
             "folder": "NimbyTack",
             "pboName": "NimbyTack",
-            "prefix": "NimbyTack"
+            "prefix": "NimbyTack",
+            "logPrefix": "Tack"
         }
     ],
     "dev": {
         "folder": "../dev/NimbyDevHarness",
         "pboName": "NimbyDevHarness",
         "prefix": "NimbyDevHarness",
+        "logPrefix": "DevHarness",
         "keyAuthority": "nimby_dev"
     },
     "bootCheck": {

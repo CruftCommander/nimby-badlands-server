@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Copies a subscribed DayZ Steam Workshop item into this repository's vendor folder.
@@ -31,24 +32,20 @@ param(
     [ValidatePattern('^\d+$')]
     [string]$WorkshopId,
 
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
 $DayZAppId = '221100'
 
+# Write-Manifest comes from NimbyCommon.psm1.
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbySteam.psm1') -Force
-
-function Write-Manifest {
-    # Appends one UTF-8 line to the manifest log.
-    param(
-        [Parameter(Mandatory)][string]$LogPath,
-        [Parameter(Mandatory)][string]$Line
-    )
-    Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8
-}
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $logDir = Join-Path $RepoRoot 'logs'

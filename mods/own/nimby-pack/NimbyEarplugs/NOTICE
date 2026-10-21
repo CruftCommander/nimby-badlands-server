@@ -1,0 +1,19 @@
+NimbyEarplugs (Ears) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+Modifies the vanilla DayZ 1.30 MissionBase, MissionGameplay, and NotificationUI classes
+(Bohemia Interactive) to toggle the scene effect volume; no third-party mod code.
+
+Changes, newest first:
+
+- October 21, 2026: the self-test completion line prints the case count,
+  "[NIMBY][Earplugs] selftest complete; cases=N failures=M", so the
+  Build-NimbyPack boot check can fail a self-test that ran no cases or
+  stayed silent. No change to what Ears does in game.
+- October 19, 2026: Inputs.xml nests <sorting> inside <inputs>, so the binding
+  shows on the shared NIMBY tab in Options > Controls (NIMBY-T-007).
+- October 17, 2026: Phase 0 and Phase 1 in-game PASS; the vanilla notification
+  toast leak is fixed in NotificationUI (E4) and Inputs.xml gains its sorting
+  tag (E11).
+- October 16, 2026, Phase 1: the toggle reapplies the reduced level whenever
+  the scene volume drifts (E7-E10); 16 engine-free self-test cases.
+- October 16, 2026, Phase 0: N toggles the scene effect volume and logs the
+  vanilla reset points; the pack.json row lands with a stub addon.

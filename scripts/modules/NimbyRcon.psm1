@@ -15,15 +15,21 @@
 
     Also writes the throwaway BEServer_x64.cfg the server reads from <profiles>\BattlEye.
 
-    Reads   : nothing on disk.
-    Writes  : only the file given to Write-NimbyBeServerConfig.
-    Never   : logs or returns a password except through the parameter it was given.
+    Reads   : <profile>\BattlEye\BEServer_x64*.cfg (Clear-NimbyBeServerConfig, to redact).
+    Writes  : <profile>\BattlEye\BEServer_x64.cfg (Write-NimbyBeServerConfig); rewrites every
+              <profile>\BattlEye\BEServer_x64*.cfg with the RCon password redacted
+              (Clear-NimbyBeServerConfig); renames <profile>\BattlEye\BEServer_x64_active_*.cfg to
+              <name>.<stamp>.old (Move-NimbyStaleBeServerConfig).
+    Never   : deletes a file; logs or returns a password except through the parameter it was given.
 
     Runs in Windows PowerShell 5.1 and PowerShell 7. UDP only; never contacts anything but the
     address it is given.
 #>
 
 Set-StrictMode -Version Latest
+
+# Get-NimbyRandomString. Reuses the copy the calling script already loaded.
+Import-Module (Join-Path $PSScriptRoot 'NimbyCommon.psm1')
 
 $script:Crc32Table = $null
 
@@ -102,13 +108,7 @@ function ConvertFrom-NimbyRconPacket {
 function Get-NimbyRconPassword {
     # Random RCon password from the alphabet BattlEye accepts (letters and digits, max 32).
     param([ValidateRange(8, 32)][int]$Length = 20)
-
-    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-    $bytes = New-Object byte[] $Length
-    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
-    $chars = foreach ($b in $bytes) { $alphabet[$b % $alphabet.Length] }
-    return -join $chars
+    return (Get-NimbyRandomString -Alphabet 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' -Length $Length)
 }
 
 function Get-NimbyBeServerConfigLine {
@@ -263,7 +263,9 @@ function Send-NimbyRconCommand {
         return $result
     }
     finally {
-        $client.Dispose()
+        # Close() is public on every .NET the two shells run on; Dispose() is public only from
+        # .NET Framework 4.6, and a throw here would skip the caller's Stop-Process and redaction.
+        $client.Close()
     }
 }
 

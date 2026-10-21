@@ -1,5 +1,8 @@
-# NimbySteam.psm1 - locates Steam, its library folders, installed apps, and Workshop items.
-# Read-only: never writes to Steam folders. Runs in Windows PowerShell 5.1 and PowerShell 7.
+# NimbySteam.psm1 - locates Steam, its library folders, installed apps, Workshop items, and the
+# DayZ Server install (Steam first, then D:\DayZServer).
+# Reads: HKCU:\Software\Valve\Steam, libraryfolders.vdf, appmanifest_*.acf, and whether the
+# candidate folders exist. Read-only: never writes anywhere. Runs in Windows PowerShell 5.1 and
+# PowerShell 7.
 
 Set-StrictMode -Version Latest
 
@@ -167,4 +170,32 @@ function Find-WorkshopItemPath {
     return $null
 }
 
-Export-ModuleMember -Function Get-SteamRootPath, Get-SteamLibraryPath, Test-SteamAppFolder, Find-SteamAppPath, Find-SteamInstalledAppPath, Find-WorkshopItemPath
+function Find-DayZServerPath {
+    <#
+    .SYNOPSIS
+        Returns the DayZ Server install folder, or $null: the Steam app manifest (app 223350) in
+        any library, then a steamapps\common\DayZServer folder, then each Fallback folder. Every
+        candidate must hold DayZServer_x64.exe.
+    .PARAMETER Fallback
+        Folders tried after Steam. D:\DayZServer is the local replica built by Sync-LiveReplica.ps1.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [AllowEmptyCollection()][string[]]$LibraryPaths = @(),
+        [AllowEmptyCollection()][string[]]$Fallback = @('D:\DayZServer')
+    )
+
+    $candidates = @()
+    if ($LibraryPaths.Count -gt 0) {
+        $candidates += Find-SteamInstalledAppPath -LibraryPaths $LibraryPaths -AppId '223350' -RequiredFile 'DayZServer_x64.exe'
+        $candidates += Find-SteamAppPath -LibraryPaths $LibraryPaths -FolderName 'DayZServer' -RequiredFile 'DayZServer_x64.exe'
+    }
+    $candidates += $Fallback
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'DayZServer_x64.exe') -PathType Leaf)) { return $candidate }
+    }
+    return $null
+}
+
+Export-ModuleMember -Function Get-SteamRootPath, Get-SteamLibraryPath, Test-SteamAppFolder, Find-SteamAppPath, Find-SteamInstalledAppPath, Find-WorkshopItemPath, Find-DayZServerPath
