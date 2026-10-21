@@ -4,32 +4,32 @@
   DRAFT. Nothing here is live. Each <message> block is copied into db/messages.xml (then deployed
   per the README) at the restart that releases that mod, and never before: no instructions for a
   mod that is not on the server (Jeff, October 19, 2026). Keep each text at or under 160 characters
-  (the engine cap). Bindings named here are the defaults; players rebind under Options > Controls > Others.
+  (the engine cap). Bindings named here are the defaults; players rebind under Options > Controls, in the NIMBY tab (NIMBY-T-007, October 19, 2026).
 -->
 <messages>
-    <!-- Legs: apply at the Legs release. 155 characters. -->
+    <!-- Legs: apply at the Legs release. 159 characters. -->
     <message>
         <delay>0</delay>
         <onConnect>1</onConnect>
-        <text>Legs: double tap Left Shift to autorun. Any movement key, Shift, Space, fire, or raising your weapon stops it. Rebind it under Options > Controls > Others.</text>
+        <text>Legs: double tap Left Shift to autorun, on land or swimming. Any movement key, Shift, Space, fire, or raising a weapon stops it. Rebind under Controls > NIMBY.</text>
     </message>
-    <!-- Hands: apply at the Hands release. 158 characters. -->
+    <!-- Hands: apply at the Hands release. 159 characters. -->
     <message>
         <delay>0</delay>
         <onConnect>1</onConnect>
-        <text>Hands: hold O with an item in hands to offer it, or with empty hands to request one. Bind 'open or close pockets' in Controls so others can fill your pockets.</text>
+        <text>Hands: press O with an item in hands to offer it, or with empty hands to request one; press again to stop. Bind 'open or close pockets' under Controls > NIMBY.</text>
     </message>
-    <!-- Ears: apply at the Ears release. 95 characters. -->
+    <!-- Ears: apply at the Ears release. 94 characters. -->
     <message>
         <delay>0</delay>
         <onConnect>1</onConnect>
-        <text>Ears: press N to put earplugs in or take them out. Rebind it under Options > Controls > Others.</text>
+        <text>Ears: press N to put earplugs in or take them out. Rebind it under Options > Controls > NIMBY.</text>
     </message>
-    <!-- Scrawl: apply at the Scrawl release. 83 characters. -->
+    <!-- Scrawl: apply at the Scrawl release. 155 characters. -->
     <message>
         <delay>0</delay>
         <onConnect>1</onConnect>
-        <text>Scrawl: find paper and a pen to write a note. Look at a note and hold F to read it.</text>
+        <text>Scrawl: hold a pen and drop one sheet on it, or hold the sheet and drop the pen, then hold left mouse to write. Hold left mouse on a note in hands to read.</text>
     </message>
     <!-- Tack: apply at the Tack release. 138 characters. -->
     <message>

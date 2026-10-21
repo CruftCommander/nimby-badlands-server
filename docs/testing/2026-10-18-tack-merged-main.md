@@ -99,3 +99,27 @@ Build `@NIMBY-20261019-215218` (`main` `bb59038`), replica `D:\DayZServer`, inst
 Findings:
 
 - **NIMBY-T-011 (medium, Tack, persistence):** pinned notes from the October 19 evening are absent at the October 20 start, though one survived the first restart on October 19. No `NimbyTack` type exists in the replica mission's `db` folder, so the Central Economy has no entry for the pinned classes; storage keeps class names in a binary form, so their presence in `storage_999` could not be checked directly. Hypothesis, not proven: CE cleanup of entities with no types entry. The release gate already lists live loot rows for Tack's four pinned classes; verify the cause (types entries on the replica, then two restarts) before the release-gate restart-survival claim.
+
+## NIMBY-T-011 verification and mud-brick walls, October 20, 2026 (evening)
+
+Replica `types.xml` carries the four rows from `server/mission-overrides/db/types.tack.patch.xml` (lifetime 2592000; backup `logs\types.xml.bak-20261020-tack`). Server starts 18:05:44, 18:21:40, 18:24:46 (`profiles\main-round1`); D client `script_2026-10-20_18-25-58.log`.
+
+| Row | Result | Evidence |
+| --- | --- | --- |
+| T-011 restarts | PASS (two restarts) | Taped note on mud brick `pin fastener=tape ... surface=dz\data_takistan\data\penetration\mud_brick.bisurf ... offset=0.03 text=written health=12 nearby=1` 18:17:01.518 (4026.13 299.118 14111.5); after the 18:21:40 start, `read class=NimbyTack_PinnedNote_Tape length=34` 18:23:41.565 and `read class=NimbyTack_PinnedNote_Nail length=29` 18:23:56.512 (4039.81 298.9 14103.7); both still hang after the 18:24:46 start (Jeff) |
+| T-011 lifetime (2 h 20 min run, loose blank Paper as the control) | PASS | Start 18:32:12 (`DayZServer_x64_2026-10-20_18-32-12.RPT`); after about 3.5 h of uptime `read class=NimbyTack_PinnedNote_Tape length=34` 21:59:28.166 (4026.15 299.116 14111.5); the loose Paper (`Paper` lifetime 7200) is gone and the notes hang (Jeff). Cause confirmed: the pinned classes had no `types.xml` rows; the four rows from `types.tack.patch.xml` (lifetime 2592000) fix it. NIMBY-T-011 closed on the replica; the live rows ship with Tack's release |
+
+Findings:
+
+- **NIMBY-T-013 (low, Tack, rendering):** on the Takistan mud-brick wall the taped note clips into the stones that stand proud of the face (Jeff's screenshot, 18:17 note). The note hangs flat at `offset=0.03` from the single probe point, and the masonry relief is deeper than 3 cm. The 3 cm default is not reopened; candidate approaches for a feasibility study: a per-material offset for rough materials (as `unknownSurfaceOffsetMeters` does for surfaces with no material), or probing the sheet's corners and standing the note off the highest point. The same pin's physics normal `<0.821324, -0.074629, -0.565560>` and fire-geometry normal `<-0.706387, -0.005025, 0.707808>` point almost opposite ways (`probe:` lines 18:17:01.329 to .517); the pin uses the physics normal, and the note renders on the face the player stood at.
+- **NIMBY-T-014 (medium, Tack):** some mud-brick walls offer no Tape or Nail prompt at all (Jeff's screenshot, Epoxy Putty in hands, no prompt), with no server line (the action never started) and no client `probe:` line. `NimbyTackWorld.ProbeWall` (`nimbytack_world.c:62-150`) logs only `no-hit` and `not-wall-angle`; `no-target`, `no-object`, `target-not-building`, `out-of-reach`, and `no-physics-normal` return without a line, so the cause cannot be read from any log. Next: a feasibility study, starting with debug lines for every probe refusal reason and the wall's class and position.
+
+### Corrections to the October 20 sections (self-review, October 20, 2026)
+
+The rows above stay as filled; these lines supersede them where they differ.
+
+- **T-011 lifetime row:** the run lasted 3 h 28 min (`DayZServer_x64_2026-10-20_18-32-12.RPT`, 18:32:12 to 22:00:18), not the 2 h 20 min in the row label. "Cause confirmed" is narrowed: the four `types.xml` rows are shown sufficient for notes to survive two restarts and 3.5 h of uptime; how long a pinned note without a row lasts was not measured, and no pinned note without a row ran as a control.
+- **T-013:** the value logged as the "fire-geometry normal" is `result.dir`, the ray direction (`nimbytack_world.c:348`), not a surface normal. The physics normal is flipped toward the player (`:287-290`), so the two point almost opposite ways by construction; that says nothing about the wall. Tack Part B renames the field `ray=`.
+- **T-014 silent reasons corrected:** `no-physics-normal` does log (`probe: physics ray had no building hit` or `probe: physics ray returned a zero normal`, `nimbytack_world.c:278`, `:283`); `no-building-hit` (`:148`) is silent; and `ActionCondition` returns silently before the probe on a tool with no portion left, no nail for the hammer, or no single unstacked sheet (`nimbytack_actions.c:75-91`).
+- **TK-R3-6:** 49.1 m is the horizontal distance; `CountPinnedNear` counts in 3D (`GetObjectsAtPosition3D`). The heights differ by 0.33 m (320.928 against 320.598), so the 3D distance is also 49.1 m, inside the 50 m radius.
+- **S1:** "one sheet in the world" means one sheet existed afterwards, in L's inventory (`takedown ... sheet=inventory`, 16:48:48.507).
