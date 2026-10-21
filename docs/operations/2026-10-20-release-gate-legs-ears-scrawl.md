@@ -6,10 +6,10 @@ Prepared October 20, 2026, after the two-client session (records committed at `1
 
 | Mod | Addon | Gate status | Why |
 | --- | --- | --- | --- |
-| Legs | `NimbyAutorun` | Ready | Two-client rows PASS; NIMBY-T-005 fixed (`docs/testing/2026-10-19-legs-phase1.md`, October 20 section) |
+| Legs | `NimbyAutorun` | Ready after row G-1 | Two-client rows PASS; NIMBY-T-005 fixed. Row G-1 (ladder, solo) runs before the gate; P2-5 (vehicle) and P2-10, P2-11 (dev harness) are waived for release 1 as known gaps (Jeff, October 20, 2026; `docs/testing/2026-10-19-legs-phase1.md`) |
 | Ears | `NimbyEarplugs` | Ready | EP-002 PASS (`docs/testing/2026-10-16-ears-phase0.md`) |
 | Scrawl | `NimbyNotes` | Ready | Second-player read and Phase 2a rows PASS; SC-2a-6 not provable in vanilla (`docs/testing/2026-10-16-scrawl-phase0.md`) |
-| Tack | `NimbyTack` | Held | NIMBY-T-011: notes missing after later restarts; verification running on the replica (types rows, two restarts, a 2-hour run) |
+| Tack | `NimbyTack` | Held | NIMBY-T-013 and NIMBY-T-014: mud-brick rows TK-P1 to TK-P10 on `study/tack-t013-t014`. NIMBY-T-011 is closed on the replica; its four `types.xml` rows ship with Tack |
 | Hands | `NimbyHands` | Held | NIMBY-T-010 (high): no transfer completes; feasibility study brief `logs\brief-hands-t010-study-20261020.md` |
 
 ## 2. Decisions Jeff makes before step 1
@@ -24,7 +24,7 @@ Prepared October 20, 2026, after the two-client session (records committed at `1
 
 | # | Step | Owner | State |
 | --- | --- | --- | --- |
-| 0 | Finish the NIMBY-T-011 replica test first. `Sync-LiveReplica.ps1` overwrites the replica mission, which removes the test spawn, the test kit (`init.c`), and the Tack rows in `types.xml` | Jeff | Running |
+| 0 | Finish the replica tests first: Legs row G-1, the Tack mud-brick rows, the Hands diagnostic. `Sync-LiveReplica.ps1` overwrites the replica mission, which removes the test spawn, the test kit (`init.c`), and the Tack rows in `types.xml` | Jeff | Pending |
 | 1 | Refresh the WinSCP mirror from live (download only; the mirror is never written to live), then run `Sync-LiveReplica.ps1`: live `storage_1` becomes `storage_998`, and the replica mission is restored from the mirror | Jeff | Ready |
 | 2 | Build the release artifact (Legs, Ears, Scrawl only) with `-Qualification` (`storageAutoFix = 0`) and boot it on instance 998. RPT: 0 `Scripted variables corrupted`, 0 `SCRIPT (E)`, no new save-load errors | Jeff runs; Claude reads the logs | Blocked on decisions 1 and 2 |
 | 3 | Vanilla control boot on the same build and storage copy; compare the save-load lines | Jeff runs; Claude compares | Blocked on decision 3 |
