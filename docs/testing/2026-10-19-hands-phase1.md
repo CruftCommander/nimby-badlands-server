@@ -212,13 +212,28 @@ Online cases (`legs-unreadable-payload`, `legs-idx-9-angle-0`, `legs-flood-50-in
 
 ### In-game rows (owed; two clients, Jeff on D and L)
 
-Server (the standing join password comes from `NIMBY_JOIN_PASSWORD`, so no `-JoinPassword`):
+#### Setup notes (from the aborted start of October 21, 2026, 14:54 to 15:05)
+
+Server. The standing join password comes from `NIMBY_JOIN_PASSWORD`, so no `-JoinPassword`. Pass `-BuildPath` as an absolute path: the script hands the value to the server unchanged and the server's working directory is `D:\DayZServer`, so a relative `.\build\...` never loads the pack (see the finding below).
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath 'D:\DayZServer' -InstanceId 999 -BuildPath .\build\@NIMBY-20261021-143500 -ProfileName hands-p3
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath 'D:\DayZServer' -InstanceId 999 -BuildPath 'D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-20261021-143500' -ProfileName hands-p3
 ```
 
-The `-Dev` companion is picked up from the build log (or pass `-DevPath .\build\@NIMBY-Dev-20261021-143500`); both clients need `@NIMBY-20261021-143500` and the `-Dev` folder. Create `profiles\hands-p3\NimbyHands\debug` on the server and `NimbyHands\debug` in both client profiles. For cost path B put the word `step2-refuse` in `profiles\hands-p3\NimbyDevHarness\forge` before the start; the next real transfer's step 2 is refused once. Read the server script log, not the RPT.
+The `-Dev` companion is picked up from the build log as an absolute path (or pass `-DevPath 'D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-Dev-20261021-143500'`). The script runs the server in its own window and waits for Enter; Enter sends the RCON `#shutdown` and the stop path redacts the config password and the BattlEye config. Create `profiles\hands-p3\NimbyHands\debug` on the server (done on this machine) and `NimbyHands\debug` in both client profiles. For cost path B put the word `step2-refuse` in `profiles\hands-p3\NimbyDevHarness\forge` before the start; the next real transfer's step 2 is refused once. Read the server script log, not the RPT.
+
+Clients. The pack must come before the harness in `-mod=`: the harness's `config.cpp` requires `NimbyAutorun` and `NimbyHands`, and the engine loads `-mod=` folders in the order given, so a harness listed first (or a pack that fails to load) compiles the harness without the classes it extends. Both folders are copied from this worktree (D is this machine; on L use wherever they were copied). The launch parameter, with the pack first:
+
+```text
+-mod=D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-20261021-143500;D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-Dev-20261021-143500
+```
+
+With the harness listed first the client showed two dialogs, quoted as Jeff reported them on October 21, 2026:
+
+- `Addon NimbyDevHarness requires addon NimbyAutorun`
+- `Bad type NimbyHandsWorldTransfer` at `nimbydevharness.c:223`
+
+Finding (server side, same class, NIMBY-T-013): the 14:54 start passed `-BuildPath .\build\@NIMBY-20261021-143500` and the server's command line carried `-mod=.\build\@NIMBY-20261021-143500;D:\...\@NIMBY-Dev-20261021-143500` verbatim (`logs\testserver-20261021-145443\testserver.log`, `SERVER START`). Relative to `D:\DayZServer` that folder does not exist, so only the harness loaded: RPT `DayZServer_x64_2026-10-21_14-54-43.RPT` lines 265 to 271, `SCRIPT (E): @"NimbyDevHarness/scripts/4_world/nimbydevharness.c,223": Bad type 'NimbyHandsWorldTransfer'` and `Can't compile "World" script module!` at 15:04:58, then `Failed to load entities script!` and an access violation at 15:05:15 (`crash_2026-10-21_14-54-43.log`). No client connected; nothing was written to `storage_999` by Hands. The script's stop path still ran: `STOP requested by server-exited`, `SERVER EXITED before stop code=-1073741819`, `CONFIG password redacted`, `BE CONFIG redacted` (the `RConPassword` line now holds an 8-character marker). `Start-NimbyTestServer.ps1` is orchestrator-owned; the fix to propose to Jeff is to resolve `-BuildPath`, `-ServerModPath`, and `-DevPath` to absolute paths (`Resolve-Path`) before building the `-mod=` argument, and to refuse a `-mod=` folder that does not exist from the server's working directory. The boot check in `Build-NimbyPack.ps1` is unaffected because it always passes absolute paths.
 
 | Row | Scenario | Acceptance | Result |
 | --- | --- | --- | --- |
