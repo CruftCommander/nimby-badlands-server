@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Runs the local DayZ server with a qualified @NIMBY build for an in-game test, stops it
@@ -6,14 +7,21 @@
 
 .DESCRIPTION
     1. Picks the build: -BuildPath, or the newest build\@NIMBY-* whose logs\build-<stamp>\build.log
-       ends in "SUMMARY PASS". A build that recorded FAIL or UNKNOWN is never picked up by itself.
-       The build log also names the -Server and -Dev companion outputs, loaded when present.
+       ends in "SUMMARY PASS". A build that recorded FAIL or UNKNOWN, or has no build log, is
+       never picked up by itself and is refused as -BuildPath unless -Force is given. The build
+       log also names the -Server and -Dev companion outputs, loaded when present. Every PBO is
+       hashed and compared with the sha256 the build log recorded for it ("ADDON OK"); a PBO
+       that changed, went missing, or was added since the build is a HASH MISMATCH and is
+       refused unless -Force is given.
     2. Copies nimby.bikey (and the dev key when a -Dev build is loaded) into the server's keys
        folder so clients that load the pack pass signature verification (verifySignatures = 2).
     3. Writes a throwaway server config from pack.json "testServer" with the join password from
-       -JoinPassword, else the one saved in the reusable profile, else a random one; BattlEye = 1 and storageAutoFix = 0 (a qualification run must show corruption, not hide
-       it), writes <profile>\BattlEye\BEServer_x64.cfg with a random RCON password, starts the
-       server, and waits for you to press Enter.
+       -JoinPassword, else the one saved in the reusable profile, else the standing password from
+       NIMBY_JOIN_PASSWORD or scripts\testserver.local.json, else a random one; BattlEye = 1 and
+       storageAutoFix = 0 (a qualification run must show corruption, not hide it), writes
+       <profile>\BattlEye\BEServer_x64.cfg with a random RCON password, starts the server, and
+       waits for Enter or Ctrl+C (both stop it the same way) or for the server to
+       exit by itself.
     4. Sends "#shutdown" over RCON, waits up to -ShutdownTimeoutSeconds for the server to exit,
        and only then stops the process by force. Redacts both passwords from the config files.
     5. Writes nimby-events.log (every [NIMBY] line from this run) and a per-result count to
@@ -23,20 +31,27 @@
     reuses <repo>\profiles\<name>\ (git-ignored), so $profile:<Prefix>\ state and the server's
     storage_<instanceId> carry over between runs.
 
-    Reads   : pack.json, build\@NIMBY-*, logs\build-*\build.log, the local DayZ Server install.
+    Reads   : pack.json, build\@NIMBY-*, logs\build-*\build.log, the local DayZ Server install,
+              the NIMBY_JOIN_PASSWORD environment variable, scripts\testserver.local.json
+              (git-ignored), <profile>\join-password.txt with -ProfileName, the Steam registry
+              key and library files (to find the server), and the process list.
     Writes  : <repo>\logs\testserver-<stamp>\ (config, summary, and the server profile unless
               -ProfileName), <repo>\profiles\<ProfileName>\ with -ProfileName, and
               <server>\keys\<authority>.bikey (added, never overwritten if different). The server
               writes its test persistence to mpmissions\<mission>\storage_<instanceId>; pack.json
               must name 998 or 999.
     Secrets : the RCON password is a random throwaway value, never shown or logged. The join
-              password is random unless -JoinPassword or a saved profile value supplies it; it is
-              shown once on screen and, with -ProfileName, kept in <profile>\join-password.txt
-              (git-ignored) so the next run of that profile reuses it. The manifest records only
-              where the join password came from, never the value. Both passwords sit in config
-              files under the git-ignored logs or profiles folder while the server runs and are
-              redacted once it stops.
-    Never   : opens a firewall port, touches storage_1, or deletes a file.
+              password comes from -JoinPassword, else <profile>\join-password.txt, else the
+              standing value in the NIMBY_JOIN_PASSWORD environment variable or
+              <repo>\scripts\testserver.local.json ("joinPassword"; git-ignored by *.local.json),
+              else a random value. It is shown once on screen. With -ProfileName an explicit or
+              random value is saved to <profile>\join-password.txt (git-ignored) and reused by
+              later runs of that profile; a standing value is never saved there. The manifest
+              records only the source, never the value. Both passwords sit in config files under
+              the git-ignored logs or profiles folder while the server runs and are redacted once
+              it stops.
+    Never   : opens a firewall port, touches storage_1, deletes a file, or starts a server while
+              another DayZServer_x64 process runs.
 
     Runs in Windows PowerShell 5.1 and PowerShell 7. No elevation needed. Windows Firewall may
     ask once to allow DayZServer_x64.exe; allow private networks only.
@@ -58,8 +73,10 @@
     A fixed join password (8 to 32 printable characters, no space, double quote, or semicolon)
     instead of a random one, for a tester who
     connects across sessions. With -ProfileName it is saved to <profile>\join-password.txt and
-    reused by later runs of that profile that omit -JoinPassword. Delete that file to go back to
-    random passwords.
+    reused by later runs of that profile that omit -JoinPassword. When omitted, the standing
+    password (environment variable NIMBY_JOIN_PASSWORD, else scripts\testserver.local.json) is
+    used before falling back to a random value. Delete join-password.txt to let a profile pick up
+    the standing value.
 
 .PARAMETER ShutdownTimeoutSeconds
     How long to wait for the server to exit after the RCON #shutdown before stopping the process.
@@ -68,6 +85,10 @@
     Boot with no -mod= at all: the same-build vanilla control the release gate compares against
     (shared rules 9.2). No build is selected, no key is installed, and -BuildPath, -ServerModPath,
     and -DevPath are refused.
+
+.PARAMETER Force
+    Run a -BuildPath build that did not record SUMMARY PASS, or whose PBOs no longer match the
+    sha256 values in its build log. The manifest records BUILD FORCED and each HASH MISMATCH.
 
 .PARAMETER InstanceId
     Override pack.json testServer.instanceId for this run. On the local replica built by
@@ -82,7 +103,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepoRoot,
     [Alias('ModPath')][string]$BuildPath,
     [string]$ServerModPath,
     [string]$DevPath,
@@ -91,38 +112,34 @@ param(
     [ValidatePattern('^[\x21\x23-\x3a\x3c-\x7e]{8,32}$')][string]$JoinPassword,
     [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
     [ValidateSet(998, 999)][int]$InstanceId,
-    [switch]$Vanilla
+    [switch]$Vanilla,
+    [switch]$Force
 )
 
 Set-StrictMode -Version Latest
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
+# script is started with -File, so the default is resolved here.
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
+# Write-Manifest, Test-TestInstanceId, Get-ServerArgument, Read-ServerLogText, the running-server
+# guard, the random-string generator, and the local settings file come from NimbyCommon.psm1.
+Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbySteam.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbyRcon.psm1') -Force
 
-function Write-Manifest {
-    param(
-        [Parameter(Mandatory)][string]$LogPath,
-        [Parameter(Mandatory)][string]$Line
-    )
-    Add-Content -LiteralPath $LogPath -Value $Line -Encoding utf8
-}
-
-function Test-TestInstanceId {
-    # Shared rules, section 8: test storage is storage_998 and storage_999 only.
-    param([Parameter(Mandatory)][int]$InstanceId)
-    return ($InstanceId -eq 998 -or $InstanceId -eq 999)
-}
-
 function Read-BuildLog {
-    # Parses one build.log written by Build-NimbyPack.ps1. Returns the verdict and the outputs
-    # it names; a line reading "SERVERMOD none ..." or "DEV none ..." yields $null for that output.
+    # Parses one build.log written by Build-NimbyPack.ps1. Returns the verdict, the outputs it
+    # names (a line reading "SERVERMOD none ..." or "DEV none ..." yields $null for that output),
+    # and Hashes: "<label>|<name>.pbo" to the sha256 of each "ADDON OK" line.
     param([Parameter(Mandatory)][string]$Path)
 
-    $result = [PSCustomObject]@{ Path = $Path; Verdict = 'MISSING'; ModPath = $null; ServerModPath = $null; DevPath = $null }
+    $result = [PSCustomObject]@{ Path = $Path; Verdict = 'MISSING'; ModPath = $null; ServerModPath = $null; DevPath = $null; Hashes = @{} }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $result }
     $result.Verdict = 'INCOMPLETE'
     foreach ($line in (Get-Content -LiteralPath $Path -Encoding utf8)) {
+        $addon = [regex]::Match($line, '^ADDON OK (?<pbo>\S+) \[(?<label>[^\]]+)\] .*\bsha256=(?<h>[0-9A-Fa-f]{64})\s*$')
+        if ($addon.Success) { $result.Hashes[("{0}|{1}.pbo" -f $addon.Groups['label'].Value, $addon.Groups['pbo'].Value)] = $addon.Groups['h'].Value.ToUpperInvariant(); continue }
         $summary = [regex]::Match($line, '^SUMMARY (?<v>PASS|FAIL|UNKNOWN) mod=(?<p>.+)$')
         if ($summary.Success) { $result.Verdict = $summary.Groups['v'].Value; $result.ModPath = $summary.Groups['p'].Value.Trim(); continue }
         $server = [regex]::Match($line, '^SERVERMOD (?<p>.+)$')
@@ -180,36 +197,61 @@ function Get-QualifiedModBuild {
 function Get-RandomJoinPassword {
     # Random 12-character join password from an unambiguous alphabet.
     param([int]$Length = 12)
+    return (Get-NimbyRandomString -Alphabet 'abcdefghjkmnpqrstuvwxyz23456789' -Length $Length)
+}
 
-    $alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
-    $bytes = New-Object byte[] $Length
-    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
-    $chars = foreach ($b in $bytes) { $alphabet[$b % $alphabet.Length] }
-    return -join $chars
+function Get-StandingJoinPassword {
+    # The standing test-server join password, never a literal in this file: NIMBY_JOIN_PASSWORD,
+    # else "joinPassword" in <repo>\scripts\testserver.local.json (git-ignored by *.local.json).
+    # Returns Password and Source, or $null when neither is set. An invalid value or an unreadable
+    # file is reported (never the value) and skipped so the next source is tried.
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $pattern = '^[\x21\x23-\x3a\x3c-\x7e]{8,32}$'
+    $fromEnv = [System.Environment]::GetEnvironmentVariable('NIMBY_JOIN_PASSWORD')
+    if ($fromEnv) {
+        if ($fromEnv -match $pattern) { return [pscustomobject]@{ Password = $fromEnv; Source = 'env' } }
+        Write-Warning 'Ignoring NIMBY_JOIN_PASSWORD: not 8 to 32 printable characters without space, double quote, or semicolon.'
+    }
+    $fromFile = Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'joinPassword'
+    if ($null -ne $fromFile) {
+        $value = [string]$fromFile
+        if ($value -match $pattern) { return [pscustomobject]@{ Password = $value; Source = 'local-file' } }
+        Write-Warning ("Ignoring joinPassword in {0}: not 8 to 32 printable characters without space, double quote, or semicolon." -f (Get-NimbyLocalSettingPath -RepoRoot $RepoRoot))
+    }
+    return $null
 }
 
 function Resolve-JoinPassword {
-    # The join password for this run and where it came from: the -JoinPassword value (saved into
-    # a reusable profile), else the value saved by an earlier run of that profile, else random.
+    # The join password for this run and where it came from: -JoinPassword (saved into a reusable
+    # profile), else the value saved by an earlier run of that profile, else the standing value
+    # (environment variable, then scripts\testserver.local.json; never saved), else random (saved).
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Requested', Justification = 'serverDZ.cfg requires plaintext; local test value.')]
     param(
         [string]$Requested,
         [Parameter(Mandatory)][string]$ProfilePath,
-        [bool]$UseProfile
+        [bool]$UseProfile,
+        [AllowNull()][object]$Standing
     )
 
+    $pattern = '^[\x21\x23-\x3a\x3c-\x7e]{8,32}$'
     $file = Join-Path $ProfilePath 'join-password.txt'
     if ($Requested) {
         if ($UseProfile) { Set-Content -LiteralPath $file -Value $Requested -Encoding ascii -NoNewline }
         return [pscustomobject]@{ Password = $Requested; Source = 'parameter' }
     }
     if ($UseProfile -and (Test-Path -LiteralPath $file)) {
-        $saved = (Get-Content -LiteralPath $file -Raw).Trim()
-        if ($saved -match '^[\x21\x23-\x3a\x3c-\x7e]{8,32}$') { return [pscustomobject]@{ Password = $saved; Source = 'profile' } }
+        # Get-Content -Raw returns $null for an empty file; .Trim() on $null fails under strict mode.
+        $raw = Get-Content -LiteralPath $file -Raw
+        $saved = ''
+        if ($null -ne $raw) { $saved = $raw.Trim() }
+        if ($saved -match $pattern) { return [pscustomobject]@{ Password = $saved; Source = 'profile' } }
         Write-Warning ("Ignoring {0}: not 8 to 32 printable characters without space, double quote, or semicolon." -f $file)
     }
-    return [pscustomobject]@{ Password = (Get-RandomJoinPassword); Source = 'random' }
+    if ($null -ne $Standing) { return $Standing }
+    $random = Get-RandomJoinPassword
+    if ($UseProfile) { Set-Content -LiteralPath $file -Value $random -Encoding ascii -NoNewline }
+    return [pscustomobject]@{ Password = $random; Source = 'random' }
 }
 
 function Get-TestServerConfigLine {
@@ -249,29 +291,6 @@ function Get-TestServerConfigLine {
     )
 }
 
-function Get-ServerArgument {
-    # Builds the DayZ server argument list. Several -mod folders join with ';' inside one
-    # argument; -servermod= is present only when a server-only output is given.
-    param(
-        [Parameter(Mandatory)][string]$ConfigPath,
-        [Parameter(Mandatory)][string]$ProfilePath,
-        [string[]]$ModPath = @(),
-        [string]$ServerModPath,
-        [Parameter(Mandatory)][int]$Port
-    )
-
-    $arguments = @(
-        "-config=$ConfigPath",
-        "-port=$Port",
-        "-profiles=$ProfilePath"
-    )
-    # -Vanilla passes no mod folders; the server then runs with no -mod= argument at all.
-    if ($ModPath.Count -gt 0) { $arguments += ("-mod={0}" -f ($ModPath -join ';')) }
-    if ($ServerModPath) { $arguments += "-servermod=$ServerModPath" }
-    $arguments += '-dologs', '-adminlog', '-freezecheck'
-    return $arguments
-}
-
 function Get-AddonHashLine {
     # One "ADDON <label> <pbo> sha256=<hash>" line per PBO under <path>\addons, for the manifest.
     param(
@@ -286,6 +305,37 @@ function Get-AddonHashLine {
         $lines += ("ADDON {0} {1} sha256={2}" -f $Label, $pbo.Name, (Get-FileHash -LiteralPath $pbo.FullName -Algorithm SHA256).Hash)
     }
     return $lines
+}
+
+function Get-BuildHashMismatch {
+    # Compares the PBOs now under <Path>\addons with the sha256 values the build log recorded for
+    # Label (from Read-BuildLog). Returns one line per PBO that changed, went missing, or was
+    # added since the build; empty when every PBO matches.
+    param(
+        [Parameter(Mandatory)][object]$Build,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    $expected = @{}
+    foreach ($key in $Build.Hashes.Keys) {
+        if ($key.StartsWith("$Label|", [System.StringComparison]::OrdinalIgnoreCase)) { $expected[$key.Substring($Label.Length + 1)] = $Build.Hashes[$key] }
+    }
+    $actual = @{}
+    foreach ($line in (Get-AddonHashLine -Path $Path -Label $Label)) {
+        $match = [regex]::Match($line, '^ADDON \S+ (?<name>\S+) sha256=(?<h>[0-9A-F]{64})$')
+        if ($match.Success) { $actual[$match.Groups['name'].Value] = $match.Groups['h'].Value }
+    }
+
+    $problems = @()
+    foreach ($name in @($expected.Keys | Sort-Object)) {
+        if (-not $actual.ContainsKey($name)) { $problems += "$Label $name missing (build log sha256=$($expected[$name]))" }
+        elseif ($actual[$name] -ne $expected[$name]) { $problems += "$Label $name sha256=$($actual[$name]) build log sha256=$($expected[$name])" }
+    }
+    foreach ($name in @($actual.Keys | Sort-Object)) {
+        if (-not $expected.ContainsKey($name)) { $problems += "$Label $name not in the build log" }
+    }
+    return $problems
 }
 
 function Install-ServerKey {
@@ -337,29 +387,6 @@ function Get-NimbyEventSummary {
     return [PSCustomObject]@{ Lines = $lines; Counts = $counts }
 }
 
-function Read-ServerLogText {
-    # Reads every RPT and script log in the profile folder written since -Since, shared-read.
-    # The -Since filter keeps a reused profile's earlier runs out of this run's summary.
-    param(
-        [Parameter(Mandatory)][string]$ProfilePath,
-        [Parameter(Mandatory)][datetime]$Since
-    )
-
-    $builder = New-Object System.Text.StringBuilder
-    if (-not (Test-Path -LiteralPath $ProfilePath)) { return '' }
-    foreach ($file in Get-ChildItem -LiteralPath $ProfilePath -File | Where-Object { ($_.Extension -ieq '.rpt' -or $_.Name -like 'script*.log') -and $_.LastWriteTime -ge $Since }) {
-        $stream = New-Object System.IO.FileStream($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        try {
-            $reader = New-Object System.IO.StreamReader($stream)
-            [void]$builder.AppendLine($reader.ReadToEnd())
-        }
-        finally {
-            $stream.Dispose()
-        }
-    }
-    return $builder.ToString()
-}
-
 function Invoke-TestServerShutdown {
     # Graceful stop: RCON #shutdown, wait, then and only then a process stop. Returns manifest lines.
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'RconPassword', Justification = 'BERCon transports the password as ASCII; throwaway local test value.')]
@@ -383,8 +410,39 @@ function Invoke-TestServerShutdown {
         $lines += "SERVER still running ${TimeoutSeconds}s after #shutdown"
     }
     Stop-Process -Id $Process.Id -Force
+    # BattlEye holds BEServer_x64_active_*.cfg until the process is gone; the redaction follows.
+    [void]$Process.WaitForExit(5000)
     $lines += "SERVER KILLED pid=$($Process.Id) (graceful stop did not complete; treat this run's storage as suspect)"
     return $lines
+}
+
+function Wait-TestServerStopKey {
+    # Waits for Enter or Ctrl+C, or for the server to exit by itself, and returns which one. Ctrl+C
+    # is read as a key, so PowerShell does not stop the pipeline and the caller's finally block
+    # still runs every cmdlet: the RCON shutdown, Stop-Process, the redaction, and the log lines.
+    # Without a console (redirected input or a non-console host) it falls back to Read-Host.
+    param([Parameter(Mandatory)][System.Diagnostics.Process]$Process)
+
+    if ([Console]::IsInputRedirected -or $Host.Name -ne 'ConsoleHost') {
+        [void](Read-Host)
+        return 'input'
+    }
+    $previous = [Console]::TreatControlCAsInput
+    [Console]::TreatControlCAsInput = $true
+    try {
+        while ($true) {
+            if ($Process.HasExited) { return 'server-exited' }
+            while ([Console]::KeyAvailable) {
+                $key = [Console]::ReadKey($true)
+                if ($key.Key -eq [ConsoleKey]::Enter) { return 'enter' }
+                if ($key.Key -eq [ConsoleKey]::C -and ($key.Modifiers -band [ConsoleModifiers]::Control)) { return 'ctrl-c' }
+            }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    finally {
+        [Console]::TreatControlCAsInput = $previous
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -416,6 +474,7 @@ try {
 
     # Build selection ---------------------------------------------------------
     $logRoot = Join-Path $RepoRoot 'logs'
+    $build = $null
     if ($Vanilla) {
         if ($BuildPath -or $ServerModPath -or $DevPath) { throw '-Vanilla boots with no mod; drop -BuildPath, -ServerModPath, and -DevPath.' }
         Write-Manifest -LogPath $manifest -Line 'BUILD none (vanilla control boot)'
@@ -423,10 +482,17 @@ try {
     elseif ($BuildPath) {
         if (-not (Test-ModFolder -Path $BuildPath)) { throw "No addons\*.pbo under -BuildPath '$BuildPath'." }
         $buildLogPath = Get-BuildLogForBuild -BuildPath $BuildPath -LogRoot $logRoot -ModFolderName $pack.modFolderName
-        $build = $null
         if ($buildLogPath) { $build = Read-BuildLog -Path $buildLogPath }
-        if ($null -ne $build) { Write-Manifest -LogPath $manifest -Line ("BUILD explicit verdict={0} log={1}" -f $build.Verdict, $build.Path) }
+        $explicitVerdict = 'UNKNOWN'
+        if ($null -ne $build) {
+            $explicitVerdict = $build.Verdict
+            Write-Manifest -LogPath $manifest -Line ("BUILD explicit verdict={0} log={1}" -f $build.Verdict, $build.Path)
+        }
         else { Write-Manifest -LogPath $manifest -Line 'BUILD explicit verdict=UNKNOWN (no build.log for this folder)' }
+        if ($explicitVerdict -ne 'PASS') {
+            if (-not $Force) { throw "-BuildPath '$BuildPath' recorded $explicitVerdict, not SUMMARY PASS. Pass -Force to run it anyway." }
+            Write-Manifest -LogPath $manifest -Line "BUILD FORCED verdict=$explicitVerdict by -Force"
+        }
         if (-not $ServerModPath -and $null -ne $build -and $build.ServerModPath) { $ServerModPath = $build.ServerModPath }
         if (-not $DevPath -and $null -ne $build -and $build.DevPath) { $DevPath = $build.DevPath }
     }
@@ -447,26 +513,32 @@ try {
     if ($ServerModPath) { foreach ($line in (Get-AddonHashLine -Path $ServerModPath -Label 'server')) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($DevPath) { foreach ($line in (Get-AddonHashLine -Path $DevPath -Label 'dev')) { Write-Manifest -LogPath $manifest -Line $line } }
 
+    # The PBOs must still be the ones the build log verified.
+    if ($null -ne $build -and $build.Verdict -ne 'MISSING') {
+        $mismatch = @(Get-BuildHashMismatch -Build $build -Path $BuildPath -Label 'client')
+        if ($ServerModPath) { $mismatch += @(Get-BuildHashMismatch -Build $build -Path $ServerModPath -Label 'server') }
+        if ($DevPath) { $mismatch += @(Get-BuildHashMismatch -Build $build -Path $DevPath -Label 'dev') }
+        foreach ($line in $mismatch) { Write-Manifest -LogPath $manifest -Line "HASH MISMATCH $line" }
+        if ($mismatch.Count -eq 0) { Write-Manifest -LogPath $manifest -Line 'HASH OK every PBO matches its build log sha256' }
+        elseif (-not $Force) { throw ("HASH MISMATCH: {0} PBO(s) differ from {1} (first: {2}). Rebuild, or pass -Force to run it anyway." -f $mismatch.Count, $build.Path, $mismatch[0]) }
+        else { Write-Manifest -LogPath $manifest -Line 'HASH MISMATCH accepted by -Force' }
+    }
+    elseif (-not $Vanilla) { Write-Manifest -LogPath $manifest -Line 'HASH unchecked (no build log for this folder)' }
+
     # Server install ----------------------------------------------------------
     if (-not $ServerPath) {
         $steamCandidates = @()
         if (${env:ProgramFiles(x86)}) { $steamCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Steam') }
         $steamRoot = Get-SteamRootPath -Candidates $steamCandidates
-        $candidates = @()
-        if ($null -ne $steamRoot) {
-            $libraries = @(Get-SteamLibraryPath -SteamRoot $steamRoot)
-            if ($libraries.Count -gt 0) {
-                $candidates += Find-SteamInstalledAppPath -LibraryPaths $libraries -AppId '223350' -RequiredFile 'DayZServer_x64.exe'
-                $candidates += Find-SteamAppPath -LibraryPaths $libraries -FolderName 'DayZServer' -RequiredFile 'DayZServer_x64.exe'
-            }
-        }
-        $candidates += 'D:\DayZServer'
-        foreach ($candidate in $candidates) {
-            if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'DayZServer_x64.exe'))) { $ServerPath = $candidate; break }
-        }
+        $libraries = @()
+        if ($null -ne $steamRoot) { $libraries = @(Get-SteamLibraryPath -SteamRoot $steamRoot) }
+        $ServerPath = Find-DayZServerPath -LibraryPaths $libraries
     }
     if (-not $ServerPath) { throw 'No DayZ Server install found; pass -ServerPath.' }
     Write-Manifest -LogPath $manifest -Line "SERVER $ServerPath"
+    # Checked before any key is installed or any password is written.
+    $runningServer = Get-RunningServerMessage
+    if ($runningServer) { throw $runningServer }
     if (-not (Test-Path -LiteralPath (Join-Path $ServerPath ("mpmissions\{0}" -f $test.mission)))) { throw "Mission '$($test.mission)' not found in $ServerPath\mpmissions." }
     Write-Manifest -LogPath $manifest -Line ("STORAGE instanceId={0} path={1}" -f $test.instanceId, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $test.mission, $test.instanceId)))
 
@@ -487,11 +559,11 @@ try {
     New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
 
     # Configs -----------------------------------------------------------------
-    $join = Resolve-JoinPassword -Requested $JoinPassword -ProfilePath $profileDir -UseProfile ([bool]$ProfileName)
+    $join = Resolve-JoinPassword -Requested $JoinPassword -ProfilePath $profileDir -UseProfile ([bool]$ProfileName) -Standing (Get-StandingJoinPassword -RepoRoot $RepoRoot)
     $password = $join.Password
     Write-Manifest -LogPath $manifest -Line ("JOIN PASSWORD source={0}" -f $join.Source)
     $config = Join-Path $runDir 'serverDZ.test.cfg'
-    Set-Content -LiteralPath $config -Value (Get-TestServerConfigLine -Hostname $test.hostname -Password $password -MaxPlayers ([int]$test.maxPlayers) -InstanceId ([int]$test.instanceId) -Mission $test.mission) -Encoding utf8
+    Set-Content -LiteralPath $config -Value (Get-TestServerConfigLine -Hostname $test.hostname -Password $password -MaxPlayers ([int]$test.maxPlayers) -InstanceId ([int]$test.instanceId) -Mission $test.mission) -Encoding ascii
 
     $rconPassword = Get-NimbyRconPassword
     $rconPort = [int]$test.port + 3
@@ -512,8 +584,9 @@ try {
     Write-Information -MessageData ("Server starting on port {0}. Join password: {1}" -f $test.port, $password) -InformationAction Continue
     if ($Vanilla) { Write-Information -MessageData 'Client mod folder: none (vanilla)' -InformationAction Continue } else { Write-Information -MessageData ("Client mod folder: {0}" -f $BuildPath) -InformationAction Continue }
     if ($DevPath) { Write-Information -MessageData ("Dev harness folder (load beside the pack): {0}" -f $DevPath) -InformationAction Continue }
-    Write-Information -MessageData 'Run the test, then press Enter here to stop the server (RCON #shutdown) and summarize.' -InformationAction Continue
-    [void](Read-Host)
+    Write-Information -MessageData 'Run the test, then press Enter (or Ctrl+C) here to stop the server (RCON #shutdown) and summarize.' -InformationAction Continue
+    $stopReason = Wait-TestServerStopKey -Process $process
+    Write-Manifest -LogPath $manifest -Line "STOP requested by $stopReason"
 }
 catch {
     Write-Manifest -LogPath $manifest -Line ("FAIL {0}" -f $_.Exception.Message)
@@ -527,7 +600,7 @@ finally {
     }
     if ($null -ne $config -and (Test-Path -LiteralPath $config)) {
         $redacted = (Get-Content -LiteralPath $config -Encoding utf8) -replace '^password = ".*";$', 'password = "REDACTED after test";'
-        Set-Content -LiteralPath $config -Value $redacted -Encoding utf8
+        Set-Content -LiteralPath $config -Value $redacted -Encoding ascii
         Write-Manifest -LogPath $manifest -Line 'CONFIG password redacted'
     }
     if ($null -ne $profileDir) {

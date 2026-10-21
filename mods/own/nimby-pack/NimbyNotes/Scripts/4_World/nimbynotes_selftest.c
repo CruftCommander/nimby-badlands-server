@@ -22,6 +22,6 @@ modded class MissionBaseWorld
         {
             Print("[NIMBY][Notes][SelfTest] " + result);
         }
-        Print("[NIMBY][Notes] selftest complete; failures=" + failures.ToString());
+        Print("[NIMBY][Notes] selftest complete; cases=" + results.Count().ToString() + " failures=" + failures.ToString());
     }
 }

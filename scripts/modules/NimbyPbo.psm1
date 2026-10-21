@@ -144,6 +144,10 @@ function Build-PboArchive {
         (method 0, original size = data size, reserved 0, timestamp, data size), an all-zero
         terminator entry, the file data in entry order, then 0x00 and the SHA1 of every
         preceding byte. Overwrites nothing: fails if Destination exists.
+        Each entry's timestamp is its source file's last-write time (as Addon Builder and Mikero
+        write it), so unchanged sources give a byte-identical PBO and the same SHA-256 from one
+        build to the next. -Timestamp stamps every entry with one fixed time instead. The engine
+        ignores the field.
     .OUTPUTS
         string[] of the entry names written.
     #>
@@ -154,7 +158,7 @@ function Build-PboArchive {
         [Parameter(Mandatory)][string]$Destination,
         [Parameter(Mandatory)][string]$Prefix,
         [Parameter(Mandatory)][string[]]$Patterns,
-        [datetime]$Timestamp = (Get-Date)
+        [Nullable[datetime]]$Timestamp = $null
     )
 
     if (Test-Path -LiteralPath $Destination) { throw "Destination '$Destination' already exists." }
@@ -162,7 +166,8 @@ function Build-PboArchive {
     if ($entries.Count -eq 0) { throw "No files in '$SourceFolder' match the include patterns." }
 
     $root = (Resolve-Path -LiteralPath $SourceFolder).ProviderPath
-    $epoch = [uint32]([System.DateTimeOffset]$Timestamp.ToUniversalTime()).ToUnixTimeSeconds()
+    $fixedEpoch = $null
+    if ($null -ne $Timestamp) { $fixedEpoch = [uint32]([System.DateTimeOffset]$Timestamp.ToUniversalTime()).ToUnixTimeSeconds() }
 
     $buffer = New-Object System.IO.MemoryStream
     $writer = New-Object System.IO.BinaryWriter($buffer)
@@ -177,8 +182,14 @@ function Build-PboArchive {
 
         $data = New-Object System.Collections.Generic.List[byte[]]
         foreach ($entry in $entries) {
-            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $root $entry))
+            $sourcePath = Join-Path $root $entry
+            $bytes = [System.IO.File]::ReadAllBytes($sourcePath)
             $data.Add($bytes)
+            $epoch = $fixedEpoch
+            if ($null -eq $epoch) {
+                $lastWrite = [System.DateTime]::SpecifyKind([System.IO.File]::GetLastWriteTimeUtc($sourcePath), [System.DateTimeKind]::Utc)
+                $epoch = [uint32]([System.DateTimeOffset]$lastWrite).ToUnixTimeSeconds()
+            }
             Write-PboCString -Writer $writer -Value $entry
             $writer.Write([uint32]0)                  # packing method: uncompressed
             $writer.Write([uint32]$bytes.Length)      # original size

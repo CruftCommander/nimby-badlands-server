@@ -27,6 +27,6 @@ modded class MissionBase extends MissionBaseWorld
         {
             Print("[NIMBY][Earplugs][SelfTest] " + result);
         }
-        Print("[NIMBY][Earplugs] selftest complete; failures=" + failures.ToString());
+        Print("[NIMBY][Earplugs] selftest complete; cases=" + results.Count().ToString() + " failures=" + failures.ToString());
     }
 }
