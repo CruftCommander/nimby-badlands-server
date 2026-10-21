@@ -1,9 +1,12 @@
 // -----------------------------------------------------------------------------
 // NimbyEarplugs - Ears. One key lowers the game's effect volume and restores it.
 // Client-only: no server script, no RPC, no item, no save footprint. VOIP untouched.
-// Plan: docs/plans/2026-10-15-earplugs-plan.md (v0.5). Owner: Jeff Fabish.
-// Phase 0 probe: binds N, toggles the level, and logs every observation to the
-// client script log so the vanilla reset points can be recorded.
+// Plan: docs/plans/2026-10-15-earplugs-plan.md (v0.9). Owner: Jeff Fabish.
+// Phase 1 toggle plus the release-1 fixes: N toggles 15 percent of the saved
+// level, reapplies on drift (E9), yields to vanilla while dead or unconscious
+// (E7), ignores the key while a menu is open (E12), and holds its fallback
+// baseline across a toggle (E13). Production logging per shared rules 4.3;
+// debug lines only with $profile:NimbyEarplugs\debug.
 // -----------------------------------------------------------------------------
 class CfgPatches
 {

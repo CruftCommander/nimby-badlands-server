@@ -4,6 +4,14 @@ Modifies the vanilla DayZ 1.30 MissionBase, MissionGameplay, and NotificationUI 
 
 Changes, newest first:
 
+- October 21, 2026, release-1 round: the toggle key is ignored while any
+  scripted menu is open (chat input included, E12) and while the player is
+  dead or unconscious; the saved-level fallback is captured once while
+  earplugs are out and held while they are in, as a pure function in
+  NimbyEarplugsLevel (E13); TakeOut clears the suppressed state; the UAInput
+  is resolved once in OnInit; the per-second sample line is built only under
+  the debug flag; earplugs come out in OnMissionFinish; nine new self-test
+  cases (25 total); reapply lines carry the saved and scene levels.
 - October 21, 2026: the self-test completion line prints the case count,
   "[NIMBY][Earplugs] selftest complete; cases=N failures=M", so the
   Build-NimbyPack boot check can fail a self-test that ran no cases or
