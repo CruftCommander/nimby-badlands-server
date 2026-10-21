@@ -37,7 +37,7 @@ class NimbyHandsActionPutInPockets extends ActionContinuousBase
 
     // Evaluated on the client for the prompt, on the server at start, and on every progress
     // tick through CanContinue (AnimatedActionBase.c:419), so closing pockets mid-action
-    // interrupts it.
+    // interrupts it, and so does a receiver who fills up during the animation.
     override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item )
     {
         PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
@@ -72,6 +72,18 @@ class NimbyHandsActionPutInPockets extends ActionContinuousBase
             return false;
         }
 
+        // G3: pockets open permits deposits into cargo only (review items 1 and 4).
+        if ( !NimbyHandsMoveItemToPlayer.ReceiverHasSpace( tgt_player, item ) )
+        {
+            return false;
+        }
+
+        // P3 step 1 stages the item in the depositor's own cargo (cost path A).
+        if ( !NimbyHandsMoveItemToPlayer.GiverHasSpace( player, item ) )
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -82,7 +94,7 @@ class NimbyHandsActionPutInPockets extends ActionContinuousBase
 
         NimbyHandsActionData data = NimbyHandsActionData.Cast( action_data );
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
-        if ( data )
+        if ( data && tgt_player )
         {
             data.Capture( action_data.m_MainItem, action_data.m_Player, tgt_player );
         }
@@ -97,7 +109,8 @@ class NimbyHandsActionPutInPockets extends ActionContinuousBase
             open = tgt_player.NimbyHandsGetPocketsOpen();
         }
 
-        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.SMALL );
+        // The depositor gives; the depositor is the requester of this transfer.
+        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( action_data.m_Player, tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.SMALL );
         move.SetConsent( open, "receiver's pockets are closed" );
         NimbyHandsActionData data = NimbyHandsActionData.Cast( action_data );
         if ( data )

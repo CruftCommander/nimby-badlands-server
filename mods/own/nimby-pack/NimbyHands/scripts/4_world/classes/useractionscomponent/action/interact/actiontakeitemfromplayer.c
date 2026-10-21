@@ -24,8 +24,16 @@ class NimbyHandsActionTakeItemBase extends ActionInteractBase
             return false;
         }
 
-        // The item lands in the taker's inventory, never their hands (review CR-001).
+        // The item lands in the taker's cargo, never their hands (review CR-001) and never a
+        // worn slot (Jeff, October 21, 2026).
         if ( !NimbyHandsMoveItemToPlayer.ReceiverHasSpace( player, tgt_entity ) )
+        {
+            return false;
+        }
+
+        // P3 step 1 stages the item in the offerer's own cargo (cost path A).
+        PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
+        if ( !NimbyHandsMoveItemToPlayer.GiverHasSpace( tgt_player, tgt_entity ) )
         {
             return false;
         }
@@ -74,8 +82,8 @@ class NimbyHandsActionTakeItemBase extends ActionInteractBase
             offering = tgt_player.NimbyHandsGetState() == ENimbyHandsState.GIVE;
         }
 
-        // The taker receives; the player holding the item is the giver.
-        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( action_data.m_Player, item, ClassName(), UAMaxDistances.DEFAULT );
+        // The taker requests and receives; the player holding the item is the giver.
+        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( action_data.m_Player, action_data.m_Player, item, ClassName(), UAMaxDistances.DEFAULT );
         move.SetConsent( offering, "giver is no longer offering" );
         NimbyHandsActionData data = NimbyHandsActionData.Cast( action_data );
         if ( data )

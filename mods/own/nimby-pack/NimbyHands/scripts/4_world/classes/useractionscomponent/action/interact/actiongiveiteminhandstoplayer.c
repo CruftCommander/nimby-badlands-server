@@ -36,9 +36,16 @@ class NimbyHandsActionGiveItem extends ActionInteractBase
             return false;
         }
 
-        // The item lands in the receiver's inventory, never their hands (review CR-001).
+        // The item lands in the receiver's cargo, never their hands (review CR-001) and never a
+        // worn slot (Jeff, October 21, 2026).
         PlayerBase tgt_player = PlayerBase.Cast( target.GetObject() );
         if ( !NimbyHandsMoveItemToPlayer.ReceiverHasSpace( tgt_player, src_entity ) )
+        {
+            return false;
+        }
+
+        // P3 step 1 stages the item in the giver's own cargo (cost path A).
+        if ( !NimbyHandsMoveItemToPlayer.GiverHasSpace( player, src_entity ) )
         {
             return false;
         }
@@ -53,7 +60,7 @@ class NimbyHandsActionGiveItem extends ActionInteractBase
 
         NimbyHandsActionData data = NimbyHandsActionData.Cast( action_data );
         PlayerBase tgt_player = PlayerBase.Cast( action_data.m_Target.GetObject() );
-        if ( data )
+        if ( data && tgt_player )
         {
             data.Capture( action_data.m_Player.GetItemInHands(), action_data.m_Player, tgt_player );
         }
@@ -68,7 +75,8 @@ class NimbyHandsActionGiveItem extends ActionInteractBase
             requesting = tgt_player.NimbyHandsGetState() == ENimbyHandsState.TAKE;
         }
 
-        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.DEFAULT );
+        // The holder gives; the holder is the requester of this transfer.
+        NimbyHandsMoveItemToPlayer move = new NimbyHandsMoveItemToPlayer( action_data.m_Player, tgt_player, action_data.m_Player.GetItemInHands(), ClassName(), UAMaxDistances.DEFAULT );
         move.SetConsent( requesting, "receiver is no longer requesting" );
         NimbyHandsActionData data = NimbyHandsActionData.Cast( action_data );
         if ( data )

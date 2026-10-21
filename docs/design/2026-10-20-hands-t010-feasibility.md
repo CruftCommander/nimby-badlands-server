@@ -1,5 +1,7 @@
 # Hands NIMBY-T-010 feasibility study - player-to-player transfer on 1.30
 
+Built, October 21, 2026: the diagnostic of section 7 ran on October 20, 2026 (H-C true, J2 chose P3) and P3 was built on `study/hands-t010` in `@NIMBY-20261021-143500` with the NIMBY-T-012 toast. The record is the "P3 build, October 21, 2026" section of `docs/testing/2026-10-19-hands-phase1.md`; the design as built is plan v0.7 (`docs/plans/2026-10-15-hands-plan.md`, decisions H1 to H7). The text below is the study as written on October 20 and is not updated.
+
 Draft v0.1, October 20, 2026. Owner: Jeff Fabish. Branch `study/hands-t010` (cut from `main` at `1473a3b`). Status: study only. No addon code, build, or test record changed. The diagnostic in section 7 is a proposal for Jeff's ruling and is not built.
 
 Inputs: the "Two-client session, October 20, 2026" section of `docs/testing/2026-10-19-hands-phase1.md`; plan `docs/plans/2026-10-15-hands-plan.md` v0.5 (G4, G5, the signal ranking); `docs/plans/2026-10-15-shared-rules.md` v1.3; the addon under `mods/own/nimby-pack/NimbyHands/`; the server RPT `profiles\main-round1\DayZServer_x64_2026-10-20_15-44-56.RPT` and the D client log `%LOCALAPPDATA%\DayZ\script_2026-10-20_15-59-50.log` (re-read for this study); review `D:\GitHub\_reviews\nimby-badlands-server-review-2026-10-14.md` (CR-001); `git log` of the Hands folder.

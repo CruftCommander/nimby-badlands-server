@@ -1,32 +1,43 @@
 // -----------------------------------------------------------------------------
 // NimbyHandsMoveItemToPlayer - moves an item from one player's hands into another
-// player's inventory (cargo or an attachment slot, never hands).
+// player's cargo (never a worn slot, never hands) in two server steps (P3).
 //
 // Rewritten October 14, 2026 (review CR-001) to use the vanilla server path:
-// Man.ServerTakeToDst on the player holding the item (Man.c:757), which routes a
+// Man.ServerTakeToDst on the player holding the item (Man.c:757-760), which routes a
 // HandEventMoveTo through that player's own hand state machine
-// (HumanInventory.RedirectToHandEvent, HumanInventory.c:200-229). Because the item
-// never lands in the receiver's hands, no second hand state machine is involved.
+// (HumanInventory.RedirectToHandEvent, HumanInventory.c:200-229).
 //
 // Phase 1, October 19, 2026 (plan v0.5): every request is registered in the
 // in-flight registry with a correlation id before dispatch (G5) and refused when
 // its item already has an unresolved entry; consent, both players' state (G4),
 // proximity, the source item, and the destination are revalidated immediately
 // before dispatch; the outcome comes from the completion signals in
-// NimbyHandsServer, not from the ServerTakeToDst return value, which is true
-// even when the holder's inventory refuses the hand event. Nothing is retried,
-// cloned, restored, or deleted to compensate for an uncertain result.
+// NimbyHandsServer. Nothing is retried, cloned, restored, or deleted.
+//
+// P3, October 21, 2026 (plan v0.7, ruling J2): the engine refuses every
+// hand-sourced move into a live player (NIMBY-T-010, H-C), so step 1 moves the
+// item from the giver's hands into a free cargo location of the giver's own
+// inventory (FindFreeLocationFor with ANY_CARGO, Inventory.c:276) and step 2, one
+// tick after that landing, moves it from the recorded staged location to the
+// receiver with the synchronous server move (Inventory.c:1057-1066). Step 1's
+// return value is meaningless for a hands source; step 2's is the result. Step 2
+// bypasses the engine's live-player rule and 2.5 m anti-cheat, so RevalidateStep2
+// is the only guard. Cost paths: step 1 refused (no staging room) leaves the item
+// in hands; step 2 refused (receiver filled between the steps) leaves it in the
+// giver's cargo. Jeff ruled on October 21, 2026 that all three verbs deliver into
+// cargo only, so an item that fits only a worn slot is a documented REFUSED.
 // -----------------------------------------------------------------------------
 
 class NimbyHandsMoveItemToPlayer
 {
-    // Destinations a transfer may use. Hands are excluded on purpose (see header). A function
+    // Destinations a transfer may use: cargo only (Jeff, October 21, 2026). A function
     // rather than a static const: vanilla has no example of a const built from enum flags.
     static int DestinationFlags()
     {
-        return FindInventoryLocationType.ANY_CARGO | FindInventoryLocationType.ATTACHMENT;
+        return FindInventoryLocationType.ANY_CARGO;
     }
 
+    protected PlayerBase m_Requester;
     protected PlayerBase m_DstPlayer;
     protected EntityAI m_Item;
     protected string m_ActionName;
@@ -38,8 +49,11 @@ class NimbyHandsMoveItemToPlayer
     protected string m_ExpectedGiverId;
     protected string m_ExpectedReceiverId;
 
-    void NimbyHandsMoveItemToPlayer(PlayerBase dst_player, EntityAI item, string action_name, float reach)
+    // requester is the player whose action made the request (the taker for Take, the
+    // holder for Give and Put In Pockets); dst_player is the receiver.
+    void NimbyHandsMoveItemToPlayer(PlayerBase requester, PlayerBase dst_player, EntityAI item, string action_name, float reach)
     {
+        m_Requester = requester;
         m_DstPlayer = dst_player;
         m_Item = item;
         m_ActionName = action_name;
@@ -49,7 +63,8 @@ class NimbyHandsMoveItemToPlayer
         m_HasExpected = false;
     }
 
-    // The consenting party's state, read by the action at dispatch time.
+    // The consenting party's state, read by the action at dispatch time. A snapshot: step 2
+    // does not read it again (plan v0.7, decision H2).
     void SetConsent(bool consent, string detail)
     {
         m_Consent = consent;
@@ -65,8 +80,8 @@ class NimbyHandsMoveItemToPlayer
         m_ExpectedReceiverId = receiverId;
     }
 
-    // True when the receiver has room for the item outside their hands. Used by action
-    // conditions so the prompt only shows when the transfer can succeed.
+    // True when the receiver has cargo room for the item. Used by action conditions so the
+    // prompt only shows when the transfer can succeed.
     static bool ReceiverHasSpace(PlayerBase receiver, EntityAI item)
     {
         if (!receiver || !item)
@@ -77,8 +92,49 @@ class NimbyHandsMoveItemToPlayer
         return receiver.GetInventory().FindFreeLocationFor(item, DestinationFlags(), dst);
     }
 
-    // Registers, revalidates, and dispatches the request. Returns true when it was submitted
-    // and not refused; the terminal outcome is logged by NimbyHandsServer.
+    // True when the giver has cargo room to stage the item in hands (cost path A). Used by
+    // the action conditions so the prompt does not show for a transfer step 1 would refuse.
+    static bool GiverHasSpace(PlayerBase giver, EntityAI item)
+    {
+        InventoryLocation dst = new InventoryLocation;
+        return FindStagingLocation(giver, item, dst);
+    }
+
+    // A free cargo location in the giver's own inventory, never inside the moving item
+    // itself: the engine walks every entity the giver carries, the item in hands included.
+    static bool FindStagingLocation(PlayerBase giver, EntityAI item, InventoryLocation dst)
+    {
+        if (!giver || !item)
+        {
+            return false;
+        }
+        if (!giver.GetInventory().FindFreeLocationFor(item, DestinationFlags(), dst))
+        {
+            return false;
+        }
+        return !LocationInside(dst, item);
+    }
+
+    // The location's parent is the item or one of its descendants (EntityAI.GetHierarchyParent,
+    // EntityAI.c:885).
+    protected static bool LocationInside(InventoryLocation loc, EntityAI item)
+    {
+        EntityAI parent = loc.GetParent();
+        int guard = 0;
+        while (parent && guard < 32)
+        {
+            if (parent == item)
+            {
+                return true;
+            }
+            parent = parent.GetHierarchyParent();
+            guard = guard + 1;
+        }
+        return false;
+    }
+
+    // Registers, revalidates, and dispatches step 1. Returns true when it was submitted and
+    // not refused; the terminal outcome is logged by NimbyHandsServer.
     bool Execute()
     {
         if (GetGame().IsClient())
@@ -90,12 +146,21 @@ class NimbyHandsMoveItemToPlayer
 
         NimbyHandsWorldTransfer transfer = new NimbyHandsWorldTransfer();
         transfer.action = m_ActionName;
+        transfer.requester = m_Requester;
         transfer.receiver = m_DstPlayer;
         transfer.item = m_Item;
         if (m_Item)
         {
-            transfer.giver = m_Item.GetHierarchyRootPlayer();
+            transfer.giver = PlayerBase.Cast(m_Item.GetHierarchyRootPlayer());
         }
+        transfer.reach = m_Reach;
+        transfer.destinationFlags = DestinationFlags();
+        transfer.consent = m_Consent;
+        transfer.consentDetail = m_ConsentDetail;
+        transfer.hasExpected = m_HasExpected;
+        transfer.expectedItem = m_ExpectedItem;
+        transfer.expectedGiverId = m_ExpectedGiverId;
+        transfer.expectedReceiverId = m_ExpectedReceiverId;
         NimbyHandsServer.Describe(transfer);
 
         if (!m_Item)
@@ -104,6 +169,8 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
+        // A lost timer must not block an item until an unrelated timeout (review item 6).
+        NimbyHandsServer.ReconcileOverdue();
         NimbyHandsTransfers registry = NimbyHandsServer.Registry();
         string key = NimbyHandsServer.ItemKey(m_Item);
         if (!registry.Begin(transfer, key, m_ActionName, GetGame().GetTime()))
@@ -119,26 +186,30 @@ class NimbyHandsMoveItemToPlayer
         }
 
         InventoryLocation src = new InventoryLocation;
+        InventoryLocation stage = new InventoryLocation;
         InventoryLocation dst = new InventoryLocation;
-        string refusal = Revalidate(transfer, src, dst);
+        NimbyHandsRequestFacts facts = CollectStep1Facts(transfer, src, stage, dst);
+        string refusal = NimbyHandsRules.CheckRequest(facts, NimbyHandsRules.STEP1);
         if (refusal != "")
         {
             NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, refusal);
             return false;
         }
 
-        NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, "dst=" + NimbyHandsServer.DescribeLocation(dst));
-        bool accepted = NimbyHandsServer.Dispatch(transfer, src, dst);
+        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst);
+        NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, requested);
+        bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
         // A server hand event is deferred to the holder's next inventory update
         // (DayZPlayerInventory.c:4448, 4623-4634), so no signal is expected inside the call;
-        // if one did end the request, its terminal line is already written.
-        if (transfer.state == NimbyHandsState.CONFIRMED)
+        // if one did land the item, its line is already written and step 2 is scheduled.
+        if (NimbyHandsState.IsTerminal(transfer.state))
         {
-            return true;
+            return transfer.state == NimbyHandsState.CONFIRMED;
         }
-        if (transfer.state != NimbyHandsState.REQUESTED)
+        if (transfer.state == NimbyHandsState.STAGED)
         {
-            return false;
+            NimbyHandsServer.ScheduleTimeout(transfer);
+            return true;
         }
         if (!accepted)
         {
@@ -149,87 +220,203 @@ class NimbyHandsMoveItemToPlayer
         return true;
     }
 
-    // Every check that must hold immediately before dispatch. Fills src and dst. Returns "" or
-    // the refusal detail.
-    protected string Revalidate(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
+    // Every fact step 1 needs, read from the world in precedence order, stopping at the first
+    // fact that refuses (the rest keep their refusing defaults, which CheckRequest never
+    // reaches). Fills src (the giver's hands), stage (the giver's own cargo), and dst (the
+    // receiver's cargo).
+    protected NimbyHandsRequestFacts CollectStep1Facts(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation stage, InventoryLocation dst)
     {
-        if (!m_Consent)
+        NimbyHandsRequestFacts f = new NimbyHandsRequestFacts();
+        PlayerBase giver = transfer.giver;
+        f.consent = m_Consent;
+        f.consentDetail = m_ConsentDetail;
+        if (!f.consent)
         {
-            return "no consent: " + m_ConsentDetail;
+            return f;
         }
-
-        PlayerBase giver = PlayerBase.Cast(transfer.giver);
-        string party = CheckPlayer("giver", giver);
-        if (party != "")
+        f.giverParty = CheckPlayer("giver", giver);
+        f.receiverParty = CheckPlayer("receiver", m_DstPlayer);
+        if (f.giverParty != "" || f.receiverParty != "")
         {
-            return party;
+            return f;
         }
-        party = CheckPlayer("receiver", m_DstPlayer);
-        if (party != "")
+        f.samePlayer = giver == m_DstPlayer;
+        f.giverReplaced = m_HasExpected && m_ExpectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != m_ExpectedGiverId;
+        f.receiverReplaced = m_HasExpected && m_ExpectedReceiverId != "" && NimbyHandsActionData.IdentityId(m_DstPlayer) != m_ExpectedReceiverId;
+        if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
-            return party;
+            return f;
         }
-        if (giver == m_DstPlayer)
+        f.itemExists = m_Item != null;
+        if (!f.itemExists)
         {
-            return "giver and receiver are the same player";
+            return f;
         }
-        if (m_HasExpected && m_ExpectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != m_ExpectedGiverId)
+        FillReach(f, giver, m_DstPlayer, m_Reach);
+        if (!f.withinReach)
         {
-            return "giver replaced since the action started";
+            return f;
         }
-        if (m_HasExpected && m_ExpectedReceiverId != "" && NimbyHandsActionData.IdentityId(m_DstPlayer) != m_ExpectedReceiverId)
+        f.locationKnown = m_Item.GetInventory().GetCurrentInventoryLocation(src);
+        if (!f.locationKnown)
         {
-            return "receiver replaced since the action started";
+            return f;
         }
-
-        float distanceSq = vector.DistanceSq(giver.GetPosition(), m_DstPlayer.GetPosition());
-        if (!NimbyHandsRules.WithinReach(distanceSq, m_Reach, NimbyHandsConstants.PROXIMITY_TOLERANCE))
+        f.itemAtSource = src.GetType() == InventoryLocationType.HANDS && src.GetParent() == giver;
+        f.itemReplaced = m_HasExpected && m_ExpectedItem != m_Item;
+        if (!f.itemAtSource || f.itemReplaced)
         {
-            return "out of reach (" + Math.Sqrt(distanceSq).ToString() + " m)";
+            return f;
         }
-
-        if (!m_Item.GetInventory().GetCurrentInventoryLocation(src))
-        {
-            return "item location unavailable";
-        }
-        if (src.GetType() != InventoryLocationType.HANDS || src.GetParent() != giver)
-        {
-            return "item is not in the giver's hands";
-        }
-        if (m_HasExpected && m_ExpectedItem != m_Item)
-        {
-            return "item replaced since the action started";
-        }
-
         DayZPlayerInventory giverInventory = DayZPlayerInventory.Cast(giver.GetInventory());
         if (giverInventory && giverInventory.IsProcessing())
         {
-            return "giver inventory busy";
+            f.giverBusy = true;
+            return f;
         }
-
-        if (!m_DstPlayer.GetInventory().FindFreeLocationFor(m_Item, DestinationFlags(), dst))
+        f.receiverHasSpace = m_DstPlayer.GetInventory().FindFreeLocationFor(m_Item, DestinationFlags(), dst);
+        if (!f.receiverHasSpace)
         {
-            return "no space in receiver inventory";
+            return f;
         }
-
+        f.giverHasSpace = FindStagingLocation(giver, m_Item, stage);
+        f.destinationText = NimbyHandsServer.DescribeLocation(stage);
+        if (!f.giverHasSpace)
+        {
+            return f;
+        }
         // The engine test HandEventMoveTo.CanPerformEvent runs at queue time (Hand_Events.c:306-319,
         // Inventory.c:373). Its result cannot be observed after dispatch on 1.30, so it is asked here.
-        if (!GameInventory.LocationCanMoveEntity(src, dst))
+        f.engineAllows = GameInventory.LocationCanMoveEntity(src, stage);
+        if (!f.engineAllows)
         {
-            return "engine refuses the move to " + NimbyHandsServer.DescribeLocation(dst);
+            return f;
         }
-
         // The reservation test HandEventBase.ReserveInventory makes (Hand_Events.c:185,
         // Inventory.c:787). A reservation taken between here and the holder's next inventory
-        // update can still refuse silently; that request ends UNCONFIRMED at the timeout.
-        if (GameInventory.HasInventoryReservation(m_Item, dst))
-        {
-            return "destination reserved";
-        }
-        return "";
+        // update can still refuse silently; that request ends at the reconcile.
+        f.reserved = GameInventory.HasInventoryReservation(m_Item, stage);
+        return f;
     }
 
-    protected static string CheckPlayer(string role, PlayerBase player)
+    // ---- step 2 ----------------------------------------------------------------
+
+    // Runs one tick after step 1 landed (NimbyHandsServer.OnStep2). Revalidates, then moves
+    // the item from the staged location to the receiver with the synchronous server move and
+    // reads its result. Only a STAGED transfer reaches here.
+    static void RunStep2(NimbyHandsWorldTransfer transfer)
+    {
+        InventoryLocation src = new InventoryLocation;
+        InventoryLocation dst = new InventoryLocation;
+        NimbyHandsRequestFacts facts = CollectStep2Facts(transfer, src, dst);
+        string refusal = NimbyHandsRules.CheckRequest(facts, NimbyHandsRules.STEP2);
+        if (refusal != "")
+        {
+            NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, refusal + "; " + NimbyHandsServer.DescribeWhere(transfer));
+            return;
+        }
+
+        // HumanInventory.TakeToDst with neither end in hands falls through to
+        // GameInventory.TakeToDst(SERVER): LocationSyncMoveEntity plus SendServerMove
+        // (HumanInventory.c:243-251, Inventory.c:1057-1066). Its EEItemLocationChanged fires
+        // inside the call and writes CONFIRMED; its return value is the result.
+        bool moved = transfer.giver.ServerTakeToDst(src, dst);
+        if (NimbyHandsState.IsTerminal(transfer.state))
+        {
+            return;
+        }
+        bool atGiverInventory = NimbyHandsServer.ItemInGiverInventory(transfer);
+        int verdict = NimbyHandsRules.ClassifyStep2(moved, false, atGiverInventory);
+        if (verdict == NimbyHandsState.REFUSED)
+        {
+            NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, "server move refused; " + NimbyHandsServer.DescribeWhere(transfer));
+            return;
+        }
+        // Moved without a signal and not with the giver: left to the reconcile, which finds it.
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 moved=" + NimbyHandsLog.Bool(moved) + " without a signal; left to the reconcile");
+    }
+
+    // Every fact step 2 needs, read from the world in precedence order, stopping at the first
+    // fact that refuses: the consent snapshot, both parties, the expected identities, reach
+    // with the action's own value, the exact staged location with the giver as root, and the
+    // receiver destination recomputed now (the receiver may have filled it since step 1). No
+    // busy test: it belongs to the hand event and may still read true for a frame after step 1.
+    protected static NimbyHandsRequestFacts CollectStep2Facts(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
+    {
+        NimbyHandsRequestFacts f = new NimbyHandsRequestFacts();
+        PlayerBase giver = transfer.giver;
+        PlayerBase receiver = transfer.receiver;
+        f.forcedRefusal = NimbyHandsServer.TakeForcedStep2Refusal();
+        if (f.forcedRefusal)
+        {
+            return f;
+        }
+        f.consent = transfer.consent;
+        f.consentDetail = transfer.consentDetail;
+        if (!f.consent)
+        {
+            return f;
+        }
+        f.giverParty = CheckPlayer("giver", giver);
+        f.receiverParty = CheckPlayer("receiver", receiver);
+        if (f.giverParty != "" || f.receiverParty != "")
+        {
+            return f;
+        }
+        f.samePlayer = giver == receiver;
+        f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != transfer.expectedGiverId;
+        f.receiverReplaced = transfer.hasExpected && transfer.expectedReceiverId != "" && NimbyHandsActionData.IdentityId(receiver) != transfer.expectedReceiverId;
+        if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
+        {
+            return f;
+        }
+        f.itemExists = transfer.item != null;
+        if (!f.itemExists)
+        {
+            return f;
+        }
+        FillReach(f, giver, receiver, transfer.reach);
+        if (!f.withinReach)
+        {
+            return f;
+        }
+        f.locationKnown = transfer.item.GetInventory().GetCurrentInventoryLocation(src);
+        if (!f.locationKnown)
+        {
+            return f;
+        }
+        bool giverIsRoot = transfer.item.GetHierarchyRootPlayer() == giver;
+        f.itemAtSource = giverIsRoot && NimbyHandsServer.IsAtStagedLocation(transfer, src);
+        f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
+        if (!f.itemAtSource || f.itemReplaced)
+        {
+            return f;
+        }
+        f.giverBusy = false;
+        f.receiverHasSpace = receiver.GetInventory().FindFreeLocationFor(transfer.item, transfer.destinationFlags, dst);
+        f.destinationText = NimbyHandsServer.DescribeLocation(dst);
+        if (!f.receiverHasSpace)
+        {
+            return f;
+        }
+        f.giverHasSpace = true;
+        f.engineAllows = GameInventory.LocationCanMoveEntity(src, dst);
+        f.reserved = false;
+        return f;
+    }
+
+    protected static void FillReach(NimbyHandsRequestFacts f, PlayerBase giver, PlayerBase receiver, float reach)
+    {
+        if (!giver || !receiver)
+        {
+            return;
+        }
+        float distanceSq = vector.DistanceSq(giver.GetPosition(), receiver.GetPosition());
+        f.withinReach = NimbyHandsRules.WithinReach(distanceSq, reach, NimbyHandsConstants.PROXIMITY_TOLERANCE);
+        f.distanceText = Math.Sqrt(distanceSq).ToString();
+    }
+
+    static string CheckPlayer(string role, PlayerBase player)
     {
         if (!player)
         {

@@ -1,0 +1,44 @@
+NimbyDevHarness (display name DevHarness) - original work by Jeff Fabish for
+NIMBY | HARDCORE | BADLANDS | 1pp. No third-party mod code.
+
+What it is: the dev harness of shared rules section 8. It is built only by
+Build-NimbyPack.ps1 -Dev into build\@NIMBY-Dev-<stamp>\, signed with the separate
+nimby_dev key, never listed in pack.json "addons", never part of the Workshop item,
+and never loaded on the live server. It depends on NimbyAutorun and NimbyHands and
+forges requests against their real server handlers; no client PBO references any
+class defined here.
+
+How it runs (server only):
+- Boot cases run at mission start when $profile:NimbyDevHarness\selftest exists
+  (the boot check creates it). They need no client: two survivor dummies and a few
+  items are spawned, used, and deleted. Each case prints
+  "[NIMBY][DevHarness][SelfTest] PASS|FAIL <case> detail=<text>" and the run ends
+  with "[NIMBY][DevHarness] selftest complete; cases=N failures=M".
+- Online cases need a connected player (a real identity). They run ten seconds
+  after a player connects when $profile:NimbyDevHarness\forge contains the word
+  "online", print "[NIMBY][DevHarness][Forge] PASS|FAIL <case> detail=<text>", and
+  end with "[NIMBY][DevHarness] forge complete; cases=N failures=M". The two Hands
+  stale-request cases use the item in the connecting player's hands (hold one) and
+  pass the party checks only with a second connected player as the receiver.
+- The dummies carry no identity, so a dummy giver or receiver fails the party
+  check ("disconnected") before any later fact; the dummy cases therefore prove
+  the ownership, consent, in-flight, step-2 guard, and switch branches, not the
+  receiver-space branch, which the in-game V3 diagnostic and the forced-refusal
+  run cover.
+- The forge file word "step2-refuse" arms one forced Hands step-2 refusal at mission
+  start (cost path B): the next real transfer ends
+  "REFUSED detail=no space in receiver inventory (forced by dev harness); item with
+  giver at ...".
+
+Changes, newest first:
+
+- October 21, 2026: created (Hands P3 build, ruling of October 21, 2026). Boot
+  cases: Legs request aimed at another player's PlayerBase from a sender that does
+  not own it; Hands take without consent; two takers on one offer; pockets closed by
+  restraint and the deposit refused; a forged step 2 on an unknown id and on a
+  request that is not staged; the step-2 guard on a forged staged request; the
+  forced-refusal switch consumed exactly once; a request with no item. Online cases:
+  Legs unreadable payload, idx 9 with angle 0, and 50 requests in one second from the
+  player's own identity; a request aimed at another player from the player's
+  identity; Hands stale request with the item replaced and with the receiver
+  replaced (both need a second connected player to pass the party checks).
