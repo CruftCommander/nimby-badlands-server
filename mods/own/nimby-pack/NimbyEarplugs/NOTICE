@@ -4,6 +4,11 @@ Modifies the vanilla DayZ 1.30 MissionBase, MissionGameplay, and NotificationUI 
 
 Changes, newest first:
 
+- October 21, 2026, release-1 round (second commit): the saved level is read
+  from the stored value of the Effects slider (GameOptions, resolved once in
+  OnInit) when that accessor resolves; the m_volume_sound path with the
+  captured fallback stays behind it. Toggle, sample, and reapply lines carry
+  slider=.
 - October 21, 2026, release-1 round: the toggle key is ignored while any
   scripted menu is open (chat input included, E12) and while the player is
   dead or unconscious; the saved-level fallback is captured once while

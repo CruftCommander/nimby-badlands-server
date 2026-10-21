@@ -23,7 +23,11 @@
 //           GetSoundVolume/SetSoundVolume (Sound.c:71-72); OnMissionFinish
 //           (gameplay.c:702, overridden at missionGameplay.c:266);
 //           Man.IsUnconscious (Man.c:63, PlayerBase.c:3925), Object.IsAlive
-//           (Object.c:517).
+//           (Object.c:517); GameOptions and GetOptionByType (gameplay.c:1460,
+//           :1489), NumericOptionsAccess.ReadValue (gameplay.c:1421-1423),
+//           OptionAccessType.AT_OPTIONS_EFFECTS_SLIDER (gameplay.c:1252); a
+//           one-off GameOptions read outside the Options menu is what
+//           VONManager.c:347-349 does.
 // Style   : One statement per line and no multi-line expressions. The Enforce
 //           compiler rejected a string built across continuation lines
 //           ("Invalid statement ')'", build 20261016-162750).
@@ -34,6 +38,11 @@ modded class MissionGameplay extends MissionBase
     protected ref NimbyEarplugsLevel m_NimbyEarplugs;
     // Resolved once in OnInit; vanilla caches its inputs the same way (Inventory.c:71).
     protected UAInput m_NimbyEarplugsInput;
+    // The stored value of the Effects slider (E14): the option store is the source of truth the
+    // Options menu reads and writes (OptionsMenuSounds.c:49, :80, :363-366), unlike the
+    // g_Game.m_volume_sound cache, which is filled once per launch and goes stale on Apply.
+    protected ref GameOptions m_NimbyEarplugsOptions;
+    protected NumericOptionsAccess m_NimbyEarplugsEffects;
     protected bool m_NimbyEarplugsDebug;
     protected float m_NimbyEarplugsSampleClock;
     protected int m_NimbyEarplugsLastMenuId = -2;
@@ -48,15 +57,37 @@ modded class MissionGameplay extends MissionBase
         {
             m_NimbyEarplugsInput = GetUApi().GetInputByName("UANimbyEarplugsToggle");
         }
+        m_NimbyEarplugsOptions = new GameOptions();
+        m_NimbyEarplugsEffects = NimbyEarplugsResolveEffects(m_NimbyEarplugsOptions);
+        bool slider = false;
+        if (m_NimbyEarplugsEffects)
+        {
+            slider = true;
+        }
         bool bound = false;
         if (m_NimbyEarplugsInput)
         {
             bound = true;
         }
         string line = "loaded; input=UANimbyEarplugsToggle bound=" + NimbyEarplugsBool(bound);
+        line = line + " slider_accessor=" + NimbyEarplugsBool(slider);
         line = line + " debug=" + NimbyEarplugsBool(m_NimbyEarplugsDebug);
         line = line + NimbyEarplugsLevels();
         NimbyEarplugsDebugLog(line);
+    }
+
+    protected NumericOptionsAccess NimbyEarplugsResolveEffects(GameOptions options)
+    {
+        if (!options)
+        {
+            return null;
+        }
+        OptionsAccess access = options.GetOptionByType(OptionAccessType.AT_OPTIONS_EFFECTS_SLIDER);
+        if (!access)
+        {
+            return null;
+        }
+        return NumericOptionsAccess.Cast(access);
     }
 
     override void OnUpdate(float timeslice)
@@ -169,12 +200,29 @@ modded class MissionGameplay extends MissionBase
         return false;
     }
 
-    // E3 and E13: the saved level is the baseline and is never written. The populated field
-    // wins; a 0 field falls back to the scene level captured while earplugs were out.
+    // E3, E13, E14: the saved level is the baseline and is never written. The stored value of
+    // the Effects slider is it when the accessor resolved; otherwise the populated
+    // m_volume_sound field wins and a 0 field falls back to the scene level captured while
+    // earplugs were out.
     protected float NimbyEarplugsSavedLevel()
     {
+        if (m_NimbyEarplugsEffects)
+        {
+            return m_NimbyEarplugsEffects.ReadValue();
+        }
         float scene = g_Game.GetSoundScene().GetSoundVolume();
         return m_NimbyEarplugs.ResolveSaved(g_Game.m_volume_sound, scene);
+    }
+
+    // " slider=<stored Effects slider value>" or " slider=none" when the accessor did not resolve.
+    protected string NimbyEarplugsSliderToken()
+    {
+        if (!m_NimbyEarplugsEffects)
+        {
+            return " slider=none";
+        }
+        float value = m_NimbyEarplugsEffects.ReadValue();
+        return " slider=" + value.ToString();
     }
 
     protected void NimbyEarplugsToggle()
@@ -200,6 +248,7 @@ modded class MissionGameplay extends MissionBase
         m_NimbyEarplugsSampleClock = 0;
 
         string line = "toggle " + detail + "; before=" + before.ToString() + " target=" + target.ToString();
+        line = line + NimbyEarplugsSliderToken();
         line = line + NimbyEarplugsLevels();
         NimbyEarplugsDebugLog(line);
         NotificationSystem.AddNotificationExtended(3, "Ears", detail);
@@ -219,6 +268,7 @@ modded class MissionGameplay extends MissionBase
         if (m_NimbyEarplugsDebug)
         {
             line = "expected=" + expected.ToString();
+            line = line + NimbyEarplugsSliderToken();
             line = line + NimbyEarplugsLevels();
             line = line + " menu=" + NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
             if (drifted && !m_NimbyEarplugsResetLogged)
@@ -239,6 +289,7 @@ modded class MissionGameplay extends MissionBase
             g_Game.GetSoundScene().SetSoundVolume(target, NimbyEarplugsLevel.FADE_SECONDS);
             int count = m_NimbyEarplugs.ReapplyCount();
             string reapply = "reapply #" + count.ToString() + " from=" + current.ToString() + " to=" + target.ToString();
+            reapply = reapply + NimbyEarplugsSliderToken();
             reapply = reapply + NimbyEarplugsLevels();
             reapply = reapply + " menu=" + NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
             NimbyEarplugsLog(reapply);
