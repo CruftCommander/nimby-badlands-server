@@ -47,8 +47,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps
 # -BuildPath, -ServerModPath, and -DevPath are resolved to absolute paths before -mod= is built, and a
 # missing folder is refused by name. The server reads -mod= from its own install folder, not the shell's:
 # on October 21, 2026 a relative -BuildPath loaded only the dev harness and crashed the server
-# (NIMBY-T-017, study/hands-t010 record). When the join password is the standing value, the start-up
-# line names its source (NIMBY_JOIN_PASSWORD or scripts\testserver.local.json).
+# (NIMBY-T-017, study/hands-t010 record). A standing join password is never printed: the start-up line
+# reads "Join password: standing value (not shown)" plus its source (NIMBY_JOIN_PASSWORD or
+# scripts\testserver.local.json). Only a -JoinPassword, profile, or random value is shown.
 
 # Against the live replica: 998 = copy of live storage_1, 999 = fresh world; -Vanilla = no mods (control boot)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath D:\DayZServer -InstanceId 998

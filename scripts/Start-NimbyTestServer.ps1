@@ -49,9 +49,10 @@
               password comes from -JoinPassword, else <profile>\join-password.txt, else the
               standing value in the NIMBY_JOIN_PASSWORD environment variable or
               <repo>\scripts\testserver.local.json ("joinPassword"; git-ignored by *.local.json),
-              else a random value. It is shown once on screen, and when it is the standing
-              value the line names its source (NIMBY_JOIN_PASSWORD or the local file) so a
-              tester knows it is not a one-run value. With -ProfileName an explicit or
+              else a random value. A -JoinPassword, profile, or random value is shown once on
+              screen. A standing value is never printed: the start-up line reads "Join
+              password: standing value (not shown)" followed by its source (NIMBY_JOIN_PASSWORD
+              or the local file). With -ProfileName an explicit or
               random value is saved to <profile>\join-password.txt (git-ignored) and reused by
               later runs of that profile; a standing value is never saved there. The manifest
               records only the source, never the value. Both passwords sit in config files under
@@ -186,19 +187,20 @@ function Resolve-ModFolderPath {
     return (Resolve-Path -LiteralPath $Path).ProviderPath
 }
 
-function Get-JoinPasswordSourceNote {
-    # The note printed beside the join password when it is the standing value, so a tester knows
-    # it came from NIMBY_JOIN_PASSWORD or scripts\testserver.local.json rather than this run.
-    # Empty for a -JoinPassword, profile, or random value.
+function Get-JoinPasswordDisplay {
+    # What the start-up line shows after "Join password:". A standing value (NIMBY_JOIN_PASSWORD
+    # or scripts\testserver.local.json) is never printed; the line says so and names the source.
+    # A -JoinPassword, profile, or random value is shown, as before.
     param(
+        [Parameter(Mandatory)][string]$Password,
         [Parameter(Mandatory)][string]$Source,
         [Parameter(Mandatory)][string]$RepoRoot
     )
 
     switch ($Source) {
-        'env' { return ' (standing value from NIMBY_JOIN_PASSWORD)' }
-        'local-file' { return (' (standing value from {0})' -f (Get-NimbyLocalSettingPath -RepoRoot $RepoRoot)) }
-        default { return '' }
+        'env' { return 'standing value (not shown), from NIMBY_JOIN_PASSWORD' }
+        'local-file' { return ('standing value (not shown), from {0}' -f (Get-NimbyLocalSettingPath -RepoRoot $RepoRoot)) }
+        default { return $Password }
     }
 }
 
@@ -630,7 +632,7 @@ try {
     $runStart = Get-Date
     $process = Start-Process -FilePath (Join-Path $ServerPath 'DayZServer_x64.exe') -ArgumentList $quoted -WorkingDirectory $ServerPath -PassThru -WindowStyle Minimized
 
-    Write-Information -MessageData ("Server starting on port {0}. Join password: {1}{2}" -f $test.port, $password, (Get-JoinPasswordSourceNote -Source $join.Source -RepoRoot $RepoRoot)) -InformationAction Continue
+    Write-Information -MessageData ("Server starting on port {0}. Join password: {1}" -f $test.port, (Get-JoinPasswordDisplay -Password $password -Source $join.Source -RepoRoot $RepoRoot)) -InformationAction Continue
     if ($Vanilla) { Write-Information -MessageData 'Client mod folder: none (vanilla)' -InformationAction Continue } else { Write-Information -MessageData ("Client mod folder: {0}" -f $BuildPath) -InformationAction Continue }
     if ($DevPath) { Write-Information -MessageData ("Dev harness folder (load beside the pack): {0}" -f $DevPath) -InformationAction Continue }
     Write-Information -MessageData 'Run the test, then press Enter (or Ctrl+C) here to stop the server (RCON #shutdown) and summarize.' -InformationAction Continue

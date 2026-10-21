@@ -7,7 +7,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
     $repo = Get-TestRepoRoot
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Start-NimbyTestServer.ps1') -Name 'Read-BuildLog', 'Test-ModFolder', 'Resolve-ModFolderPath', 'Get-BuildLogForBuild', 'Get-QualifiedModBuild', 'Get-RandomJoinPassword', 'Get-StandingJoinPassword', 'Resolve-JoinPassword', 'Get-JoinPasswordSourceNote', 'Get-AddonHashLine', 'Get-BuildHashMismatch')
+    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Start-NimbyTestServer.ps1') -Name 'Read-BuildLog', 'Test-ModFolder', 'Resolve-ModFolderPath', 'Get-BuildLogForBuild', 'Get-QualifiedModBuild', 'Get-RandomJoinPassword', 'Get-StandingJoinPassword', 'Resolve-JoinPassword', 'Get-JoinPasswordDisplay', 'Get-AddonHashLine', 'Get-BuildHashMismatch')
 
     function New-FakeBuild {
         # build\@NIMBY-<stamp>\addons\<pbo> plus logs\build-<stamp>\build.log ending in Verdict.
@@ -131,14 +131,20 @@ Describe 'Resolve-ModFolderPath' {
     }
 }
 
-Describe 'Get-JoinPasswordSourceNote' {
-    It 'names the environment variable or the local file for a standing value' {
-        Get-JoinPasswordSourceNote -Source 'env' -RepoRoot $TestDrive | Should -Be ' (standing value from NIMBY_JOIN_PASSWORD)'
-        Get-JoinPasswordSourceNote -Source 'local-file' -RepoRoot $TestDrive | Should -Be (' (standing value from {0})' -f (Join-Path $TestDrive 'scripts\testserver.local.json'))
+Describe 'Get-JoinPasswordDisplay' {
+    It 'never shows a standing value and names its source instead' {
+        $secret = 'dummy-standing-value-xyz'
+        $fromEnv = Get-JoinPasswordDisplay -Password $secret -Source 'env' -RepoRoot $TestDrive
+        $fromEnv | Should -Be 'standing value (not shown), from NIMBY_JOIN_PASSWORD'
+        $fromEnv | Should -Not -BeLike "*$secret*"
+        $fromFile = Get-JoinPasswordDisplay -Password $secret -Source 'local-file' -RepoRoot $TestDrive
+        $fromFile | Should -Be ('standing value (not shown), from {0}' -f (Join-Path $TestDrive 'scripts\testserver.local.json'))
+        $fromFile | Should -Not -BeLike "*$secret*"
+        ("Join password: {0}" -f $fromEnv) | Should -Not -BeLike "*$secret*"
     }
 
-    It 'is empty for a parameter, profile, or random value' {
-        foreach ($source in 'parameter', 'profile', 'random') { Get-JoinPasswordSourceNote -Source $source -RepoRoot $TestDrive | Should -Be '' }
+    It 'shows a parameter, profile, or random value as before' {
+        foreach ($source in 'parameter', 'profile', 'random') { Get-JoinPasswordDisplay -Password 'shown-value-123' -Source $source -RepoRoot $TestDrive | Should -Be 'shown-value-123' }
     }
 }
 
