@@ -6,14 +6,14 @@ Branch `diag/hands-t010` (never merged). Implements section 7 of `docs/design/20
 
 ## 0. Before the session
 
-1. The build must pass the boot check first. Until Jeff says `D:\DayZServer` is free (the NIMBY-T-011 lifetime run), only `-SkipBootCheck` builds exist (`@NIMBY-20261020-221359`: pack and signatures PASS, scripts not compiled). When it is free: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1` from the worktree; it must end `SUMMARY PASS`. Use that build's stamp below.
+1. The build must pass the boot check first. Until Jeff says `D:\DayZServer` is free (the NIMBY-T-011 lifetime run), only `-SkipBootCheck` builds exist (`@NIMBY-20261020-221359`: pack and signatures PASS, scripts not compiled). When it is free: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1` from the worktree; it must end `SUMMARY PASS`. Done October 20, 22:23: `@NIMBY-20261020-222301` `SUMMARY PASS` (Hands self-test 104 pass, 0 fail; no `SCRIPT (E)`).
 2. No server running: `Get-Process DayZServer_x64 -ErrorAction SilentlyContinue` prints nothing.
 
 ## 1. Setup (desktop PowerShell, one window, keep it open)
 
 ```powershell
 $wt    = 'D:\GitHub\nimby-badlands-server-wt\hands-t010'
-$stamp = '<stamp of the boot-checked build>'
+$stamp = '20261020-222301'
 $build = "$wt\build\@NIMBY-$stamp"
 $prof  = "$wt\profiles\hands-t010-diag"
 New-Item -ItemType File -Force -Path "$prof\NimbyHands\debug" | Out-Null
@@ -24,7 +24,7 @@ Compress-Archive -Path $build -DestinationPath "\\Purgatory\server\NIMBY-$stamp.
 Laptop:
 
 ```powershell
-$stamp = '<same stamp>'
+$stamp = '20261020-222301'
 Expand-Archive -Path "\\Purgatory\server\NIMBY-$stamp.zip" -DestinationPath 'D:\Github\nimby-badlands-server\build' -Force
 Test-Path "$env:LOCALAPPDATA\DayZ\NimbyHands\debug"
 ```
