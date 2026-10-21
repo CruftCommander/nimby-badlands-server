@@ -107,7 +107,7 @@ Replica `types.xml` carries the four rows from `server/mission-overrides/db/type
 | Row | Result | Evidence |
 | --- | --- | --- |
 | T-011 restarts | PASS (two restarts) | Taped note on mud brick `pin fastener=tape ... surface=dz\data_takistan\data\penetration\mud_brick.bisurf ... offset=0.03 text=written health=12 nearby=1` 18:17:01.518 (4026.13 299.118 14111.5); after the 18:21:40 start, `read class=NimbyTack_PinnedNote_Tape length=34` 18:23:41.565 and `read class=NimbyTack_PinnedNote_Nail length=29` 18:23:56.512 (4039.81 298.9 14103.7); both still hang after the 18:24:46 start (Jeff) |
-| T-011 lifetime (2 h 20 min run, loose blank Paper as the control) | Running | Expected: notes hang, the loose Paper (replica `Paper` lifetime 7200) is gone |
+| T-011 lifetime (2 h 20 min run, loose blank Paper as the control) | PASS | Start 18:32:12 (`DayZServer_x64_2026-10-20_18-32-12.RPT`); after about 3.5 h of uptime `read class=NimbyTack_PinnedNote_Tape length=34` 21:59:28.166 (4026.15 299.116 14111.5); the loose Paper (`Paper` lifetime 7200) is gone and the notes hang (Jeff). Cause confirmed: the pinned classes had no `types.xml` rows; the four rows from `types.tack.patch.xml` (lifetime 2592000) fix it. NIMBY-T-011 closed on the replica; the live rows ship with Tack's release |
 
 Findings:
 
