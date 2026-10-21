@@ -55,7 +55,7 @@ Without Buzz loaded, Puff items still light, burn, and get smoked; they report t
 | D14 | Perk class | Buzz ships meaningful survival effects by default, with a `perkClass` config switch that targets cosmetic plus a minor nudge, or cosmetic only |
 | D15 | Hash | Cook dried weed in a pot or pan over a fire |
 | D16 | Cloud scope | Everywhere; full rate inside a building, half rate and a smaller radius outdoors |
-| D17 | Order | Ears, Scrawl, Tack, Puff, Buzz, Sprout, with Puff Phase 0 run in parallel with Ears |
+| D17 | Order | Ears, Scrawl, Tack, Puff, Buzz, Sprout. The parallel clause (Puff Phase 0 beside Ears, later beside Central Scrutinizer) is superseded: Jeff ruled on October 21, 2026 that Central Scrutinizer takes the next build slot alone and Puff Phase 0 starts after its Phase 4 |
 | D18 | Wall notes | Separate addon, Tack: pin with a vanilla `Hammer` and one `Nail`, or with vanilla `DuctTape`; pulling a note down damages the sheet |
 
 ## Requirements as stated
