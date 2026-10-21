@@ -62,3 +62,32 @@ Build `@NIMBY-20261019-215218` (`main` `bb59038`), replica `D:\DayZServer`, inst
 | SC-2a-5 | PASS | Pasted lipsum.com text (15,520 bytes): client `editor capped from=1827 to=512` 17:36:19.059 (the edit box's paste took 1,827 characters); server `write ink: pen=Pen_Green ... length 0 -> 512` 17:38:14.200. The read-back shows "Lorem Ipsum" through "Nulla et aliquet tortor", 511 characters plus the caret |
 | SC-2a-6 | NOT PROVABLE (vanilla) | Vanilla 1.30 pens never lose ink. `Pen_ColorBase` declares no `varQuantityMax` (`DZ/gear/tools/config.cpp:308-383`), nor does `Inventory_Base` (`DZ/data/config.cpp:3162`), and `DepleteWritingImplement` clamps the deduction to `GetQuantityMax()` (`WrittenNoteData.c:83-87`), which is 0. Matches every `quantity 0 -> 0` line. Plan v0.8 corrects the pen row |
 | SC-2a-7 | PASS | Blank sheet in hands, pen on the ground: client `world write: started pen=Pen_Blue sheet=Paper` 17:39:05.787; server `world write: menu requested` 17:39:06.427, `write ink: ... length 0 -> 5` and `write finished` 17:39:11.231 |
+
+## Release-1 round, October 21, 2026
+
+Plan: `docs/plans/2026-10-15-scrawl-plan.md` v0.9 (N14, N15, N16). Branch `feat/scrawl-r1`, worktree `D:\GitHub\nimby-badlands-server-wt\scrawl-r1`. Brief: `vendor/audit-bundle-20261021/out/brief-scrawl-ears-release1-round.md` Part A. Build: PENDING (`Build-NimbyPack.ps1 -Qualification`; the stamp, `SUMMARY`, and the Notes `SELFTEST` line are filled in below once it runs). Test server: replica `D:\DayZServer`, instance 999 (fresh world), profile `scrawl-r1`, dedicated server plus a real client, never offline mode; the join password comes from the environment. Debug flag on both sides (`$profile:NimbyNotes\debug` in the server profile, `%LOCALAPPDATA%\DayZ\NimbyNotes\debug` on the client). Read the server script log, not the RPT.
+
+A0 vendor check (read only, recorded in the plan's current-state table): `ItemBase.CombineItems` re-runs `CanBeCombined(other_item, false)` on the server before `AddQuantity` (`ItemBase.c:2243-2263`); both server entries reach it (`PlayerBase.c:6670`, `Inventory.c:1111`); there is no separate quick-stack-on-pickup path in 1.30 script. So the October 20 world could not lose a note to a client-side merge; it offered a Combine the server refused silently.
+
+### A4 rows
+
+| Row | Scenario | Result | Evidence |
+| --- | --- | --- | --- |
+| SC-003 | Written note in hands, drag a blank onto it; blank stack of 3 in hands, drag a written note onto it; two written notes. Read the note after each. Then restart the server and repeat the first drag | PENDING | Expected: no Combine offered on the client (the flag); the server never logs `combine refused` for a legitimate drag; `written flag synced from=load written=true sheet=Paper` after the restart |
+| SC-003b | Written note in inventory, pick up a blank from the ground and from a container | PENDING | Expected: quantities unchanged, text intact |
+| SC-002 | Five blanks combine to one stack of 5, a sixth refuses, split back to 1 and 4; a written note offers no Split | PENDING | Expected: as stated |
+| SC-2a-7x | Sheet in hands, pen on the ground, three writes right after a fresh start with debug on | PENDING | Expected: the full `write ink: pen=Pen_<color> quantity 0 -> 0 health=<h> length <a> -> <b>` line quoted each time |
+| SC-W1 | Open the write menu, close the client without OK, restart with `storageAutoFix = 0` | PENDING | Expected: 0 VME, sheet present and blank, `save cleared a live write binding on Paper pen=Pen_<color>` in the server script log |
+| SC-W2 | Open the write menu, hold it past a `#shutdown`, reconnect, write | PENDING | Expected: `pen=` on the write line (the window is closed) |
+| SC-T1 (Tack) | Pin a written note with Tack, take it down, read it | PENDING | Expected: `written flag synced from=text written=true sheet=NimbyTack_PinnedNote_<fastener>` on the pin, the same with `sheet=Paper` on the take-down; the taken-down note offers no Combine |
+
+Also expected across the session: 0 `SCRIPT (E)` on the server and the client; `[NIMBY][Notes] selftest complete; cases=28 failures=0` in the boot check.
+
+### A5 release-gate boots (replica, instance 998, release artifact, `storageAutoFix = 0`; Jeff runs the servers)
+
+| Step | Check | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | With the artifact: write one note, make a stack of 5 and a stack of 2, drop all three; pin one written note with Tack if Tack is on the artifact; graceful stop | PENDING | Server script log |
+| 2 | Boot the same storage again with the artifact: text intact, stacks intact | PENDING | RPT, read-back |
+| 3 | Boot the same storage with no `-mod=` (`-Vanilla`): 0 "Scripted variables corrupted", 0 `SCRIPT (E)`, no VME at `Paper.c:17`; what the stacks became; `MorsecodeLeaflet_*` count before and after; pick one leaflet up (quantity, stack, split) for the leaflet ruling (TGA-018) | PENDING | RPT, counts |
+| SC-005 | Filled from step 3 in the plan's test table | PENDING | - |

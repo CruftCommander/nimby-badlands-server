@@ -4,6 +4,13 @@ Bohemia's own ActionWritePaper and ActionReadPaper classes; no third-party mod c
 
 Changes, newest first:
 
+- October 21, 2026, release-1 round (plan v0.9, N14 to N16): a net-synced written
+  flag on the vanilla Paper (never persisted) so the client refuses to combine a
+  written note too; the vanilla WrittenNoteData owner reference is bound from
+  construction and after load so any SetNoteText syncs the flag; Paper.OnStoreSave
+  restores the pen and paper references after the save instead of leaving them
+  cleared; the server accepts RPC_WRITE_NOTE_CLIENT only from the writer; combine
+  refusals and no-pen writes are production log lines. Still no third-party code.
 - October 19, 2026, Phase 2a (plan v0.7, N9 and N12): ActionWritePaper is also
   added to Paper, so the vanilla inventory Combine (drop on the item in hands,
   then the action key) writes in either order. Scrawl handles the vanilla
