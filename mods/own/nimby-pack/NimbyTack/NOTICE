@@ -3,8 +3,33 @@ Defines four Paper subclasses and six user actions on the vanilla DayZ 1.30 acti
 (Bohemia Interactive); depends on NimbyNotes (Scrawl) from the same pack; no third-party mod code.
 
 Changes, newest first.
+- October 21, 2026 (Tack plan v0.13, fix round after the Part B in-game run, branch study/tack-t013-t014):
+  - TK-P10: the roughSurfaceOffsetMeters default moves from 0.06 to 0.08 (Jeff). No config version
+    bump: a version 2 file keeps what it holds (a hand-set 0.06 and the old default cannot be told
+    apart), a fresh profile takes 0.08.
+  - NIMBY-T-015 (plan T17): the pin is refused when the physics hit stands more than 15 cm
+    (NimbyTackRules.PHYSICS_DEPTH_LIMIT_METERS, a code constant) in front of the view hit along the
+    outward normal; exactly 15 cm and every negative depth pass. Reason token physics-ahead on the
+    client pin-check line and the server refuse pin line (probe-detail=depth=<d> limit=0.15
+    physics=<class>); status message "The wall is not where it looks; the note would be buried."
+    The prompt does not show on such a face. The T-016 shed face (15.6 cm) is refused too.
+  - Config write-back (version 1 to 2 upgrade, and the defaults of a missing file) goes through
+    config.json.tmp: saved, read back, version-checked, copied over the file, deleted, then the file
+    is read once more; a failure logs "config <upgrade|defaults> not written; step=<save|validate|
+    copy|verify>" and leaves the file as it was (shared rules 6; EnSystem.c:528,531). A file whose
+    version is above the build's logs "config newer than this build; left as written".
+  - The probe's refusal detail strings are built only with the debug flag or on the server (its
+    production refuse pin line prints them once per request); the probe: lines only with the flag.
+    The client without the flag builds no string per frame (code review row 1).
+  - The reach test is written as "not within reach" so a NaN cursor refuses; the production pin
+    line prints wall=- for a class-less piece; the B5 footprint rays start 1.0 m out (was 30 cm).
+  - Self-test gains 13 cases (97): the 8 cm default, the unknown-surface upgrade fill, a hand-set
+    value through the upgrade (0.11), a newer file left alone, the guard against the measured
+    depths (0.979, 0.635, 0.156, 0.1501 refused; 0.15, 0.103, 0.07, 0.040, -0.05 accepted), and
+    the reason token.
 - October 20, 2026 (Tack plan v0.12, T-013/T-014 study Part B, branch study/tack-t013-t014):
-  - NIMBY-T-013: new config key roughSurfaceOffsetMeters (default 0.06, clamped 5 mm to 20 cm).
+  - NIMBY-T-013: new config key roughSurfaceOffsetMeters (default 0.06 then, 0.08 since October 21,
+    2026; clamped 5 mm to 20 cm).
     A surface on the rough-material code list (NimbyTackRules.IsRoughSurface, starting with
     dz\data_takistan\data\penetration\mud_brick.bisurf, matched without regard to case or
     slash direction) is pinned at that offset; wallOffsetMeters (0.03) is unchanged for every

@@ -131,7 +131,7 @@ Build `@NIMBY-20261020-222755` from `study/tack-t013-t014` at `fd20fcc` (plan v0
 
 What changed for the tester:
 
-- A note on Takistan mud brick (`surface=dz\data_takistan\data\penetration\mud_brick.bisurf`) goes up at `offset=0.06` (`roughSurfaceOffsetMeters`); every other named surface stays at `offset=0.03` and a surface with no name at `0.06`, as before.
+- A note on Takistan mud brick (`surface=dz\data_takistan\data\penetration\mud_brick.bisurf`) goes up at `offset=0.06` (`roughSurfaceOffsetMeters`; 0.08 since the October 21 fix round); every other named surface stays at `offset=0.03` and a surface with no name at `0.06`, as before.
 - With the debug flag, holding a fastener writes one client `pin-check` line each time the reason or the target changes (at most every 250 ms), not 30 `probe:` lines a second; the `probe:` lines of that moment follow it. A targeting refusal adds up to four `cursor-ray` lines. Each pin adds four `footprint` lines on the server.
 
 Setup, in this order:
@@ -192,3 +192,42 @@ Coverage, October 21, 2026:
 | Wire fences, railings, windows and glass, doors | Not tested; doors are animated and a note does not follow a door |
 | Player builds: Fence (frame, wood, metal, gate), Watchtower, the three shelters, player tents, flag pole | Not tested. `nimbytack_world.c:141` refuses any target inheriting `ItemBase`, and vanilla base building and player tents inherit it, so these are expected to refuse with `target-not-building`; plan item 6 asks for a pin on a base-building wall. Scope is Jeff's call |
 | Vehicles, barrels and crates, trees and rocks | Not tested; expected refusals |
+
+## Fix round, October 21, 2026
+
+Jeff's rulings of October 21, 2026 (section above): the `roughSurfaceOffsetMeters` default goes to 0.08 (TK-P10), and the NIMBY-T-015 guard refuses a pin whose physics hit stands more than 15 cm in front of the placement point. Plus code review rows 1 and 2 of `vendor\audit-bundle-20261021\out\review-tack.md` (per-frame debug strings; non-atomic config write-back) and the extras in the fix-round brief. Plan v0.13 (T17), branch `study/tack-t013-t014` on `main` at `10f4901`.
+
+Build: `@NIMBY-<stamp>` from `study/tack-t013-t014` at `<sha>`: `D:\GitHub\nimby-badlands-server-wt\tack-t013\build\@NIMBY-<stamp>`, log `D:\GitHub\nimby-badlands-server-wt\tack-t013\logs\build-<stamp>\build.log`. <verdict>. Deliberate flip: <flip>. Nothing persisted changed: same four pinned classes, no new field, no config version bump.
+
+What changed for the tester:
+
+- Mud brick pins at `offset=0.08` from the build default (the `main-round1` profile key is removed for these rows so the default is what runs; the hand-set 0.08 is backed up in the main checkout's `logs\`).
+- A face whose physics shell stands more than 15 cm in front of the view hit offers no prompt; the client `pin-check` line reads `reason=physics-ahead detail=depth=<d> limit=0.15 physics=<class>`. A forced request logs `refuse pin fastener=<f> reason=no-wall detail=physics-ahead probe-detail=depth=<d> limit=0.15 physics=<class> ...` on the server and shows "The wall is not where it looks; the note would be buried."
+- With the debug flag off, the client builds no `probe:` line and no detail string per frame; the server still prints the probe detail on its production `refuse pin` line.
+- The config write-back goes through `config.json.tmp`; a failure logs `config upgrade not written; step=<save|validate|copy|verify>`. A file newer than the build logs `config newer than this build; left as written`.
+- The production `pin` line prints `wall=-` for a class-less piece; the B5 `footprint` rays start 1.0 m out, so a face up to 1 m deep now reads a depth instead of 0.2999.
+
+TGA-009 scenario 7 (no migration of a version 2 file): the 0.06 to 0.08 move is a default change, not an upgrade. A version 2 file holding 0.06 keeps 0.06, because the loader cannot tell a hand-set 0.06 from the October 20 default; a fresh profile takes 0.08; a version 1 file upgrades to 2 and fills a missing or zero rough offset with 0.08. Row TK-F8 checks all three.
+
+Setup, in this order:
+
+1. Back up `D:\GitHub\nimby-badlands-server\profiles\main-round1\NimbyTack\config.json` to the main checkout's `logs\tack-config.json.v2-bak-20261021-fixround` (beside the two existing backups), then remove the `roughSurfaceOffsetMeters` key from the profile file so the build default (0.08) runs. Keep both Tack debug flags (server profile and client).
+2. Server, from this worktree, once Jeff says the server is free (port 2302, `storage_999`): `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath 'D:\DayZServer' -InstanceId 999 -BuildPath .\build\@NIMBY-<stamp> -ProfileName main-round1` (the join password comes from the `NIMBY_JOIN_PASSWORD` environment variable). Client: `Start-NimbyTestClient.ps1 -BuildPath` with the same path.
+3. Tack bug reports take a screenshot from about 3 m back showing the whole building, plus the in-game time. Read the server script log, not the RPT.
+
+| Row | Scenario | Result | Evidence expected |
+| --- | --- | --- | --- |
+| TK-F1 | `Land_House_2M1`, both TK-P5 faces (4031.95 298.835 14109.5, normal <-0.595, 0.096, -0.798>; 4038.55 299.336 14118.6, normal <0.801, 0.067, -0.595>) | | No prompt; client `pin-check ... result=refuse reason=physics-ahead detail=depth=<d> limit=0.15 physics=Land_House_2M1`; if forced through, server `refuse pin ... detail=physics-ahead probe-detail=depth=<d> limit=0.15 physics=Land_House_2M1` and the new status message; no `pin` line; a later pin nearby logs the same `nearby=` as before |
+| TK-F2 | `Land_Shed_W6` face with physics 15.6 cm (TK-P3, normal <-0.616, 0, -0.788>, near 4041.79 298.924 14110.2) | | Refused with `physics-ahead`, `depth=` about 0.156 |
+| TK-F3 | `Land_Shed_W6` 18:15 face (physics 7 cm, normal <-0.788, 0, 0.616>, near 4039.81 298.9 14103.7) | | Pins at `offset=0.03` and renders |
+| TK-F4 | Mud-brick compound wall right face (TK-P4, physics 10.3 cm, class-less `wall_m5_corner.p3d` near 4026.15 299.116 14111.5) | | Pins at `offset=0.08` from the build default; first boot with the key removed does not rewrite the file (version 2 stays as written); no stone through the sheet, no float; 3 m screenshot |
+| TK-F5 | `Land_TradTent_Small` (TK-R3-1/2, near 3141 321 14688) | | Still pins at `offset=0.06` (`surface=` empty); negative `depth=` does not trip the guard; nothing shows inside |
+| TK-F6 | Chain-link fence (`wall_fen4_8.p3d`, the 00:56 spot) | | Still pins at 0.03 |
+| TK-F7 | A player-built fence between the player and a house wall within 1.5 m, cursor on the house; then the fence itself as the target | | Record which: the guard refuses (physics hit on the fence far in front of the view hit) or the note lands on the house behind the fence. The fence as target refuses `target-not-building` today; record the `pin-check` line and the fence's class and `shape=` token for the Part 2 study |
+| TK-F8 | Config: a version 2 file holding 0.06; a fresh profile; a version 1 file (restore `logs\tack-config.json.v1-bak-20261021`) | | 0.06 stays 0.06 (`rough-offset=0.06`, no `config upgraded`); fresh reads 0.08 (`config missing; defaults written`, file holds `"roughSurfaceOffsetMeters": 0.08`); v1 upgrades to 2 with 0.08, `config upgraded; from=1 to=2`, no `config.json.tmp` left in the folder |
+| TK-F9 | Config error paths (TGA-012): a file with a trailing comma; a valid file with `wallOffsetMeters: 5.0` and `areaCapCount: -3`; a version 1 file missing `unknownSurfaceOffsetMeters`; a version 2 file with one key deleted by hand | | `config invalid; defaults in use` and the file untouched; `config clamped; fields=2` and `offset=0.2` on a pin; the upgrade writes 0.06 for the unknown offset; record what the engine does with a deleted key (zero or initializer), which settles review row 7 |
+| TK-F10 | Regression the study branch never re-ran | | Take-down damage per fastener (one pull each: 5/3/7/5), burn one note, TK-005 area cap with cap 2, read by a second player if L is available |
+
+Findings:
+
+- (none yet)

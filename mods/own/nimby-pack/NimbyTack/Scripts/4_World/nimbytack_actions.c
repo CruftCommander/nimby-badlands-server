@@ -19,7 +19,12 @@
 // Part B  : With the debug flag the pin actions write one pin-check line per
 //           change of (reason, target) on the client, and one per request on the
 //           server, naming the first check that refused (T-014 study, October 20,
-//           2026). Without the flag Can is vanilla's and no line is built.
+//           2026). Without the flag Can is vanilla's and the client builds no line
+//           and no detail string per frame; the server builds the probe's refusal
+//           detail once per request for its production refuse pin line.
+// Guard   : NIMBY-T-015 (T17, October 21, 2026): a probe refused with reason
+//           physics-ahead gets its own status message, because the wall is there
+//           but the note would be buried inside it.
 // -----------------------------------------------------------------------------
 class ActionNimbyTackPinCB : ActionContinuousBaseCB
 {
@@ -336,7 +341,14 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             string refuseLine = "refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " probe-detail=" + NimbyTackWorld.LastProbeDetail();
             refuseLine = refuseLine + " " + NimbyTackWorld.TargetTag(action_data.m_Target) + " " + NimbyTackWorld.ReachTag(player, action_data.m_Target) + " " + who;
             NimbyTackLog.Info(refuseLine);
-            player.MessageStatus("There is no wall there.");
+            if (NimbyTackWorld.LastProbeReason() == NimbyTackRules.REASON_PHYSICS_AHEAD)
+            {
+                player.MessageStatus("The wall is not where it looks; the note would be buried.");
+            }
+            else
+            {
+                player.MessageStatus("There is no wall there.");
+            }
             return;
         }
         if (fastener == NimbyTackFastener.KNIFE && !NimbyTackRules.IsWoodSurface(hit.surface))
@@ -366,7 +378,7 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         ConsumeFastener(player, tool, nail, pinned, config);
         GetGame().ObjectDelete(sheet);
         // Built in two statements: one concatenation this long is "Formula too complex" to Enforce.
-        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
+        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + NimbyTackWorld.ClassOf(hit.wall) + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
         line = line + " text=" + textTag + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
         NimbyTackLog.Info(line);
         // Part B (B5): debug only; measures the footprint, moves nothing.

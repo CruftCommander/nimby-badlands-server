@@ -2,7 +2,7 @@
 // NimbyTack - Tack. Pin a sheet of paper to a wall with a hammer and nail (or a
 // blunt tool), duct tape, epoxy putty, or a knife through the sheet; anyone pulls
 // it down by hand at the cost of some damage to the sheet.
-// Plan: docs/plans/2026-10-15-tack-plan.md (v0.5). Owner: Jeff Fabish.
+// Plan: docs/plans/2026-10-15-tack-plan.md (v0.13). Owner: Jeff Fabish.
 // Content addon (shared rules 6.1): the pinned note is a persistent class of its
 // own (T3) and nothing is written to the vanilla Paper class. Removing the addon
 // drops only pinned notes; vanilla sheets and Scrawl stacks are unaffected.

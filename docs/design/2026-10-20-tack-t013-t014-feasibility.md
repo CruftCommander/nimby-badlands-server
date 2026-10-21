@@ -189,6 +189,7 @@ Reasons B1 names, each from the first check that fails:
 | `out-of-reach` | `nimbytack_world.c:87` | `head` against `reachMeters` |
 | `no-hit`, `no-building-hit` | `nimbytack_world.c:98,148` | first result's class |
 | `no-physics-normal` | `nimbytack_world.c:115` | `none` or `zero` |
+| `physics-ahead` | `nimbytack_world.c` `WallNormal`, since October 21, 2026 (plan T17, NIMBY-T-015) | `depth=` along the normal, `limit=0.15`, `physics=` the physics hit's class |
 | `not-wall-angle` | `nimbytack_world.c:122` | the normal's vertical part |
 | `not-wood` | `nimbytack_actions.c:100` | the surface |
 | `ok` | - | the surface and the offset the server would use |
@@ -239,4 +240,4 @@ Pending Part B data, not asked now: if `out-of-reach` dominates, whether Tack's 
 | D3 | Section 4.3 is recorded as NIMBY-T-015 in the Tack test record; the 15 cm guard waits for the Part B data |
 | D4 | Iteration builds use `-SkipBootCheck`; the full build with the boot check waits until Jeff says `D:\DayZServer` is free of the NIMBY-T-011 lifetime run |
 
-Built on this branch as plan v0.12 (decision T16, T3 and T6 updated). Section 5.2's steps, updated for the option (a) check, are rows TK-P0 to TK-P10 in `docs/testing/2026-10-18-tack-merged-main.md`, section "T-013 option (a) and T-014 diagnostics (Part B)". Two details differ from section 5.1: the `pin-check` gate runs on the client only, and the server writes one line per request, because the server evaluates `Can` once per request (`ActionManagerServer.c:168`) and its action objects are shared by every player (`ActionManagerBase.c:50`); and a refusal after Tack's own checks passed is named `stance-change` (`ActionBase.c:957-963`).
+October 21, 2026, after the Part B in-game run: D3's guard is built in the fix round on this branch (plan T17): the pin is refused when the physics hit stands more than 15 cm in front of the view hit, reason `physics-ahead`. D2's 0.06 default became 0.08 (TK-P10). Both are recorded in the Tack test record, section "Fix round, October 21, 2026". Built on this branch as plan v0.12 (decision T16, T3 and T6 updated), then v0.13 (T17, the 0.08 default). Section 5.2's steps, updated for the option (a) check, are rows TK-P0 to TK-P10 in `docs/testing/2026-10-18-tack-merged-main.md`, section "T-013 option (a) and T-014 diagnostics (Part B)". Two details differ from section 5.1: the `pin-check` gate runs on the client only, and the server writes one line per request, because the server evaluates `Can` once per request (`ActionManagerServer.c:168`) and its action objects are shared by every player (`ActionManagerBase.c:50`); and a refusal after Tack's own checks passed is named `stance-change` (`ActionBase.c:957-963`).

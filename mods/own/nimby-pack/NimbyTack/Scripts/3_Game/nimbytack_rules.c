@@ -5,9 +5,10 @@
 //           reads from the world: the wall-angle test (T2), the fastener lists
 //           (T2, T7), the wood test for the knife (T2), the written-first sheet
 //           choice (T2), the sheet's facing and offset (T3), take-down damage (T4),
-//           the per-area cap (T6), the config clamps and upgrade (T6), and the
+//           the per-area cap (T6), the config clamps and upgrade (T6), the
 //           pure parts of the Part B diagnostics (pin-check gate, signed depth,
-//           sheet kinds, footprint standoff; T-014 study, October 20, 2026).
+//           sheet kinds, footprint standoff; T-014 study, October 20, 2026), and
+//           the physics-depth guard (NIMBY-T-015, T17, October 21, 2026).
 // -----------------------------------------------------------------------------
 class NimbyTackFastener
 {
@@ -363,7 +364,10 @@ class NimbyTackRules
     // something, so the loader writes the file back once. Version 1 files (October 17-20, 2026)
     // can lack the surface offsets added since. Whether the JSON reader leaves a missing key at
     // its initializer or at zero is native and unstated, so a surface offset that reads zero or
-    // below takes the default here and a value the operator wrote by hand is kept.
+    // below takes the default here and a value the operator wrote by hand is kept. The rough
+    // default's move from 0.06 to 0.08 (TK-P10, October 21, 2026) did not bump the version: a
+    // version 2 file keeps what it holds, because an upgrade could not tell a hand-set 0.06 from
+    // the old default. A file newer than the build is left alone (version 3 returns false here).
     static bool UpgradeConfig(NimbyTackConfig config, NimbyTackConfig defaults)
     {
         if (config.version >= defaults.version)
@@ -400,6 +404,27 @@ class NimbyTackRules
     static float SignedDepth(vector point, vector viewHit, vector normal)
     {
         return vector.Dot(point - viewHit, normal);
+    }
+
+    // NIMBY-T-015 (T17, Jeff, October 21, 2026): the physics hit may stand at most this far in
+    // front of the placement point (the view hit). On Land_House_2M1 it stood 0.6 to 0.98 m in
+    // front and the note was buried inside the wall (TK-P5, two faces); the visible pins of
+    // October 21 reached 10.3 cm (TK-P4, mud brick) and the T-016 shed face reads 15.6 cm, which
+    // this also refuses. A code constant, not a config key: a key would need config version 3, an
+    // UpgradeConfig branch, a Sanitize clamp, and the write-back path.
+    static const float PHYSICS_DEPTH_LIMIT_METERS = 0.15;
+    // The probe reason the guard reports (the production refuse line's detail= and the pin-check
+    // line's reason=).
+    static const string REASON_PHYSICS_AHEAD = "physics-ahead";
+
+    // NIMBY-T-015: true when the physics hit is accepted. depth is SignedDepth(physicsHit,
+    // viewHit, normal) with the normal already flipped toward the player, so a positive depth is in
+    // front of the placement point. The ruling says "more than 15 cm", so exactly the limit is
+    // accepted, and every negative depth is accepted, which keeps the tent whose physics shell sits
+    // 3 to 5 cm behind the cloth (NIMBY-T-008).
+    static bool PhysicsHitAccepted(float depth, float limitMeters)
+    {
+        return depth <= limitMeters;
     }
 
     // Part B (B1): what one Paper in inventory counts as on the no-single-sheet line, in the order
@@ -528,7 +553,7 @@ class NimbyTackRules
         string mudBrick = "dz\\data_takistan\\data\\penetration\\mud_brick.bisurf";
         float roughPicked = OffsetFor(mudBrick, defaults);
         failures += Case(results, "mud brick takes the rough-surface offset", Math.AbsFloat(roughPicked - defaults.roughSurfaceOffsetMeters) < 0.0001);
-        failures += Case(results, "rough-surface default is 6 cm", Math.AbsFloat(defaults.roughSurfaceOffsetMeters - 0.06) < 0.0001);
+        failures += Case(results, "rough-surface default is 8 cm", Math.AbsFloat(defaults.roughSurfaceOffsetMeters - 0.08) < 0.0001);
         failures += Case(results, "mud brick match ignores case and slash direction", IsRoughSurface("DZ/Data_Takistan/Data/Penetration/Mud_Brick.bisurf"));
         failures += Case(results, "mud brick in another folder is not on the list", !IsRoughSurface("dz\\data\\data\\penetration\\mud_brick.bisurf"));
         failures += Case(results, "concrete is not a rough surface", !IsRoughSurface("dz\\data\\data\\penetration\\concrete.bisurf"));
@@ -600,13 +625,43 @@ class NimbyTackRules
         bool upgraded = UpgradeConfig(oldFile, defaults);
         failures += Case(results, "version 1 file is upgraded", upgraded && oldFile.version == defaults.version);
         failures += Case(results, "upgrade fills a missing rough-surface offset with the default", Math.AbsFloat(oldFile.roughSurfaceOffsetMeters - defaults.roughSurfaceOffsetMeters) < 0.0001);
+        // 0.11 is no default of any version, so this case fails if the upgrade ever overwrites a
+        // hand-set value (0.08 became the default on October 21, 2026).
         NimbyTackConfig handSet = new NimbyTackConfig();
         handSet.version = 1;
-        handSet.roughSurfaceOffsetMeters = 0.08;
+        handSet.roughSurfaceOffsetMeters = 0.11;
         UpgradeConfig(handSet, defaults);
-        failures += Case(results, "upgrade keeps a hand-set rough-surface offset", Math.AbsFloat(handSet.roughSurfaceOffsetMeters - 0.08) < 0.0001);
+        failures += Case(results, "upgrade keeps a hand-set rough-surface offset", Math.AbsFloat(handSet.roughSurfaceOffsetMeters - 0.11) < 0.0001);
+        NimbyTackConfig oldUnknown = new NimbyTackConfig();
+        oldUnknown.version = 1;
+        oldUnknown.unknownSurfaceOffsetMeters = 0.0;
+        UpgradeConfig(oldUnknown, defaults);
+        failures += Case(results, "upgrade fills a missing unknown-surface offset with the default", Math.AbsFloat(oldUnknown.unknownSurfaceOffsetMeters - defaults.unknownSurfaceOffsetMeters) < 0.0001);
         NimbyTackConfig current = new NimbyTackConfig();
         failures += Case(results, "current file is not upgraded", !UpgradeConfig(current, defaults));
+        NimbyTackConfig future = new NimbyTackConfig();
+        future.version = 3;
+        future.roughSurfaceOffsetMeters = 0.11;
+        bool futureTouched = UpgradeConfig(future, defaults);
+        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 3 && Math.AbsFloat(future.roughSurfaceOffsetMeters - 0.11) < 0.0001);
+
+        // NIMBY-T-015 (T17): the physics-depth guard against the depths measured on October 21, 2026.
+        float depthLimit = PHYSICS_DEPTH_LIMIT_METERS;
+        failures += Case(results, "physics depth limit is 15 cm", Math.AbsFloat(depthLimit - 0.15) < 0.0001);
+        failures += Case(results, "physics 0.979 m ahead refuses (TK-P5 first face)", !PhysicsHitAccepted(0.979, depthLimit));
+        failures += Case(results, "physics 0.635 m ahead refuses (TK-P5 second face)", !PhysicsHitAccepted(0.635, depthLimit));
+        failures += Case(results, "physics 15.6 cm ahead refuses (TK-P3 shed face, T-016)", !PhysicsHitAccepted(0.156, depthLimit));
+        failures += Case(results, "physics 15.01 cm ahead refuses", !PhysicsHitAccepted(0.1501, depthLimit));
+        failures += Case(results, "physics exactly 15 cm ahead is accepted", PhysicsHitAccepted(0.15, depthLimit));
+        failures += Case(results, "physics 10.3 cm ahead is accepted (TK-P4 right face)", PhysicsHitAccepted(0.103, depthLimit));
+        failures += Case(results, "physics 7 cm ahead is accepted (18:15 shed face)", PhysicsHitAccepted(0.07, depthLimit));
+        failures += Case(results, "physics 4 cm ahead is accepted (chain-link fence)", PhysicsHitAccepted(0.040, depthLimit));
+        failures += Case(results, "physics 5 cm behind is accepted (tent)", PhysicsHitAccepted(-0.05, depthLimit));
+        string ahead = REASON_PHYSICS_AHEAD;
+        bool distinct = ahead != "" && ahead != "no-physics-normal" && ahead != "no-hit" && ahead != "no-building-hit";
+        distinct = distinct && ahead != "not-wall-angle" && ahead != "out-of-reach" && ahead != "target-not-building";
+        distinct = distinct && ahead != "no-target" && ahead != "no-object" && ahead != "not-wood";
+        failures += Case(results, "physics-ahead reason is its own token", distinct);
 
         // Part B: the pin-check gate, the signed depth, sheet kinds, the mask, the standoff.
         failures += Case(results, "pin-check logs a new key after the floor", ShouldLogCheck("ok|a", 10.0, "no-hit|a", 10.3, 0.25));

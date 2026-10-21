@@ -11,11 +11,19 @@
 //           "normal * offset" had been pushing the sheet INTO the wall, which is why
 //           1 cm sat inside the mud brick and 6 cm vanished in both walls. The normal
 //           now comes from DayZPhysics.RayCastBullet and points toward the player.
+// Guard   : NIMBY-T-015 (T17, October 21, 2026): WallNormal refuses the pin when the
+//           physics hit stands more than NimbyTackRules.PHYSICS_DEPTH_LIMIT_METERS in
+//           front of the view hit (reason physics-ahead), so a note is never placed
+//           inside a wall whose physics shell sits far in front of its drawn face.
 // Part B  : The T-013/T-014 study (October 20, 2026) adds debug-only diagnostics:
 //           a detail for every probe refusal (B1), the vanilla cursor ray rebuilt
 //           (B2), the client's probe lines held for the pin-check gate (B3), the
 //           fire line's ray= and engine-computed depth= (B4), and the footprint
 //           samples at pin time (B5). None changes where or whether a note pins.
+// Cost    : The probe's detail strings and probe: lines are built only when they
+//           can be read: with the debug flag, or (the detail alone) on the server,
+//           whose production refuse line prints it once per request. The client
+//           without the flag builds no string per frame (review row 1).
 // -----------------------------------------------------------------------------
 class NimbyTackHit
 {
@@ -63,6 +71,18 @@ class NimbyTackWorld
     static string LastProbeDetail()
     {
         return s_LastProbeDetail;
+    }
+
+    // True when a refusal detail is worth building: the debug flag is on (the pin-check line reads
+    // it on either side), or this is the server, whose production refuse pin line prints it once
+    // per request. The client's per-frame condition without the flag skips the ToString work.
+    protected static bool WantDetail()
+    {
+        if (NimbyTackLog.IsDebug())
+        {
+            return true;
+        }
+        return GetGame().IsServer();
     }
 
     // Part B (B3): on the client the pin condition runs every frame; its probe lines are held
@@ -141,16 +161,24 @@ class NimbyTackWorld
         if (wall.IsMan() || wall.IsInherited(ItemBase))
         {
             s_LastProbeReason = "target-not-building";
-            s_LastProbeDetail = ClassOf(wall);
+            if (WantDetail())
+            {
+                s_LastProbeDetail = ClassOf(wall);
+            }
             return false;
         }
         vector head = MiscGameplayFunctions.GetPlayerHeadPosition(player);
         vector cursor = target.GetCursorHitPos();
         float headDistance = vector.Distance(head, cursor);
-        if (headDistance > config.reachMeters)
+        // Written as "not within reach" so a NaN distance (a cursor with a NaN component) refuses
+        // instead of reaching the raycast (review row 3).
+        if (!(headDistance <= config.reachMeters))
         {
             s_LastProbeReason = "out-of-reach";
-            s_LastProbeDetail = "head=" + headDistance.ToString() + " limit=" + config.reachMeters.ToString();
+            if (WantDetail())
+            {
+                s_LastProbeDetail = "head=" + headDistance.ToString() + " limit=" + config.reachMeters.ToString();
+            }
             return false;
         }
         vector direction = vector.Direction(head, cursor);
@@ -184,7 +212,12 @@ class NimbyTackWorld
             vector normal;
             if (!WallNormal(head, end, direction, player, result.pos, normal))
             {
-                s_LastProbeReason = "no-physics-normal";
+                // WallNormal names its own refusal (no-physics-normal or physics-ahead); this is
+                // the fallback for a path that did not.
+                if (s_LastProbeReason == "")
+                {
+                    s_LastProbeReason = "no-physics-normal";
+                }
                 return false;
             }
             // The angle test comes before the surface lookup: a floor or a ceiling never pays
@@ -192,8 +225,14 @@ class NimbyTackWorld
             if (!NimbyTackRules.IsWallNormal(normal, config.wallAngleDegrees))
             {
                 s_LastProbeReason = "not-wall-angle";
-                s_LastProbeDetail = "ny=" + normal[1].ToString();
-                Trace("probe: refused hit=" + result.obj.GetType() + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+                if (WantDetail())
+                {
+                    s_LastProbeDetail = "ny=" + normal[1].ToString();
+                }
+                if (NimbyTackLog.IsDebug())
+                {
+                    Trace("probe: refused hit=" + result.obj.GetType() + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+                }
                 return false;
             }
             string surfaceName = "";
@@ -208,7 +247,10 @@ class NimbyTackWorld
                     surfaceName = FireSurfaceName(head, end, player, result.obj, result.pos, normal);
                 }
             }
-            Trace("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+            if (NimbyTackLog.IsDebug())
+            {
+                Trace("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+            }
             hit = new NimbyTackHit();
             hit.position = result.pos;
             hit.normal = normal;
@@ -217,7 +259,10 @@ class NimbyTackWorld
             return true;
         }
         s_LastProbeReason = "no-building-hit";
-        s_LastProbeDetail = "skipped=" + skipped;
+        if (WantDetail())
+        {
+            s_LastProbeDetail = "skipped=" + skipped;
+        }
         return false;
     }
 
@@ -341,8 +386,12 @@ class NimbyTackWorld
     // player, which is the side the sheet hangs on and faces.
     // Part B (B4): the line carries gap= (straight distance to the view hit) and depth= (signed,
     // along the normal, positive in front of the view hit), computed here at full precision.
-    // NIMBY-T-015: a physics hit 0.6 m in front of the view hit was accepted; the guard waits for
-    // this data (Jeff, October 20, 2026).
+    // NIMBY-T-015 (T17, Jeff, October 21, 2026): a physics hit more than
+    // NimbyTackRules.PHYSICS_DEPTH_LIMIT_METERS in front of the view hit refuses the pin with
+    // reason physics-ahead; on Land_House_2M1 it stood 0.6 to 0.98 m in front and the note was
+    // buried (TK-P5). This is the only place that holds both hits, and the normal is already
+    // flipped toward the player when the depth is taken. Every refusal here sets the reason; the
+    // physics line is traced before the guard so the depth stays visible with the flag on.
     static bool WallNormal(vector head, vector end, vector direction, PlayerBase player, vector viewHit, out vector normal)
     {
         Object hitObject;
@@ -351,12 +400,14 @@ class NimbyTackWorld
         float hitFraction;
         if (!DayZPhysics.RayCastBullet(head, end, PhxInteractionLayers.BUILDING, player, hitObject, hitPosition, hitNormal, hitFraction))
         {
+            s_LastProbeReason = "no-physics-normal";
             s_LastProbeDetail = "none";
             Trace("probe: physics ray had no building hit");
             return false;
         }
         if (hitNormal.Length() < 0.5)
         {
+            s_LastProbeReason = "no-physics-normal";
             s_LastProbeDetail = "zero";
             Trace("probe: physics ray returned a zero normal");
             return false;
@@ -369,13 +420,26 @@ class NimbyTackWorld
         string hitName = "none";
         if (hitObject)
         {
-            hitName = hitObject.GetType();
+            hitName = ClassOf(hitObject);
         }
-        float gap = vector.Distance(hitPosition, viewHit);
         float depth = NimbyTackRules.SignedDepth(hitPosition, viewHit, hitNormal);
-        string line = "probe: physics hit=" + hitName + " normal=" + hitNormal.ToString() + " fraction=" + hitFraction.ToString() + " " + PositionTag(hitPosition);
-        line = line + " gap=" + gap.ToString() + " depth=" + depth.ToString();
-        Trace(line);
+        if (NimbyTackLog.IsDebug())
+        {
+            float gap = vector.Distance(hitPosition, viewHit);
+            string line = "probe: physics hit=" + hitName + " normal=" + hitNormal.ToString() + " fraction=" + hitFraction.ToString() + " " + PositionTag(hitPosition);
+            line = line + " gap=" + gap.ToString() + " depth=" + depth.ToString();
+            Trace(line);
+        }
+        float depthLimit = NimbyTackRules.PHYSICS_DEPTH_LIMIT_METERS;
+        if (!NimbyTackRules.PhysicsHitAccepted(depth, depthLimit))
+        {
+            s_LastProbeReason = NimbyTackRules.REASON_PHYSICS_AHEAD;
+            if (WantDetail())
+            {
+                s_LastProbeDetail = "depth=" + depth.ToString() + " limit=" + depthLimit.ToString() + " physics=" + hitName;
+            }
+            return false;
+        }
         normal = hitNormal;
         return true;
     }
@@ -647,9 +711,12 @@ class NimbyTackWorld
 
     // B5: option (b) of the T-013 study measured at pin time and not applied. Five points over the
     // sheet's footprint (center and four corners, in the plane of the view hit), each cast back
-    // along the normal from 30 cm out to 10 cm behind, against the view, fire, and physics layers
+    // along the normal from 1.0 m out to 10 cm behind, against the view, fire, and physics layers
     // of the wall object; depth is signed along the normal from the view hit. standoff= is what
-    // option (b) would add to the wall offset (NimbyTackRules.FootprintStandoff, 10 cm cap).
+    // option (b) would add to the wall offset (NimbyTackRules.FootprintStandoff, 10 cm cap). The
+    // rays started 30 cm out until October 21, 2026, which is why TK-P5 read 0.2999 on faces whose
+    // layers stand 0.6 to 0.98 m out; 1.0 m lets B5 see the T-015 geometry. A pin on such a face
+    // is refused since T17, so this now matters only for faces between 15 cm and 1.0 m.
     static void LogFootprint(PlayerBase player, NimbyTackHit hit, Object pinned, float usedOffset, float wallOffset)
     {
         if (!NimbyTackLog.IsDebug() || !hit || !hit.wall)
@@ -684,7 +751,7 @@ class NimbyTackWorld
         array<float> depths = new array<float>;
         foreach (vector point : points)
         {
-            vector start = point + hit.normal * 0.3;
+            vector start = point + hit.normal * 1.0;
             vector end = point - hit.normal * 0.1;
             depths.Insert(SampleDepth(intersectType, start, end, player, hit));
         }
