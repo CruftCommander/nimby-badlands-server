@@ -179,6 +179,7 @@ Coverage, October 21, 2026:
 | `Land_TradTent_Small` (map tent) | Good (TK-R3-2) |
 | Concrete, fabric | One pin each in earlier rounds |
 | Other Nasdara houses (`Land_House_*`, `Land_House_1M3_*`), concrete and industrial, corrugated metal, ruins, the dam buildings | Not tested; T-015 is per model, so at least two faces each |
-| Chain-link and wire fences, railings, windows and glass, doors | Not tested; doors are animated and a note does not follow a door |
+| Chain-link fence, class-less `dz\structures_bliss\walls\wall_fen4_8.p3d` | Good at 3 cm (Jeff, 00:56:12.969): `pin ... wall= surface=dz\data\data\penetration\weaponLift.bisurf offset=0.03`; the sheet hangs on the post and top rail, its top corners miss every layer (above the rail), the bottom corners read fire 0.4 cm and physics 4.0 cm |
+| Wire fences, railings, windows and glass, doors | Not tested; doors are animated and a note does not follow a door |
 | Player builds: Fence (frame, wood, metal, gate), Watchtower, the three shelters, player tents, flag pole | Not tested. `nimbytack_world.c:141` refuses any target inheriting `ItemBase`, and vanilla base building and player tents inherit it, so these are expected to refuse with `target-not-building`; plan item 6 asks for a pin on a base-building wall. Scope is Jeff's call |
 | Vehicles, barrels and crates, trees and rocks | Not tested; expected refusals |
