@@ -1,6 +1,6 @@
 # Beards feasibility
 
-Draft v0.1, October 21, 2026. Owner: Jeff Fabish. Status: feasibility only, ordered by Jeff on October 21, 2026 with the condition that Beards leaves the mod board if 1.30 cannot swap or morph the head mesh at runtime. Every `file:line` is relative to `vendor/dayz-1.30-scripts/scripts/` (build 1.30.164078.38).
+Draft v0.2, October 21, 2026. Owner: Jeff Fabish. Status: Jeff ruled on October 21, 2026 (evening) that Beards takes the replacement-head-model route (B3), because vanilla's maximum beard is not long enough for Nasdara; Beards therefore stays on the board as a model project and the leave-the-board condition in v0.1 is withdrawn. Scope of that ruling, read from `D:\DayZServer\addons\characters_heads.pbo` on October 21, 2026: 22 male head models (`m_Adam`, `m_Boris`, `m_Cyril`, `m_Denis_2`, `m_Elias`, `m_Francis`, `m_Guo`, `m_Hassan`, `m_Indar`, `m_Jose`, `m_Kaito`, `m_Lewis`, `m_Manua`, `m_Niki_2`, `m_Oliver`, `m_Peter`, `m_Quinn`, `m_Rolf`, `m_Ruslan`, `m_Seth`, `m_Taiki`, plus the `m_white_01_above0` base) for 20 `SurvivorM_*` classes, each needing a longer beard mesh that keeps the vanilla hidden-selection groups (`beard`, `hair`, `Group_HairBeard`) so masks and helmets still hide it. Every model is Claude-made under the smoking study's D2 rule; the plan, when ordered, sequences one head first as the proof and the other 21 after Jeff accepts it. Every `file:line` is relative to `vendor/dayz-1.30-scripts/scripts/` (build 1.30.164078.38).
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30 / Nasdara.
 
@@ -51,6 +51,7 @@ Under the leave-the-board condition: the head mesh cannot be morphed at runtime,
 
 | # | Decision | Recommendation |
 | --- | --- | --- |
-| BD1 | Board status | Beards as a model project leaves the board (the condition is met: no runtime mesh morphing). B1 becomes a Tweaker row named "Beard clock" |
-| BD2 | B2 prototype | No, unless Jeff is happy to lose the mask slot for long-bearded characters; on Badlands the shemagh and the gas mask matter |
-| BD3 | B1 defaults | 48 hours of play time to the full beard, six stages |
+| BD1 | Board status | **Ruled by Jeff, October 21, 2026: B3, replacement head models.** Beards stays on the board, unordered, as the fleet's one model project; B1 (slower clock, more stages) ships with it so the long beard has a clock to arrive on |
+| BD2 | B2 prototype | Withdrawn by the BD1 ruling |
+| BD3 | B1 defaults | 48 hours of play time to the full beard, six stages (recommendation stands) |
+| BD4 | First head | `m_Adam` (the default male head), as the proof before the other 21; Jeff accepts it in game before any further head is modelled |
