@@ -137,3 +137,41 @@ The rows above stay as filled; these lines supersede them where they differ. Sou
 - **In-flight guard:** id 23 also belongs to the list (`REFUSED detail=item in flight (id=22)` 16:30:24.729).
 - **HD-001 evidence narrowed:** "no `signal=` debug line on the server or either client" holds for the server and D's client only; the laptop's logs for 16:08 to 16:30 were not copied (`logs\laptop-script-20261020.log` is its 17:12:52 launch).
 - **HD-022 reconnect cause corrected:** the character was removed at 17:01:21.04, 15 s after the 17:01:06 disconnect; the relogs began at 17:02:04 and 17:03:40, and both were kicked `Login timed out. (WaitAuthPlayerLoginState)` 10 s into authentication, a separate failure. The connect speed did not decide it; the relog started after the window. Reaching the reconnect case needs a relog inside 15 s of the drop, or a longer `logoutTime` in the test config. Result stays NOT RUN.
+
+## Hands T-010 diagnostic, October 20, 2026 (two clients, `diag/hands-t010`)
+
+Build `@NIMBY-20261020-222301` (branch `diag/hands-t010` at `041b898`, boot check PASS) on the replica `D:\DayZServer`, instance 999, profile `hands-t010-diag` in that worktree. Server log: `script_2026-10-20_23-17-55.log` in the profile (the RPT of the same stamp is buffered and lags; the script log carries every line). D client: `script_2026-10-20_23-22-49.log` in `%LOCALAPPDATA%\DayZ`. L client: `logs\laptop-hands-diag\script_2026-10-20_23-26-11.log` in the worktree (the laptop clock runs about 2.3 s ahead of the desktop). In this run D was `Road Dog` (`h8o5r...`) and L was `Road Dog (2)` (`tYlJF...`); the in-game names follow join order, the ids do not change. Run sheet: `docs/testing/2026-10-20-hands-t010-diag-runsheet.md` on that branch. Jeff shortened blocks 2 and 3 once block 1 showed `cmtd=false` (readings below).
+
+| Block | Variant | Attempts (id, server time) | Result |
+| --- | --- | --- | --- |
+| 1 | V0 | Take id 1 (23:29:36), Give id 3 (23:30:34), Put In Pockets id 5 (23:31:16). Ids 2 and 4: `REFUSED detail=item in flight`, a second press inside the 5 s window | All `UNCONFIRMED`, Wrench #05018 stayed in D's hands. `diag=predispatch ... cmtd=false` on every id |
+| 2 | V1 | Put In Pockets ids 6 (23:32:43) and 7 (23:32:49) | `diag=clearjuncture ... cleared=1` before each, still `cmtd=false`, `UNCONFIRMED`. Take and Give on V1 not run |
+| 3 | V2 | Take ids 8 (23:36:41) and 9 (23:36:54) | `diag=wait result=free waited=764` and `805`; predispatch with `act=none` on both players and `cmtd=false`; `UNCONFIRMED`. Jeff: D's offer animation stops when L's Take fires. Give and Put In Pockets on V2 not run |
+| 4 | V3 | Take id 10, D to L (23:38:41); Take id 11, L to D (23:41:06); Give id 12 (23:44:12); Put In Pockets id 13 (23:45:29) | All `CONFIRMED` about 0.4 s after dispatch: `diag=step1 result=arrived` (the giver's own KameezShirt), `diag=step2 result=true`, `EEItemLocationChanged` giver cargo to receiver cargo on the server and on both clients. On each id `cmtdReceiver=false`: the direct hand move into the receiver is still refused |
+| 5 | B0, vanilla control | L cuffed 23:49:43; D dragged L's cargo to D's hands 23:49:52, then D's hands to L's cargo 23:50:16 | PASS: `EEItemLocationChanged HANDS:SurvivorM_Guo@h8o5r... -> CARGO:KameezShirt_BlueFlowers@tYlJF...` on the server and L's client. Hands closed L's pockets on restraint (`pockets ... open=false reason=restrained`) |
+
+Readings against the study's section 7.5:
+
+- **H-C true.** `cmtd=false` on all seven V0 to V2 dispatches, including V2 with both players idle and no action running. The engine's `CheckMoveToDstRequest` refuses a hand-sourced move into a live player's cargo whatever the timing or locks; B0 shows the same move passes once the receiver is restrained.
+- **H-D false.** The `SJ_INVENTORY` juncture played on the server and on D's client (`controlled=true`) within about 50 ms of each dispatch.
+- **H-A not the cause.** V1 cleared the lock and the check still returned `false`.
+- **H-B not reached.** On V0 to V2, D's hand state never left `Equipped idle=true`: the animated move never started. On V3, D's client showed the normal animated move (`state=UNKNOWN idle=false`, then `Empty`).
+- The deferred hand event left the queue every time (`proc=true`, then `proc=false` within 50 ms).
+- Nothing was lost or duplicated in any attempt. 0 `SCRIPT (E)` on the server and on both clients. The server shut down cleanly at 23:54:05 after both clients logged out.
+
+Rulings (Jeff, October 20, 2026):
+
+- **J2: P3.** The giver needs room in their own inventory for the item in hands for the moment between the two steps. With no room, step 1 is refused and the item stays in hands (`REFUSED`); if the receiver fills between the steps, the item stays in the giver's inventory. No branch creates or deletes an entity.
+- **J3: moot.** It applied only to P2, which H-C rules out.
+- B0 was run at Jeff's request, though H-C was already proven.
+
+Other observations:
+
+- Jeff, block 1: a sound like dropping the Wrench played on each attempt; not heard on V2. The logs do not show its source.
+- Two client-side drops with no kick or BattlEye line (`[Disconnect]: Client ... early disconnect`): D at 23:15:54 on the first server of the night (D's client logged `[ErrorModuleHandler] :: Error thrown: 0x00040001`; Jeff saw no message), and L at 23:24:56. Jeff reports the laptop has power issues, which may explain L's drop; D's is unexplained.
+- `Start-NimbyTestServer.ps1`: with `-ProfileName` and no `-JoinPassword`, the random join password is not saved to `<profile>\join-password.txt`, contrary to the script's help. Jeff has a standing join password for test servers (kept out of the repo); the next fix round defaults the script to it and fixes the save.
+
+Next:
+
+1. Build P3 on `study/hands-t010` with the NIMBY-T-012 toast to both players on success and failure (J4).
+2. Re-test on the P3 build: HD-001 to HD-003, P0-4c to P0-4e, HD-011, and the two P3 cost paths (giver inventory full, so step 1 is refused; receiver fills between the steps, so the item ends in the giver's inventory).
