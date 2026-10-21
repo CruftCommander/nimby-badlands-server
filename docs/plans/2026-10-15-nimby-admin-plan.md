@@ -1,11 +1,13 @@
 # Plan 3 - Central Scrutinizer (`NimbyAdmin`)
 
-Draft v0.4, October 16, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
+Draft v0.5, October 21, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
 Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.1) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; none of it is planned until Jeff rules on its decisions Q1-Q6.
+
+Changes since v0.4 (Jeff's rulings, October 21, 2026, after the gap analysis against COT and VPP): eight capabilities added. Per-stat editor, cure, and restraint join Phase 1; weather presets join Phase 3; vehicle manager, object tools, and admin notes form a new Phase 5 after the first live release (N10). Restraint mechanism (N11), object-tool scope (N12), and the notes store (N13) decided. The capabilities surfaced by the same analysis and not adopted are recorded under Later (not committed) (N14). New `config.json` field `restrainTimeoutMinutes`; new `notes.json` data format.
 
 Changes since v0.3: display name Central Scrutinizer (Jeff, October 16, 2026; was Golden God); the tool serves every admin, not one person; observation features (live player map, spectate) stay out of scope but the architecture carries the seams for them (N9); key bindings are player-configurable per shared rules 5.
 
@@ -32,6 +34,11 @@ Changes since v0.2: display name Golden God (N1); client and server PBO split (N
 | N7 | PBO layout | Client PBO `NimbyAdmin` (menu, request sender, admin-state receiver) plus server-only PBO `NimbyAdminServer` loaded with `-servermod=` (router, permissions, bans, audit, webhook, handlers). See shared rules 8.1 | Decided October 15, 2026 |
 | N9 | Observation seams | Built now, used later: (a) the server-to-client channel is a typed push envelope (`NimbyAdminPush`: kind, sequence, payload), with `role` the only kind in this plan, so a position feed or spectate stream is a new kind, not a new channel; (b) permissions are capability strings on roles (`player.kick`, `spawn.item`, `world.weather`, and reserved `observe.map`, `observe.spectate`), so observation gets its own capabilities with no schema change; (c) the client menu is a page registry (`NimbyAdminPage` subclasses register at init); a Map or Spectate page registers like any other; (d) RPC ids `6550350`-`6550399` are reserved for observation feeds; (e) a streaming handler variant (server-paced, rate-limited, per-subscriber) is specified when the first feed is built, not now. The self-test registers one fake page, one fake push kind, and one fake capability to prove the seams exist | Decided by Jeff, October 16, 2026 (build for later map and spectator views); seam design is Claude's |
 | N8 | Access-file failure | Permissions and bans are written atomically with a `.lkg` copy. On a corrupt load the server uses `.lkg`, logs, posts to Discord, and refuses further edits to that file until repaired. Admission is denied only when no `.lkg` exists | Decided October 15, 2026 |
+| N10 | Placement of the October 21 additions | Player verbs (per-stat editor, cure, restrain and release) ship in release 1 inside Phase 1; weather presets inside Phase 3; vehicle manager, object tools, and admin notes form Phase 5, which starts only after the first live release. Release 1 slips about a week; Phase 5 never blocks it | Decided by Jeff, October 21, 2026 |
+| N11 | Restraint mechanism | Both: the vanilla restrained state (`PlayerBase.SetRestrained`, `PlayerBase.c:2206`; handcuffed animation, visible to bystanders) and an invisible freeze (`HumanInputController.OverrideMovementSpeed`, `human.c:253`). The admin picks per use. Either form MAY send the target a toast saying an admin has restrained them; the admin chooses whether to send it. Both end on `restrainTimeoutMinutes` (default 10) or explicit release; apply and release are audited; the owner is notified in Discord on every hold, as for spectate (addendum Q5) | Decided by Jeff, October 21, 2026 |
+| N12 | Object-tool scope | Dynamic objects only: ground items, vehicles, base-building parts, tents, barrels, fences, flags, and dead bodies (anything with a persistent id or an inventory). Map statics (`House`, `Building`, terrain objects) are selectable for inspection and never deleted or moved, because the change does not persist and desyncs later joiners | Decided by Jeff, October 21, 2026 |
+| N13 | Admin notes store | `$profile:NimbyAdmin\notes.json` from Phase 5, same atomic write and `.lkg` as N8; Eyes imports the file when it ships and becomes the viewer, and the server keeps writing locally so an Eyes outage never loses a note | Decided by Jeff, October 21, 2026 |
+| N14 | Capabilities not adopted | Recorded under Later (not committed) with their one-line verdicts; nothing scheduled or estimated | Decided by Jeff, October 21, 2026 |
 
 ## Architecture
 
@@ -100,6 +107,18 @@ flowchart LR
 | `requestsPerSecond` | `integer` | No | 5 | Per-sender request limit |
 | `discordQueueMax` | `integer` | No | 200 | Queued messages before overflow is reported |
 | `auditRetentionDays` | `integer` | No | 90 | Audit files older than this are rotated out |
+| `restrainTimeoutMinutes` | `integer` | No | 10 | A hold (N11) ends on its own after this many minutes |
+| `vehicleRegistryRefreshSeconds` | `integer` | No | 60 | Cadence of the vehicle and object registry sweep (Phase 5) |
+
+`notes.json` (N13) entry:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | Yes | Unique per note; the request id that created it |
+| `steam64` | `string` | Yes | The player the note is about |
+| `author` | `string` | Yes | Steam64 of the admin who wrote it |
+| `createdUtc` | `string` | Yes | ISO 8601 UTC |
+| `text` | `string` | Yes | Escaped free text, maximum 500 characters |
 
 Audit record (one JSON object per line; two per command, `intent` then `result`):
 
@@ -174,11 +193,15 @@ Go/no-go: continue only when the slice passes and remaining uncertainties are wr
 
 ### Player commands
 
-Player list, teleport to, bring, heal, kill, kick, ban, unban, private message.
+Player list, teleport to, bring, heal, cure, per-stat editor, kill, kick, ban, unban, private message, unstick, restrain and release.
 
 - Teleport and bring reject unsafe player states and invalid destinations; avoid occupied geometry, unsuitable terrain, and placement near vehicles.
 - Kill and ban require explicit confirmation in the menu.
 - Heal restores health, blood, and shock, stops bleeding, and repairs fractures. Disease, hunger, thirst, temperature, and equipment stay separate.
+- Cure is its own verb: clears every agent (`PlayerAgentPool.RemoveAllAgents`, `PlayerAgentPool.c:218`) and resets disease-related modifiers; it touches no other stat.
+- Per-stat editor: Health, Blood, Shock, Energy, Water, Heat comfort, and Stamina, each set to an explicit value bounded to the vanilla range for that stat (`SetHealth`, `GetStatEnergy`/`GetStatWater`/`GetStatHeatComfort`, `StaminaHandler.SetStamina` at `StaminaHandler.c:1075`). Lowering a stat ("hurt") is the same command with a lower value; a value that would kill requires the same confirmation as kill. Stamina is not persisted and the edit is advisory until the next stamina tick.
+- Unstick: teleport with a 1 m lift, a 2 m forward nudge, and a surface check (addendum F16).
+- Restrain and release per N11. The server re-applies the hold if the target struggles free; a disconnect ends the hold; the timeout is enforced server side and does not depend on the admin staying online.
 - A ban on an online player also ends that session. Ban and permission changes persist before success is reported.
 - Removing or disabling Central Scrutinizer removes connection-time ban enforcement; the ops doc says so.
 
@@ -206,7 +229,7 @@ Exit: every command passes authorized, unauthorized, stale-target, and restart t
 
 ### World controls
 
-Overcast, rain, fog, wind, time of day, and server-wide announcements. Bound every value and validate finite numeric input. Weather overrides last for the requested duration, then return control to the normal system; a newer override replaces the previous one; overrides do not persist across restart in v1. Time is set immediately and then progresses by server settings. Sandstorm control is out of v1 unless separately specified and verified.
+Overcast, rain, fog, wind, time of day, and server-wide announcements. Named presets are saved in `$profile:NimbyAdmin\weather.json` (name, the five values, duration) and applied as one override; the file is validated on load and an invalid preset is skipped and logged, never applied. Bound every value and validate finite numeric input. Weather overrides last for the requested duration, then return control to the normal system; a newer override replaces the previous one; overrides do not persist across restart in v1. Time is set immediately and then progresses by server settings. Sandstorm control is out of v1 unless separately specified and verified.
 
 ### Local audit
 
@@ -235,12 +258,58 @@ Exit: local records remain useful during HTTP failures; delivery failures cannot
 
 Back up mission storage and `$profile:NimbyAdmin` together. Code rollback does not reverse spawned objects or player changes; world restoration is a separate decision because it discards later progress.
 
+## Phase 5 - ops pages (after the first live release, N10)
+
+Three new menu pages over the Phase 1-3 plumbing. None adds a persistence hook; the registry below is rebuilt at boot and refreshed on a timer, never saved.
+
+### Vehicle manager
+
+- Server-side registry of every `CarScript` and `BoatScript` entity (class, position, persistent id, last-seen time), filled at load and refreshed every `vehicleRegistryRefreshSeconds`; the same registry the Phase 6 map draws from (addendum F17).
+- Per vehicle: teleport to, delete (confirmation required), unstick (1 m lift, surface check, 2 m nudge), refuel (every fluid to capacity), repair (every part and the hull to full health). Map markers for all vehicles ship with Phase 6 and read this registry.
+
+### Object tools
+
+- Select: the object under the admin's look direction, or a pick from a nearby list (radius in the menu). Scope per N12; a map static shows its class and position and offers no verb.
+- Delete: confirmation required; the audit `target` carries class, persistent id, and position so the record is enough to respawn a wrongly deleted item by hand.
+- Move: set position and yaw; the server re-places with the surface check from teleport and refuses a position inside geometry or more than a bounded distance from the original.
+
+### Admin notes
+
+- Per player (N13): add, list (newest first, 20 lines in game), and delete your own note; an `owner` deletes any. Notes appear on the player card next to first seen and session rows.
+
+| Scenario | Required result | Evidence |
+| --- | --- | --- |
+| Delete a vehicle | Gone now and after restart | Audit `result=ok`; absent from the registry after RCON `#shutdown` restart |
+| Delete a map static | Refused | `result=invalid reason=static object` |
+| Move a tent 3 m | Tent at the new position after restart, collision intact | Manual check; audit `effects.position` |
+| Restrain, then admin disconnects | Hold ends at timeout | One `result=ok` for apply, one `[NIMBY][Admin] hold expired` line, owner Discord message |
+| Note by `admin`, delete by another `admin` | Refused | `result=denied` |
+| Corrupt `notes.json` | `.lkg` used, edits refused | Same lines as N8 |
+
+## Later (not committed, N14)
+
+Surfaced by the October 21, 2026 gap analysis against COT and VPP and not adopted. A future revision promotes or drops each with the reasoning in view.
+
+| Capability | Verdict |
+| --- | --- |
+| Invisible and god mode as standalone toggles on self | Feasible (`Entity.SetInvisible`, `Object.SetAllowDamage`); spectate already uses both on the admin's hidden body. Would need Q5-style guards; no roleplay use identified for applying either to another player |
+| Map click-to-teleport (self and target) and click-to-drop | Same code paths as teleport and addendum F14 with a position argument; natural Phase 6 extension |
+| Saved loadouts applied to a player | Catalog plus a JSON file; useful for events |
+| Player inventory view and clear inventory | The most common dispute ask on roleplay servers |
+| Ban list page: view, edit duration, ban or unban an offline player | A page over the existing ban store |
+| Kick all | One loop over sessions; pairs with a restart countdown |
+| Saved teleport points and teleport to coordinates | Cheap once Phase 6 exists |
+| In-game log viewer | Eyes' web page is the planned viewer; an in-game last-N-lines audit page is widget work |
+| RCON console | Not feasible in script (BattlEye RCON is UDP; Enforce has HTTP only); lives in Eyes. No script API for `#lock`/`#unlock` was found in 1.30 |
+| Free camera, ESP, chat commands, password layer, item stats editor, static-object spawner with persistence | Rejected: observation tools stay out, ESP never, and the rest add a second auth or persistence surface for little use |
+
 ## Acceptance criteria
 
 - Server-authoritative authorization for every command and sensitive query, with a dev-harness denial test per command.
 - No unexplained script errors; the `storage_1`-copy boot shows 0 "Scripted variables corrupted".
 - Audit `intent` written before every state change; `result` written after.
 - Bounded, non-blocking Discord delivery.
+- Every hold or override on a player (restraint, and spectate when it ships) ends on a server-enforced timeout, is audited on apply and release, and notifies the owner.
 - Multiplayer, restart, removal, and rollback tests passed against the exact artifact.
 - Client PBO in the Workshop item; server PBO on the host only; no secret in either.
 - Jay signs off on the menu.
@@ -259,3 +328,5 @@ Re-estimate after Phase 0 in engineering effort and tester hours. Treat five to 
 | `RestApi` limited in 1.30 | No Discord posts | Local audit is authoritative; webhook becomes a later item |
 | Sandstorm not scriptable | One control missing | Out of v1 |
 | DayZ update breaks a used API | Admin tool down | Small surface; boot check fails the build |
+| Object delete is irreversible | A wrong click removes a player's base part | Confirmation plus a full audit `target`; restoring is a manual respawn from the record, never a world rollback |
+| Restraint abused or forgotten | A player held with no admin present | Server-side timeout, owner notified in Discord, both forms audited; the toast tells the target it is an admin action |

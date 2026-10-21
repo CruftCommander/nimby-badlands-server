@@ -1,6 +1,6 @@
 # Central Scrutinizer feasibility addendum - player intelligence, map, spectate, config
 
-Draft v0.2, October 16, 2026. Owner: Jeff Fabish. Status: Jeff ruled on Q1-Q6 on October 16, 2026 (see Decisions); the companion is named Eyes and is planned later as its own mod-board row; its prerequisite is moving the game server from HostHavoc to a VPS Jeff manages (feasibility in `docs/design/vps-move-feasibility.md`). Changes since v0.1: rulings recorded; the companion runs beside the game server, so the RCON, FTP, and public-endpoint notes below describe the HostHavoc-era shape and are superseded by local access on the VPS. Extends `nimby-admin-feasibility.md` and Plan 3 (`docs/plans/2026-10-15-nimby-admin-plan.md`, v0.4). Every API cited was read in `vendor/dayz-1.30-scripts/` (build 1.30.164078.38) on October 16, 2026; `file:line` is relative to `vendor/dayz-1.30-scripts/scripts/` unless stated.
+Draft v0.3, October 21, 2026. Owner: Jeff Fabish. Status: Jeff ruled on Q1-Q6 on October 16, 2026 (see Decisions); the companion is named Eyes and is planned later as its own mod-board row; its prerequisite is moving the game server from HostHavoc to a VPS Jeff manages (feasibility in `docs/design/vps-move-feasibility.md`). Changes since v0.2: Plan 3 v0.5 (October 21, 2026) adds a Phase 5 (vehicle manager, object tools, admin notes) between release 1 and the map; the landing table below is updated and the vehicle registry built there is the source the Phase 6 map reads. Changes since v0.1: rulings recorded; the companion runs beside the game server, so the RCON, FTP, and public-endpoint notes below describe the HostHavoc-era shape and are superseded by local access on the VPS. Extends `nimby-admin-feasibility.md` and Plan 3 (`docs/plans/2026-10-15-nimby-admin-plan.md`, v0.5). Every API cited was read in `vendor/dayz-1.30-scripts/` (build 1.30.164078.38) on October 16, 2026; `file:line` is relative to `vendor/dayz-1.30-scripts/scripts/` unless stated.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30 / Nasdara.
 
@@ -79,7 +79,8 @@ This stores player PII: IP addresses, approximate location, Steam ids, Discord i
 | Plan 3 Phase 1 and 2 (already planned) | F1, F3, F4, F11 (server side), F14, F16 | Vanilla hooks, no new component; F1 and F3 ride the existing Players feed |
 | Plan 3 Phase 3 | F2, F15 journaling, F8 in-script path | Journal files in the profile folder; counters computed at boot until the companion exists |
 | Eyes (own mod-board row, order 9, after Sprout; prerequisite: the VPS move) | F5, F6, F9, F10 (score), F12, F13, F11 backfill, F8 preferred path, F7 | One service, one database; the game server gains the outbox |
-| New Phase 6 - map | F17 | First use of `observe.map` (N9) |
+| Plan 3 Phase 5 - ops pages (added October 21, 2026, N10) | Vehicle and object registry that F17 reads; admin notes (N13), the local half of F6 | After the first live release; no persistence hook |
+| New Phase 6 - map | F17 | First use of `observe.map` (N9); player and vehicle dots come from the Phase 5 registry |
 | New Phase 7 - spectate | F18 | First use of `observe.spectate` (N9); last of the in-game pages |
 | Eyes, after its first release | F7 | Highest blast radius; Eyes edits any file in the mission folder (Q6) with a backup, a diff, schema validation, and a mandatory replica boot before apply |
 
