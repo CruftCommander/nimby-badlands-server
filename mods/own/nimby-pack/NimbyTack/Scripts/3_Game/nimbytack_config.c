@@ -15,7 +15,9 @@
 // -----------------------------------------------------------------------------
 class NimbyTackConfig
 {
-    int version = 1;
+    // 2 since October 20, 2026 (roughSurfaceOffsetMeters). A file written at version 1 is
+    // upgraded once on load and written back, see NimbyTackRules.UpgradeConfig.
+    int version = 2;
     // T2: a wall hit by the raycast within this many meters of the player's head.
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
@@ -31,6 +33,11 @@ class NimbyTackConfig
     // none, and its physics shell sits 3 to 5 cm behind the visible cloth, so 1 cm from the view
     // hit showed through to the inside. Jeff ruled tents stay pinnable with a larger offset.
     float unknownSurfaceOffsetMeters = 0.06;
+    // T3: the offset used instead on a rough material (NimbyTackRules.IsRoughSurface, a code list
+    // starting with Takistan mud brick). NIMBY-T-013, October 20, 2026: the stones stand 3 to 11 cm
+    // proud of the point the sheet is placed from, so a taped note at 3 cm clipped into them. Jeff
+    // ruled a per-material offset (option (a) of the T-013 study); every other surface keeps 3 cm.
+    float roughSurfaceOffsetMeters = 0.06;
     // T4: health taken from the sheet per take-down, by fastener. Paper has 15 hitpoints.
     float takeDownDamageNail = 5.0;
     float takeDownDamageTape = 3.0;
@@ -117,6 +124,15 @@ class NimbyTackConfigLoader
             else
             {
                 NimbyTackLog.Info("config loaded; path=" + PATH);
+                // A file from an older version gains the keys added since, once, and is written
+                // back so the operator sees them. Out-of-range values are written as the operator
+                // left them; Sanitize below clamps only the running copy.
+                int fromVersion = loaded.version;
+                if (NimbyTackRules.UpgradeConfig(loaded, new NimbyTackConfig()))
+                {
+                    JsonFileLoader<NimbyTackConfig>.JsonSaveFile(PATH, loaded);
+                    NimbyTackLog.Info("config upgraded; from=" + fromVersion.ToString() + " to=" + loaded.version.ToString() + " path=" + PATH);
+                }
             }
         }
         else
@@ -132,7 +148,8 @@ class NimbyTackConfigLoader
         }
         s_Config = loaded;
         string line = "config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " offset=" + loaded.wallOffsetMeters.ToString();
-        line = line + " unknown-offset=" + loaded.unknownSurfaceOffsetMeters.ToString() + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m";
+        line = line + " unknown-offset=" + loaded.unknownSurfaceOffsetMeters.ToString() + " rough-offset=" + loaded.roughSurfaceOffsetMeters.ToString();
+        line = line + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m version=" + loaded.version.ToString();
         NimbyTackLog.Debug(line);
     }
 }

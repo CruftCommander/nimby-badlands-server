@@ -16,6 +16,10 @@
 //           in OnFinishProgressServer and refuses with a status message, so a
 //           client cannot pin where the server says no (T8).
 // Labels  : Plain English action text (T9); the Menu addon localizes later.
+// Part B  : With the debug flag the pin actions write one pin-check line per
+//           change of (reason, target) on the client, and one per request on the
+//           server, naming the first check that refused (T-014 study, October 20,
+//           2026). Without the flag Can is vanilla's and no line is built.
 // -----------------------------------------------------------------------------
 class ActionNimbyTackPinCB : ActionContinuousBaseCB
 {
@@ -28,6 +32,19 @@ class ActionNimbyTackPinCB : ActionContinuousBaseCB
 class ActionNimbyTackPinBase : ActionContinuousBase
 {
     static const float PIN_SECONDS = 2.0;
+    // Part B (B1): at most one client pin-check line per this many seconds.
+    static const float CHECK_FLOOR_SECONDS = 0.25;
+    // Part B (B1): set by ActionCondition when Tack's own checks all passed, so a refusal after
+    // it is the stance check that follows (ActionBase.c:957-963).
+    static const string REASON_PASSED = "condition-passed";
+    // Part B (B1): the reason and detail of the evaluation in progress. Actions are one instance
+    // per class (ActionManagerBase.c:50), shared by every player on the server; the fields are
+    // written and read inside one synchronous Can call, so that is safe. The gate fields are used
+    // only on the client, which has one player.
+    protected string m_NimbyReason = "";
+    protected string m_NimbyDetail = "-";
+    protected string m_NimbyLastKey = "";
+    protected float m_NimbyLastSeconds = -1000.0;
 
     void ActionNimbyTackPinBase()
     {
@@ -64,43 +81,219 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         return true;
     }
 
+    // Part B (B1): the public entry the action inputs call (ActionInput.c:333,343,608; the
+    // server's request check, ActionManagerServer.c:168, through the three-argument form,
+    // ActionBase.c:968-973). With the debug flag it names the first check that refused; a
+    // refusal with no reason set came from the vanilla stage before ActionCondition, which
+    // VanillaRefusal re-runs to name. Same precedent: ActionDigInStash.c:29.
+    override bool Can(PlayerBase player, ActionTarget target, ItemBase item, int condition_mask)
+    {
+        if (!NimbyTackLog.IsDebug())
+        {
+            return super.Can(player, target, item, condition_mask);
+        }
+        bool client = !GetGame().IsServer();
+        m_NimbyReason = "";
+        m_NimbyDetail = "-";
+        if (client)
+        {
+            NimbyTackWorld.HoldTrace();
+        }
+        bool allowed = super.Can(player, target, item, condition_mask);
+        string reason = m_NimbyReason;
+        string detail = m_NimbyDetail;
+        if (allowed)
+        {
+            reason = "ok";
+        }
+        else if (reason == "")
+        {
+            reason = VanillaRefusal(player, target, item, condition_mask);
+            detail = m_NimbyDetail;
+        }
+        else if (reason == REASON_PASSED)
+        {
+            reason = "stance-change";
+        }
+        bool write = true;
+        if (client)
+        {
+            string key = reason + "|" + NimbyTackWorld.TargetKey(target);
+            float now = GetGame().GetTickTime();
+            write = NimbyTackRules.ShouldLogCheck(m_NimbyLastKey, m_NimbyLastSeconds, key, now, CHECK_FLOOR_SECONDS);
+            if (write)
+            {
+                m_NimbyLastKey = key;
+                m_NimbyLastSeconds = now;
+            }
+        }
+        if (write)
+        {
+            LogPinCheck(player, target, allowed, reason, detail);
+            bool targeting = reason == "no-target-object" || reason == "cursor-too-far" || reason == "target-not-building";
+            if (client && targeting)
+            {
+                NimbyTackWorld.LogCursorRay(player);
+            }
+        }
+        if (client)
+        {
+            NimbyTackWorld.ReleaseTrace(write);
+        }
+        return allowed;
+    }
+
+    // Part B (B1): the vanilla checks of ActionBase.Can (ActionBase.c:929-952) in their order,
+    // run only after a refusal that Tack's own checks did not explain. Sets m_NimbyDetail.
+    protected string VanillaRefusal(PlayerBase player, ActionTarget target, ItemBase item, int condition_mask)
+    {
+        m_NimbyDetail = "-";
+        if (!player)
+        {
+            return "no-player";
+        }
+        int refused = NimbyTackRules.RefusedMaskBits(condition_mask, m_ConditionMask);
+        if (refused != 0)
+        {
+            m_NimbyDetail = "mask=" + refused.ToString();
+            return "player-state";
+        }
+        if (player.IsRolling())
+        {
+            m_NimbyDetail = "rolling";
+            return "player-state";
+        }
+        if (!IsFullBodyEx(player, target, item) && !player.IsPlayerInStance(GetStanceMaskEx(player, target, item)))
+        {
+            m_NimbyDetail = "stance";
+            return "player-state";
+        }
+        if (!target)
+        {
+            return "no-target-object";
+        }
+        EntityAI entity = EntityAI.Cast(target.GetObject());
+        if (entity && !entity.IsMan())
+        {
+            Man holder = entity.GetHierarchyRootPlayer();
+            if (holder && holder != player)
+            {
+                return "target-held";
+            }
+        }
+        // CCTCursor (CCTCursor.c:15-36): object else parent, not destroyed, cursor within 2.0 m of
+        // the feet or the head.
+        Object targetObject = target.GetObject();
+        if (!targetObject)
+        {
+            targetObject = target.GetParent();
+        }
+        if (!targetObject)
+        {
+            return "no-target-object";
+        }
+        if (targetObject.IsDamageDestroyed())
+        {
+            return "target-destroyed";
+        }
+        vector cursor = target.GetCursorHitPos();
+        float head = vector.Distance(MiscGameplayFunctions.GetPlayerHeadPosition(player), cursor);
+        float feet = vector.Distance(player.GetPosition(), cursor);
+        float limit = UAMaxDistances.DEFAULT;
+        if (head > limit && feet > limit)
+        {
+            m_NimbyDetail = "head=" + head.ToString() + " feet=" + feet.ToString() + " limit=" + limit.ToString();
+            return "cursor-too-far";
+        }
+        // CCINonRuined (CCINonRuined.c:3-6).
+        if (!item || item.IsDamageDestroyed())
+        {
+            return "tool-ruined";
+        }
+        return "vanilla-other";
+    }
+
+    protected void LogPinCheck(PlayerBase player, ActionTarget target, bool allowed, string reason, string detail)
+    {
+        string result = "refuse";
+        if (allowed)
+        {
+            result = "ok";
+        }
+        string line = "pin-check fastener=" + NimbyTackFastener.Name(GetFastener()) + " result=" + result + " reason=" + reason + " detail=" + detail;
+        line = line + " " + NimbyTackWorld.TargetTag(target);
+        line = line + " " + NimbyTackWorld.ReachTag(player, target) + " " + NimbyTackWorld.PlayerTag(player);
+        NimbyTackLog.Debug(line);
+    }
+
+    // Records why ActionCondition refused, for the pin-check line. Free without the debug flag:
+    // two string assignments, no detail is built.
+    protected bool Refuse(string reason)
+    {
+        m_NimbyReason = reason;
+        return false;
+    }
+
     // Runs on the client every frame while the tool is in hands and on the server when the
     // action is requested. Cheap checks first; the raycast last.
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
+        m_NimbyReason = "";
+        m_NimbyDetail = "-";
+        bool debugOn = NimbyTackLog.IsDebug();
         if (!player || !target || !item)
         {
-            return false;
+            return Refuse("no-target");
         }
         if (!ToolMatches(item))
         {
-            return false;
+            return Refuse("tool-mismatch");
         }
         NimbyTackConfig config = NimbyTackConfigLoader.Get();
         if (!ToolHasPortion(item, config))
         {
-            return false;
+            if (debugOn)
+            {
+                m_NimbyDetail = "quantity=" + item.GetQuantity().ToString();
+            }
+            return Refuse("no-portion");
         }
         if (GetFastener() == NimbyTackFastener.NAIL && !NimbyTackWorld.FindNail(player))
         {
-            return false;
+            return Refuse("no-nail");
         }
         if (!NimbyTackWorld.FindSingleSheet(player))
         {
-            return false;
+            if (debugOn)
+            {
+                m_NimbyDetail = NimbyTackWorld.SheetSummary(player);
+            }
+            return Refuse("no-single-sheet");
         }
         // Only the knife needs the surface name here (wood test); the debug flag asks for it
         // so the test record sees every surface. Everyone else skips the fire-geometry ray.
-        bool wantSurface = GetFastener() == NimbyTackFastener.KNIFE || NimbyTackLog.IsDebug();
+        bool wantSurface = GetFastener() == NimbyTackFastener.KNIFE || debugOn;
         NimbyTackHit hit;
         if (!NimbyTackWorld.ProbeWall(player, target, config, wantSurface, hit))
         {
-            return false;
+            m_NimbyDetail = NimbyTackWorld.LastProbeDetail();
+            return Refuse(NimbyTackWorld.LastProbeReason());
         }
         if (GetFastener() == NimbyTackFastener.KNIFE && !NimbyTackRules.IsWoodSurface(hit.surface))
         {
-            return false;
+            if (debugOn)
+            {
+                m_NimbyDetail = "surface=" + hit.surface;
+            }
+            return Refuse("not-wood");
         }
+        // Part B (B1): what the pin would use. On the client this is the default config, which
+        // the server's matches unless its config.json changes the offsets.
+        if (debugOn)
+        {
+            m_NimbyDetail = "surface=" + hit.surface + " offset=" + NimbyTackRules.OffsetFor(hit.surface, config).ToString();
+        }
+        m_NimbyReason = REASON_PASSED;
         return true;
     }
 
@@ -138,7 +331,11 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         // empty, the fire-geometry lookup. OffsetFor below reads it; no further raycast is needed.
         if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, true, hit))
         {
-            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " " + who);
+            // Part B: the target and the cursor ride on this line, so a refusal at pin time names
+            // the object the player aimed at without the debug flag.
+            string refuseLine = "refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " probe-detail=" + NimbyTackWorld.LastProbeDetail();
+            refuseLine = refuseLine + " " + NimbyTackWorld.TargetTag(action_data.m_Target) + " " + NimbyTackWorld.ReachTag(player, action_data.m_Target) + " " + who;
+            NimbyTackLog.Info(refuseLine);
             player.MessageStatus("There is no wall there.");
             return;
         }
@@ -155,8 +352,9 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             player.MessageStatus("Too many notes on these walls already.");
             return;
         }
-        // NIMBY-T-008: a surface with no name (the tent's cloth) takes the larger offset.
-        float pinOffset = NimbyTackRules.OffsetFor(hit.surface, config.wallOffsetMeters, config.unknownSurfaceOffsetMeters);
+        // NIMBY-T-008: a surface with no name (the tent's cloth) takes the unknown-surface offset;
+        // NIMBY-T-013: a rough material (mud brick) takes the rough-surface offset.
+        float pinOffset = NimbyTackRules.OffsetFor(hit.surface, config);
         // Read before the sheet is deleted (NIMBY-T-009: the log tells which sheet went up).
         string textTag = NimbyTackRules.TextTag(NimbyTackWorld.IsWritten(sheet));
         NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, hit, sheet, pinOffset);
@@ -171,6 +369,8 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + hit.wall.GetType() + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
         line = line + " text=" + textTag + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
         NimbyTackLog.Info(line);
+        // Part B (B5): debug only; measures the footprint, moves nothing.
+        NimbyTackWorld.LogFootprint(player, hit, pinned, pinOffset, config.wallOffsetMeters);
     }
 
     // T2: what the pin costs. Nail, tape, and epoxy are spent and never come back; the knife

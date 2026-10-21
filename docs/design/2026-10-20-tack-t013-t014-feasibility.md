@@ -229,3 +229,14 @@ Setup: the Part B build (path in the record), replica `D:\DayZServer`, instance 
 | D4 | The full build with the boot check (runs the self-test) | When the replica server is free of the NIMBY-T-011 lifetime run | Jeff names the window |
 
 Pending Part B data, not asked now: if `out-of-reach` dominates, whether Tack's reach moves to the vanilla 2.0 m measured from the feet or the head (plan T2 says 1.5 m); if `no-target-object` with a proxy of id 0 dominates, whether to accept building proxies as targets through a modded `ActionTargets.IsRaycastResultException` (`ActionTargets.c:411-417`), which changes targeting for every vanilla action and needs its own study.
+
+## 7. Rulings, October 20, 2026
+
+| Id | Ruling (Jeff) |
+| --- | --- |
+| D1 | Part B approved in full, B1 to B5 |
+| D2 | Option (a) now: `roughSurfaceOffsetMeters` (default 0.06, clamped like `unknownSurfaceOffsetMeters`) for rough materials, starting with `dz\data_takistan\data\penetration\mud_brick.bisurf`; `wallOffsetMeters` stays 3 cm for every other surface; the material match and the clamp are self-tested; the config version goes to 2 with a one-time upgrade of existing files |
+| D3 | Section 4.3 is recorded as NIMBY-T-015 in the Tack test record; the 15 cm guard waits for the Part B data |
+| D4 | Iteration builds use `-SkipBootCheck`; the full build with the boot check waits until Jeff says `D:\DayZServer` is free of the NIMBY-T-011 lifetime run |
+
+Built on this branch as plan v0.12 (decision T16, T3 and T6 updated). Section 5.2's steps, updated for the option (a) check, are rows TK-P0 to TK-P10 in `docs/testing/2026-10-18-tack-merged-main.md`, section "T-013 option (a) and T-014 diagnostics (Part B)". Two details differ from section 5.1: the `pin-check` gate runs on the client only, and the server writes one line per request, because the server evaluates `Can` once per request (`ActionManagerServer.c:168`) and its action objects are shared by every player (`ActionManagerBase.c:50`); and a refusal after Tack's own checks passed is named `stance-change` (`ActionBase.c:957-963`).

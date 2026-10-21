@@ -3,6 +3,20 @@ Defines four Paper subclasses and six user actions on the vanilla DayZ 1.30 acti
 (Bohemia Interactive); depends on NimbyNotes (Scrawl) from the same pack; no third-party mod code.
 
 Changes, newest first.
+- October 20, 2026 (Tack plan v0.12, T-013/T-014 study Part B, branch study/tack-t013-t014):
+  - NIMBY-T-013: new config key roughSurfaceOffsetMeters (default 0.06, clamped 5 mm to 20 cm).
+    A surface on the rough-material code list (NimbyTackRules.IsRoughSurface, starting with
+    dz\data_takistan\data\penetration\mud_brick.bisurf, matched without regard to case or
+    slash direction) is pinned at that offset; wallOffsetMeters (0.03) is unchanged for every
+    other surface. Config version 2: a version 1 file is upgraded once on load and written back.
+  - NIMBY-T-014, debug flag only: a pin-check line naming the first refused check and the target
+    (class, model, id, proxy, parent, component, cursor, head and feet distances); a cursor-ray
+    dump of the vanilla targeting ray; the client's per-frame probe lines held to the pin-check
+    gate; the fire line's normal= renamed ray= (it is the ray); gap= and depth= on the physics
+    and fire lines; footprint lines at pin time that measure corner depths and move nothing.
+  - The refuse pin reason=no-wall line gains probe-detail=, the target, and the cursor.
+  - Self-test gains 27 cases (84): the rough-surface match, offset, clamp, and upgrade, and the
+    pure parts of the diagnostics.
 - October 20, 2026 (Tack plan v0.10, round 3, from the October 19 Jay session):
   - NIMBY-T-008: new config key unknownSurfaceOffsetMeters (default 0.06, clamped 5 mm to 20 cm).
     A wall that reports no surface material after the view and fire-geometry lookups (the

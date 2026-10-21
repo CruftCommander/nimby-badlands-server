@@ -11,6 +11,11 @@
 //           "normal * offset" had been pushing the sheet INTO the wall, which is why
 //           1 cm sat inside the mud brick and 6 cm vanished in both walls. The normal
 //           now comes from DayZPhysics.RayCastBullet and points toward the player.
+// Part B  : The T-013/T-014 study (October 20, 2026) adds debug-only diagnostics:
+//           a detail for every probe refusal (B1), the vanilla cursor ray rebuilt
+//           (B2), the client's probe lines held for the pin-check gate (B3), the
+//           fire line's ray= and engine-computed depth= (B4), and the footprint
+//           samples at pin time (B5). None changes where or whether a note pins.
 // -----------------------------------------------------------------------------
 class NimbyTackHit
 {
@@ -52,6 +57,61 @@ class NimbyTackWorld
         return s_LastProbeReason;
     }
 
+    // Part B (B1): what the last refusal measured, for the pin-check line ("-" when nothing).
+    protected static string s_LastProbeDetail = "-";
+
+    static string LastProbeDetail()
+    {
+        return s_LastProbeDetail;
+    }
+
+    // Part B (B3): on the client the pin condition runs every frame; its probe lines are held
+    // here and written only when the pin-check gate writes its line, then dropped. The server
+    // never holds (its probes run once per request and at pin time).
+    protected static bool s_HoldTrace = false;
+    protected static ref array<string> s_HeldTrace;
+
+    static void HoldTrace()
+    {
+        s_HoldTrace = true;
+        if (!s_HeldTrace)
+        {
+            s_HeldTrace = new array<string>;
+        }
+        s_HeldTrace.Clear();
+    }
+
+    static void ReleaseTrace(bool write)
+    {
+        s_HoldTrace = false;
+        if (!s_HeldTrace)
+        {
+            return;
+        }
+        if (write)
+        {
+            foreach (string held : s_HeldTrace)
+            {
+                NimbyTackLog.Debug(held);
+            }
+        }
+        s_HeldTrace.Clear();
+    }
+
+    static void Trace(string line)
+    {
+        if (!NimbyTackLog.IsDebug())
+        {
+            return;
+        }
+        if (s_HoldTrace && s_HeldTrace)
+        {
+            s_HeldTrace.Insert(line);
+            return;
+        }
+        NimbyTackLog.Debug(line);
+    }
+
     // T2: the wall under the cursor. The action target gives the object and the cursor hit
     // position but no normal (ActionTargets.c:115), so one raycast from the head to just past
     // the hit point recovers the normal and, when asked, the surface material. Players, items,
@@ -62,6 +122,7 @@ class NimbyTackWorld
     static bool ProbeWall(PlayerBase player, ActionTarget target, NimbyTackConfig config, bool wantSurface, out NimbyTackHit hit)
     {
         s_LastProbeReason = "";
+        s_LastProbeDetail = "-";
         if (!player || !target)
         {
             s_LastProbeReason = "no-target";
@@ -80,13 +141,16 @@ class NimbyTackWorld
         if (wall.IsMan() || wall.IsInherited(ItemBase))
         {
             s_LastProbeReason = "target-not-building";
+            s_LastProbeDetail = ClassOf(wall);
             return false;
         }
         vector head = MiscGameplayFunctions.GetPlayerHeadPosition(player);
         vector cursor = target.GetCursorHitPos();
-        if (vector.Distance(head, cursor) > config.reachMeters)
+        float headDistance = vector.Distance(head, cursor);
+        if (headDistance > config.reachMeters)
         {
             s_LastProbeReason = "out-of-reach";
+            s_LastProbeDetail = "head=" + headDistance.ToString() + " limit=" + config.reachMeters.ToString();
             return false;
         }
         vector direction = vector.Direction(head, cursor);
@@ -98,9 +162,11 @@ class NimbyTackWorld
         if (!DayZPhysics.RaycastRVProxy(params, results))
         {
             s_LastProbeReason = "no-hit";
-            NimbyTackLog.Debug("probe: no hit from head to cursor");
+            Trace("probe: no hit from head to cursor");
             return false;
         }
+        // Part B (B1): the first object the ray skipped, for the no-building-hit detail.
+        string skipped = "-";
         foreach (RaycastRVResult result : results)
         {
             if (!result.obj)
@@ -109,10 +175,14 @@ class NimbyTackWorld
             }
             if (result.obj == player || result.obj.IsMan() || result.obj.IsInherited(ItemBase))
             {
+                if (skipped == "-")
+                {
+                    skipped = ClassOf(result.obj);
+                }
                 continue;
             }
             vector normal;
-            if (!WallNormal(head, end, direction, player, normal))
+            if (!WallNormal(head, end, direction, player, result.pos, normal))
             {
                 s_LastProbeReason = "no-physics-normal";
                 return false;
@@ -122,7 +192,8 @@ class NimbyTackWorld
             if (!NimbyTackRules.IsWallNormal(normal, config.wallAngleDegrees))
             {
                 s_LastProbeReason = "not-wall-angle";
-                NimbyTackLog.Debug("probe: refused hit=" + result.obj.GetType() + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+                s_LastProbeDetail = "ny=" + normal[1].ToString();
+                Trace("probe: refused hit=" + result.obj.GetType() + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
                 return false;
             }
             string surfaceName = "";
@@ -134,10 +205,10 @@ class NimbyTackWorld
                     // The view-geometry hit carried no surface on every Nasdara building tried
                     // on October 17, 2026. Fire geometry is what bullets read materials from,
                     // so ask it.
-                    surfaceName = FireSurfaceName(head, end, player, result.obj, result.pos);
+                    surfaceName = FireSurfaceName(head, end, player, result.obj, result.pos, normal);
                 }
             }
-            NimbyTackLog.Debug("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
+            Trace("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
             hit = new NimbyTackHit();
             hit.position = result.pos;
             hit.normal = normal;
@@ -146,6 +217,7 @@ class NimbyTackWorld
             return true;
         }
         s_LastProbeReason = "no-building-hit";
+        s_LastProbeDetail = "skipped=" + skipped;
         return false;
     }
 
@@ -267,7 +339,11 @@ class NimbyTackWorld
     // (PhxInteractionLayers.BUILDING). RayCastBullet reports the face normal; when the physics
     // geometry hands back the far face, the normal is flipped so it always points toward the
     // player, which is the side the sheet hangs on and faces.
-    static bool WallNormal(vector head, vector end, vector direction, PlayerBase player, out vector normal)
+    // Part B (B4): the line carries gap= (straight distance to the view hit) and depth= (signed,
+    // along the normal, positive in front of the view hit), computed here at full precision.
+    // NIMBY-T-015: a physics hit 0.6 m in front of the view hit was accepted; the guard waits for
+    // this data (Jeff, October 20, 2026).
+    static bool WallNormal(vector head, vector end, vector direction, PlayerBase player, vector viewHit, out vector normal)
     {
         Object hitObject;
         vector hitPosition;
@@ -275,12 +351,14 @@ class NimbyTackWorld
         float hitFraction;
         if (!DayZPhysics.RayCastBullet(head, end, PhxInteractionLayers.BUILDING, player, hitObject, hitPosition, hitNormal, hitFraction))
         {
-            NimbyTackLog.Debug("probe: physics ray had no building hit");
+            s_LastProbeDetail = "none";
+            Trace("probe: physics ray had no building hit");
             return false;
         }
         if (hitNormal.Length() < 0.5)
         {
-            NimbyTackLog.Debug("probe: physics ray returned a zero normal");
+            s_LastProbeDetail = "zero";
+            Trace("probe: physics ray returned a zero normal");
             return false;
         }
         hitNormal.Normalize();
@@ -293,7 +371,11 @@ class NimbyTackWorld
         {
             hitName = hitObject.GetType();
         }
-        NimbyTackLog.Debug("probe: physics hit=" + hitName + " normal=" + hitNormal.ToString() + " fraction=" + hitFraction.ToString() + " " + PositionTag(hitPosition));
+        float gap = vector.Distance(hitPosition, viewHit);
+        float depth = NimbyTackRules.SignedDepth(hitPosition, viewHit, hitNormal);
+        string line = "probe: physics hit=" + hitName + " normal=" + hitNormal.ToString() + " fraction=" + hitFraction.ToString() + " " + PositionTag(hitPosition);
+        line = line + " gap=" + gap.ToString() + " depth=" + depth.ToString();
+        Trace(line);
         normal = hitNormal;
         return true;
     }
@@ -319,11 +401,12 @@ class NimbyTackWorld
     }
 
     // Same ray against fire geometry (ObjIntersectFire), surface of the first hit on the wall
-    // object. Debug-logs what it found, with the fire hit's position and normal next to the
-    // view-geometry hit (viewHit) and the gap between them: the pin sits on the view hit, and
-    // on Land_House_1M3_Dam2 that point is inside the rendered mud-brick relief at 3 cm
-    // (October 17, 2026). The two planes decide whether the fire hit should place the pin.
-    static string FireSurfaceName(vector head, vector end, PlayerBase player, Object wall, vector viewHit)
+    // object. Debug-logs what it found, with the fire hit's position next to the view-geometry
+    // hit (viewHit), the gap between them, and the signed depth along the physics normal
+    // (Part B, B4): the pin sits on the view hit.
+    // RaycastRVResult.dir is the ray for a line-object hit, not a normal (DayZPhysics.c:104;
+    // T-013 study section 4.1), so the line names it ray=.
+    static string FireSurfaceName(vector head, vector end, PlayerBase player, Object wall, vector viewHit, vector normal)
     {
         RaycastRVParams params = new RaycastRVParams(head, end, player, 0.0);
         params.sorted = true;
@@ -331,7 +414,7 @@ class NimbyTackWorld
         array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
         if (!DayZPhysics.RaycastRVProxy(params, results))
         {
-            NimbyTackLog.Debug("probe: fire-geometry ray had no hit");
+            Trace("probe: fire-geometry ray had no hit");
             return "";
         }
         foreach (RaycastRVResult result : results)
@@ -345,19 +428,314 @@ class NimbyTackWorld
                 continue;
             }
             string name = SurfaceNameOf(result);
-            vector fireNormal = result.dir;
-            fireNormal.Normalize();
+            vector ray = result.dir;
+            ray.Normalize();
             float gap = vector.Distance(result.pos, viewHit);
-            NimbyTackLog.Debug("probe: fire-geometry surface=" + name + " component=" + result.component.ToString() + " normal=" + fireNormal.ToString() + " " + PositionTag(result.pos) + " view-" + PositionTag(viewHit) + " gap=" + gap.ToString());
+            float depth = NimbyTackRules.SignedDepth(result.pos, viewHit, normal);
+            string line = "probe: fire-geometry surface=" + name + " component=" + result.component.ToString() + " ray=" + ray.ToString() + " " + PositionTag(result.pos);
+            line = line + " view-" + PositionTag(viewHit) + " gap=" + gap.ToString() + " depth=" + depth.ToString();
+            Trace(line);
             return name;
         }
-        NimbyTackLog.Debug("probe: fire-geometry ray did not hit the wall object");
+        Trace("probe: fire-geometry ray did not hit the wall object");
         return "";
+    }
+
+    // ---- Part B diagnostics (debug only; T-013/T-014 study, October 20, 2026) ----
+
+    // A class name for a log token: "-" for no object or an object with no config class (the
+    // class-less mud-brick piece at 4026, 14111).
+    static string ClassOf(Object obj)
+    {
+        if (!obj)
+        {
+            return "-";
+        }
+        string name = obj.GetType();
+        if (name == "")
+        {
+            return "-";
+        }
+        return name;
+    }
+
+    // The model file (Object.c:503); "-" when there is none.
+    static string ShapeOf(Object obj)
+    {
+        if (!obj)
+        {
+            return "-";
+        }
+        string shape = obj.GetShapeName();
+        if (shape == "")
+        {
+            return "-";
+        }
+        return shape;
+    }
+
+    // The entity id (EnEntity.c:518). Vanilla targeting skips a proxy whose id is below 1
+    // (ActionTargets.c:271-275); this is the number that says whether that happened.
+    static string IdOf(Object obj)
+    {
+        if (!obj)
+        {
+            return "-";
+        }
+        return obj.GetID().ToString();
+    }
+
+    // B1: the action target as log tokens: object, model, id, proxy flag (ActionTargets.c:152),
+    // parent, and component.
+    static string TargetTag(ActionTarget target)
+    {
+        if (!target)
+        {
+            return "target=none";
+        }
+        Object obj = target.GetObject();
+        Object parent = target.GetParent();
+        string tag = "target=" + ClassOf(obj) + " shape=" + ShapeOf(obj) + " id=" + IdOf(obj) + " proxy=" + NimbyTackLog.Bool(target.IsProxy());
+        tag = tag + " parent=" + ClassOf(parent) + " pshape=" + ShapeOf(parent) + " component=" + target.GetComponentIndex().ToString();
+        return tag;
+    }
+
+    // B1: the gate key's target half. The id tells two class-less pieces apart.
+    static string TargetKey(ActionTarget target)
+    {
+        if (!target)
+        {
+            return "none";
+        }
+        return ClassOf(target.GetObject()) + "|" + IdOf(target.GetObject()) + "|" + ClassOf(target.GetParent());
+    }
+
+    // B1: where the cursor is and how far it is from the head and the feet, the two points the
+    // vanilla 2.0 m test measures from (CCTCursor.c:27-35).
+    static string ReachTag(PlayerBase player, ActionTarget target)
+    {
+        if (!player || !target)
+        {
+            return "cursor=none";
+        }
+        vector cursor = target.GetCursorHitPos();
+        float head = vector.Distance(MiscGameplayFunctions.GetPlayerHeadPosition(player), cursor);
+        float feet = vector.Distance(player.GetPosition(), cursor);
+        string tag = "cursor=" + cursor[0].ToString() + " " + cursor[1].ToString() + " " + cursor[2].ToString();
+        tag = tag + " head=" + head.ToString() + " feet=" + feet.ToString();
+        return tag;
+    }
+
+    // B1, no-single-sheet: what the Paper in inventory is, by NimbyTackRules.SheetKind.
+    static string SheetSummary(PlayerBase player)
+    {
+        if (!player)
+        {
+            return "singles=0 stacks=0 ruined=0";
+        }
+        array<EntityAI> items = new array<EntityAI>;
+        player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+        int singles = 0;
+        int stacks = 0;
+        int ruined = 0;
+        foreach (EntityAI entity : items)
+        {
+            Paper sheet = Paper.Cast(entity);
+            if (!sheet)
+            {
+                continue;
+            }
+            if (sheet.IsInherited(NimbyTack_PinnedNote))
+            {
+                continue;
+            }
+            int kind = NimbyTackRules.SheetKind(sheet.IsDamageDestroyed(), sheet.HasQuantity(), sheet.GetQuantity());
+            if (kind == NimbyTackRules.SHEET_SINGLE)
+            {
+                singles = singles + 1;
+            }
+            if (kind == NimbyTackRules.SHEET_STACK)
+            {
+                stacks = stacks + 1;
+            }
+            if (kind == NimbyTackRules.SHEET_RUINED)
+            {
+                ruined = ruined + 1;
+            }
+        }
+        return "singles=" + singles.ToString() + " stacks=" + stacks.ToString() + " ruined=" + ruined.ToString();
+    }
+
+    // B2: the vanilla cursor ray rebuilt (ActionTargets.c:245-255: camera, 5 m, all objects) and
+    // its first four hits, each with whether vanilla would keep it as a target (:267, :271-275,
+    // :411-417). Client only, when the pin-check reason points at targeting.
+    static void LogCursorRay(PlayerBase player)
+    {
+        vector start = GetGame().GetCurrentCameraPosition();
+        vector end = start + GetGame().GetCurrentCameraDirection() * 5.0;
+        RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
+        params.flags = CollisionFlags.ALLOBJECTS;
+        params.sorted = true;
+        array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
+        if (!DayZPhysics.RaycastRVProxy(params, results))
+        {
+            NimbyTackLog.Debug("cursor-ray hits=0");
+            return;
+        }
+        int index = 0;
+        foreach (RaycastRVResult result : results)
+        {
+            if (index >= 4)
+            {
+                break;
+            }
+            index = index + 1;
+            bool actionTarget = true;
+            if (result.obj && !result.obj.CanBeActionTarget())
+            {
+                actionTarget = false;
+            }
+            bool kept = actionTarget;
+            if (kept && result.hierLevel > 0)
+            {
+                if (result.parent && result.parent.IsMan())
+                {
+                    kept = false;
+                }
+                if (result.obj && result.obj.GetID() < 1 && !TentBase.Cast(result.parent))
+                {
+                    kept = false;
+                }
+            }
+            float distance = vector.Distance(start, result.pos);
+            string line = "cursor-ray hit=" + index.ToString() + " class=" + ClassOf(result.obj) + " shape=" + ShapeOf(result.obj) + " hier=" + result.hierLevel.ToString() + " id=" + IdOf(result.obj);
+            line = line + " parent=" + ClassOf(result.parent) + " dist=" + distance.ToString() + " action-target=" + NimbyTackLog.Bool(actionTarget) + " kept=" + NimbyTackLog.Bool(kept);
+            line = line + " component=" + result.component.ToString() + " " + PositionTag(result.pos);
+            NimbyTackLog.Debug(line);
+        }
+    }
+
+    // B5: the sheet's size, read once per start from the pinned note's collision box
+    // (Object.c:370); model X is the width and model Y the height (FaceDirection, T3).
+    protected static bool s_SheetSizeRead = false;
+    protected static float s_SheetHalfWidth = 0.075;
+    protected static float s_SheetHalfHeight = 0.105;
+    protected static string s_SheetSizeSource = "default";
+
+    protected static void ReadSheetSize(Object sheet)
+    {
+        if (s_SheetSizeRead || !sheet)
+        {
+            return;
+        }
+        s_SheetSizeRead = true;
+        vector box[2];
+        if (!sheet.GetCollisionBox(box))
+        {
+            return;
+        }
+        float width = box[1][0] - box[0][0];
+        float height = box[1][1] - box[0][1];
+        if (width < 0.02 || height < 0.02)
+        {
+            return;
+        }
+        s_SheetHalfWidth = width * 0.5;
+        s_SheetHalfHeight = height * 0.5;
+        s_SheetSizeSource = "box";
+    }
+
+    // B5: option (b) of the T-013 study measured at pin time and not applied. Five points over the
+    // sheet's footprint (center and four corners, in the plane of the view hit), each cast back
+    // along the normal from 30 cm out to 10 cm behind, against the view, fire, and physics layers
+    // of the wall object; depth is signed along the normal from the view hit. standoff= is what
+    // option (b) would add to the wall offset (NimbyTackRules.FootprintStandoff, 10 cm cap).
+    static void LogFootprint(PlayerBase player, NimbyTackHit hit, Object pinned, float usedOffset, float wallOffset)
+    {
+        if (!NimbyTackLog.IsDebug() || !hit || !hit.wall)
+        {
+            return;
+        }
+        ReadSheetSize(pinned);
+        vector basis[4];
+        Math3D.DirectionAndUpMatrix(NimbyTackRules.FaceDirection(hit.normal), vector.Up, basis);
+        vector right = basis[0];
+        vector up = basis[1];
+        array<vector> points = new array<vector>;
+        points.Insert(hit.position);
+        points.Insert(hit.position - right * s_SheetHalfWidth + up * s_SheetHalfHeight);
+        points.Insert(hit.position + right * s_SheetHalfWidth + up * s_SheetHalfHeight);
+        points.Insert(hit.position - right * s_SheetHalfWidth - up * s_SheetHalfHeight);
+        points.Insert(hit.position + right * s_SheetHalfWidth - up * s_SheetHalfHeight);
+        float width = s_SheetHalfWidth * 2.0;
+        float height = s_SheetHalfHeight * 2.0;
+        string header = "footprint wall=" + ClassOf(hit.wall) + " surface=" + hit.surface + " offset=" + usedOffset.ToString() + " size=" + width.ToString() + "x" + height.ToString();
+        header = header + " size-source=" + s_SheetSizeSource + " " + PlayerTag(player) + " " + PositionTag(hit.position);
+        NimbyTackLog.Debug(header);
+        LogFootprintLayer("view", ObjIntersectView, player, hit, points, wallOffset);
+        LogFootprintLayer("fire", ObjIntersectFire, player, hit, points, wallOffset);
+        LogFootprintLayer("physics", -1, player, hit, points, wallOffset);
+    }
+
+    // One B5 line: intersectType is ObjIntersectView or ObjIntersectFire, or -1 for the physics
+    // shell (RayCastBullet on the building layer, as WallNormal).
+    protected static void LogFootprintLayer(string layer, int intersectType, PlayerBase player, NimbyTackHit hit, array<vector> points, float wallOffset)
+    {
+        array<float> depths = new array<float>;
+        foreach (vector point : points)
+        {
+            vector start = point + hit.normal * 0.3;
+            vector end = point - hit.normal * 0.1;
+            depths.Insert(SampleDepth(intersectType, start, end, player, hit));
+        }
+        float standoff = NimbyTackRules.FootprintStandoff(depths, 0.1);
+        float wouldOffset = wallOffset + standoff;
+        string line = "footprint layer=" + layer + " center=" + NimbyTackRules.DepthTag(depths[0]) + " tl=" + NimbyTackRules.DepthTag(depths[1]) + " tr=" + NimbyTackRules.DepthTag(depths[2]);
+        line = line + " bl=" + NimbyTackRules.DepthTag(depths[3]) + " br=" + NimbyTackRules.DepthTag(depths[4]) + " standoff=" + standoff.ToString() + " would-offset=" + wouldOffset.ToString();
+        NimbyTackLog.Debug(line);
+    }
+
+    // The depth of the first hit on the wall object along one footprint ray, or DEPTH_MISS.
+    protected static float SampleDepth(int intersectType, vector start, vector end, PlayerBase player, NimbyTackHit hit)
+    {
+        if (intersectType < 0)
+        {
+            Object hitObject;
+            vector hitPosition;
+            vector hitNormal;
+            float hitFraction;
+            if (!DayZPhysics.RayCastBullet(start, end, PhxInteractionLayers.BUILDING, player, hitObject, hitPosition, hitNormal, hitFraction))
+            {
+                return NimbyTackRules.DEPTH_MISS;
+            }
+            if (hitObject != hit.wall)
+            {
+                return NimbyTackRules.DEPTH_MISS;
+            }
+            return NimbyTackRules.SignedDepth(hitPosition, hit.position, hit.normal);
+        }
+        RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
+        params.sorted = true;
+        params.type = intersectType;
+        array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
+        if (!DayZPhysics.RaycastRVProxy(params, results))
+        {
+            return NimbyTackRules.DEPTH_MISS;
+        }
+        foreach (RaycastRVResult result : results)
+        {
+            if (result.obj != hit.wall)
+            {
+                continue;
+            }
+            return NimbyTackRules.SignedDepth(result.pos, hit.position, hit.normal);
+        }
+        return NimbyTackRules.DEPTH_MISS;
     }
 
     // T3: create the pinned class at the hit point, offsetMeters off the wall along the normal,
     // facing out, with the sheet's text and health. The caller picks the offset with
-    // NimbyTackRules.OffsetFor (wall or unknown surface) and logs the same value. No
+    // NimbyTackRules.OffsetFor (wall, rough, or unknown surface) and logs the same value. No
     // ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the engine does not drop it to the ground
     // (CentralEconomy.c:28).
     static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackHit hit, Paper sheet, float offsetMeters)
