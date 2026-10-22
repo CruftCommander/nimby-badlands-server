@@ -104,7 +104,7 @@ Written October 21, 2026, branch `feat/scrawl-r1`, from the brief's Part A. Deci
 - `Scripts/4_World/nimbynotes_actions.c`: the write-pair allocation in `OnStartClient` runs only under the debug flag.
 - `config.cpp` header and `NOTICE` current.
 
-Exit: `SUMMARY PASS` with 28 cases; the A4 rows in the test record PASS; the A5 release-gate boots recorded.
+Exit: `SUMMARY PASS` with 28 cases; the A4 rows in the test record PASS; the A5 boots run at the release gate (deferred October 21, 2026). Status after the October 21 run: A4 rows 1 to 3, 5, 6, 8 to 10, and 12 PASS, SC-2a-7x and the SC-T1 take-down not run, the SC-003 restart row not proven (test record, Release-1 round, open item); findings NIMBY-T-020 (Tack placement) and NIMBY-T-021 (storage loss on the shared `storage_999`, open).
 
 ## Phase 2 - release
 
@@ -123,7 +123,7 @@ Exit: `SUMMARY PASS` with 28 cases; the A4 rows in the test record PASS; the A5 
 | SC-W2 | Write menu held past a `#shutdown`, reconnect, write: `pen=` on the write line | Server script log |
 | SC-T1 | A written note pinned with Tack and taken down keeps the flag with the text (Tack's `SetNoteText` path syncs); the taken-down note offers no Combine | Client inventory, server `written flag synced from=text` Debug lines |
 | SC-004 | A dropped note is gone after `lifetime` with no interaction; a note picked up at half-life is not; a note inside a flag radius survives | CE log and test record (run with a short test lifetime) |
-| SC-005 | Existing vanilla sheets in a `storage_1` copy load with their text under the override, and again after Scrawl is removed. Hypothesis for the removal boot: a stack of 5 and a stack of 2 saved with Scrawl load as single sheets (the quantity bit is read under the variables mask and clamped to vanilla's range of none); written notes keep their text (the note data layout is vanilla's, N14); `MorsecodeLeaflet_*` count unchanged. Observed: pending the A5 boots (Jeff runs them; test record, Release-1 round) | Release gate RPT, 0 "Scripted variables corrupted", 0 `SCRIPT (E)`, no VME at `Paper.c:17` |
+| SC-005 | Existing vanilla sheets in a `storage_1` copy load with their text under the override, and again after Scrawl is removed. Hypothesis for the removal boot: a stack of 5 and a stack of 2 saved with Scrawl load as single sheets (the quantity bit is read under the variables mask and clamped to vanilla's range of none); written notes keep their text (the note data layout is vanilla's, N14); `MorsecodeLeaflet_*` count unchanged. Observed: deferred by Jeff on October 21, 2026 to the release gate, steps 2 and 2a of `docs/operations/2026-10-20-release-gate-legs-ears-scrawl.md`, where the boots run on the release artifact (test record, Release-1 round, A5) | Release gate RPT, 0 "Scripted variables corrupted", 0 `SCRIPT (E)`, no VME at `Paper.c:17` |
 
 ## Risks
 
