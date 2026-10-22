@@ -2,7 +2,7 @@
 
 > **Superseded in part, October 16, 2026.** The feature is named Payload (code prefix `NimbyPayload`); this file keeps its name. Eligibility is no longer a class allowlist: any vehicle with storage can be rigged when its cargo is large enough to hold the explosive, so a motorbike with no cargo cannot be rigged and a future helicopter mod with cargo can. The "Not open to every vehicle" line and the allowlist decision below are replaced by that rule; the horn, remote, rename, and disarm design stands until the 1.30 hooks are re-verified.
 
-Draft v0.4, October 14, 2026. Roadmap phase 4. Owner: Jeff Fabish. Status: design decisions made by Jeff on October 14, 2026 (see Decisions); hooks still to be re-verified on 1.30.
+Draft v0.4, October 14, 2026. Roadmap phase 4. Owner: Jeff Fabish. Status: design decisions made by Jeff on October 14, 2026 (see Decisions); hooks re-verified on 1.30 on October 21, 2026 (see the section after the hooks table).
 
 The rigged ADA is feasible as a small client-and-server mod built entirely on vanilla hooks: a player wires plastic explosive into an ADA 4x4 or any other base-game car, the vehicle's display name changes while the rig is armed, and the charge goes off when the horn sounds or when a paired remote detonator fires. Every hook this design depends on exists in the vanilla 1.29 scripts (Scripts Rev. 125372, August 12, 2026). Badlands ships as 1.30, so each hook gets re-checked against the 1.30 scripts before code is written.
 
@@ -55,6 +55,27 @@ Each row was read in the vanilla script source. Re-verify every row on 1.30.
 | Base-game car classes | `CivilianSedan`, `Hatchback_02`, `Offroad_02`, `OffroadHatchback`, `Sedan_02`, `Truck_01_Base` family, `Truck_02`, `Van_01` | `scripts/4_world/entities/vehicles/inheritedcars/` | Yes |
 | Attach the charge model to the car | `IEntity.AddChild(child, pivot, positionOnly)` | `scripts/1_core/proto/enentity.c` | Exists; client-side behavior **not verified** |
 | Which cars spawn on Nasdara | Badlands vehicle list | 1.30 `types.xml` | **No - verify on October 15** |
+
+## Re-verified on 1.30 (October 21, 2026)
+
+Every row above was re-read in `vendor/dayz-1.30-scripts/scripts/` (build 1.30.164078.38); `file:line` below is relative to that folder. Verdict: every hook holds, one moved to a better place, one assumption about bikes was wrong, and Nasdara's spawn list is now known.
+
+| Need | 1.30 state | Where | Consequence for the plan |
+| --- | --- | --- | --- |
+| Rename an instance | Holds: `bool NameOverride(out string output)` on `Object` | `3_Game/DayZ/Entities/Object.c:1344` | Works for cars and motorbikes alike |
+| Sync the armed flag | Holds: `ExplosivesBase` registers `m_Armed` with `RegisterNetSyncVariableBool`; `Arm()` at `:219` | `4_World/DayZ/Entities/ExplosivesBase.c:54,219` | Same pattern on the rigged vehicle |
+| Detect the horn on the server | **Moved.** `CarScript.SetCarHornState(pState)` still exists but now forwards to `m_HornComponent.SetMode(pState)`; the 1.30 motorbikes (`MotorbikeScript : Motorbike : Transport`, not `CarScript`) have the same `VehicleHornComponent` and their horn actions call `SetMode` directly | `4_World/DayZ/Entities/Vehicles/CarScript.c:188,273-283,2481-2486`; `MotorbikeScript.c:75,127-128,212-215`; `4_World/DayZ/Entities/Vehicles/Components/VehicleHornComponent.c:10,41` | **Hook `VehicleHornComponent.SetMode` with a modded class, not `SetCarHornState`.** One hook then covers every car and both bikes. Phase 0 confirms the component can reach its owning `Transport` (it is constructed with it at `CarScript.c:273`) |
+| Horn preconditions | Cars: driver seat plus a vital battery (`ActionCarHornBase.ActionCondition`). **Bikes: driver seat only, no battery check** (`ActionVehicleHornBase.ActionCondition`), and `Motorbike_02` reports `NeedElectricitySourceDevice() = false` | `Actions/Continuous/Vehicles/ActionCarHorn.c:4-21`; `ActionVehicleHorn.c:3-12`; `InheritedMotorbikes/Motorbike_02.c` | "Pull the battery to defang horn mode" is cars-only counterplay; on a bike the only defang is disarm or the kill switch |
+| Produce the blast | Holds: `Object.Explode(int damageType, string ammoType)`; `Plastic_Explosive` sets `Plastic_Explosive_Ammo` | `3_Game/DayZ/Entities/Object.c:144`; `4_World/DayZ/Entities/ExplosivesBase/Plastic_Explosive.c:14` | Unchanged |
+| Remote pairing | Holds: `RemotelyActivatedItemBehaviour` in `3_Game`; `Plastic_Explosive.OnActivatedByItem` at `:236` | `3_Game/DayZ/RemotelyActivatedItemBehaviour.c:1`; `Plastic_Explosive.c:236` | Unchanged |
+| Vanilla remote range | Holds: `UAMaxDistances.EXPLOSIVE_REMOTE_ACTIVATION = 100.0`, checked in `RemoteDetonator` (server) and `ActionTriggerRemotely` (client) | `Actions/ActionConstants.c:121`; `ExplosivesBase/RemoteDetonator.c:103,132`; `Actions/SingleUse/ActionTriggerRemotely.c:46` | Unchanged |
+| Vanilla trigger and disarm accept explosives only | Holds: `ActionTriggerRemotely.ActionCondition` casts the controlled device to `ExplosivesBase`; `ActionDisarmExplosive` casts its target the same way | `ActionTriggerRemotely.c:31-36`; `Actions/Continuous/ActionDisarmExplosive.c:47-63` | The mod still needs its own trigger and disarm actions |
+| Disarm odds | Holds: `ToolBase.GetDisarmRate()` returns `m_MineDisarmRate`, default 60; `ActionDisarmExplosive.c:66` rolls against it | `4_World/DayZ/Entities/ItemBase/ToolBase.c:2-4,19-22`; `ActionDisarmExplosive.c:66` | Unchanged |
+| ADA class | Holds: `OffroadHatchback : CarScript`, colour subclasses at `:488,514` | `InheritedCars/OffroadHatchback.c:1,488,514` | Unchanged |
+| Base-game car classes | Holds: `CivilianSedan`, `Hatchback_02`, `OffroadHatchback`, `Offroad_02`, `Sedan_02`, `Truck_01_Base` (`Cargo`, `Chassis`, `Covered`), `Truck_02`, `Van_01` | `4_World/DayZ/Entities/Vehicles/InheritedCars/` | Unchanged |
+| Attach the charge model | Holds: `IEntity.AddChild(child, pivot, positionOnly)`; client-side replication still unverified until the first build | `1_Core/DayZ/proto/EnEntity.c:551` | Unchanged; first-build check stands |
+| Which vehicles spawn on Nasdara | **Now known.** Events: `VehicleCivilianSedan`, `VehicleHatchback02`, `VehicleOffroad02`, `VehicleOffroadHatchback`, `VehicleSedan02`, `VehicleTruck01` (nominal 6), `VehicleMotorbike` (nominal 30, `Motorbike_01_*` children), `VehicleBoat`. No `Truck_02`, no `Van_01` | `server/live/db/events.xml:1144-1224` | Offsets are needed for six car families plus the bikes; `Truck_02` and `Van_01` can wait |
+| Bike eligibility | Under the October 16 cargo rule a stock bike has no cargo and cannot be rigged; the bike study (`docs/design/bikes-feasibility.md`, K5) shows that bike storage (saddlebags, basket) is what makes a bike riggable | `bikes-feasibility.md` K2-K5 | Payload's bike branch depends on the Bikes addon shipping first, or on Jeff relaxing the cargo rule for bikes |
 
 ## Instance rename
 
