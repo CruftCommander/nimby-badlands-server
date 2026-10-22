@@ -7,7 +7,8 @@
 //           its captured fallback, and the two press gates (menu open, player
 //           dead or unconscious). The mission layer owns the engine calls; this
 //           class never touches g_Game.
-// Plan    : Ears E3 (15 percent of the saved level, 0.5 s fade), E7-E9, E12-E13 (v0.9).
+// Plan    : Ears E3 (15 percent of the launch value, 0.5 s fade), E7, E9, E12-E14 (v0.11;
+//           E8 superseded by E14: the saved level is the launch value of the channel).
 // -----------------------------------------------------------------------------
 class NimbyEarplugsLevel
 {
@@ -65,8 +66,8 @@ class NimbyEarplugsLevel
         return savedLevel;
     }
 
-    // The level Ears expects the scene to sit at for the given saved level (E8: the saved
-    // level is read live, so a slider change while earplugs are in moves the target with it).
+    // The level Ears expects the scene to sit at for the given saved level (E14: the launch
+    // value of the channel, so a slider move never moves the target; E8 superseded).
     float Expected(float savedLevel)
     {
         if (m_In)
@@ -76,7 +77,8 @@ class NimbyEarplugsLevel
         return savedLevel;
     }
 
-    // The saved level Ears works from (E13). The populated saved field wins. When it reads 0
+    // The saved level Ears works from (E13, E14). The populated saved field, the launch value
+    // of the channel read once in OnInit, wins. When it reads 0
     // the scene level stands in: captured while earplugs are out and held while they are in,
     // so a sample never reads the reduced level that Ears itself wrote back as the baseline
     // (one step per second toward silence, review E-2). A player whose slider really is 0 gets 0.
@@ -235,6 +237,15 @@ class NimbyEarplugsLevel
         u.SetSuppressed(true);
         u.TakeOut(0.8);
         failures += SelfTestCase(results, "take out clears suppressed", !u.IsSuppressed() && !u.IsIn());
+
+        // E14: the launch value of the channel is the saved level; in writes 0.15 of it, the
+        // reduced channel read while in never moves it, and take-out writes it back.
+        NimbyEarplugsLevel l = new NimbyEarplugsLevel();
+        float launch = l.ResolveSaved(1, 0.5);
+        float launchIn = l.PutIn(launch);
+        float launchHeld = l.ResolveSaved(1, launchIn);
+        float launchOut = l.TakeOut(launchHeld);
+        failures += SelfTestCase(results, "launch value restored on take out", Near(launch, 1) && Near(launchIn, 0.15) && Near(launchHeld, 1) && Near(launchOut, 1));
         return failures;
     }
 

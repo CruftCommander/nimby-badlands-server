@@ -4,6 +4,13 @@ Modifies the vanilla DayZ 1.30 MissionBase, MissionGameplay, and NotificationUI 
 
 Changes, newest first:
 
+- October 21, 2026, release-1 round (E14 revised by Jeff on the measured
+  rows, findings NIMBY-T-018 and NIMBY-T-019 in the test record): the
+  Effects slider read is gone; OnInit reads the launch value of the scene
+  effect channel once, earplugs in writes 0.15 of it, take-out and the
+  mission-finish take-out write it back. The loaded, toggle, sample, and
+  reapply lines carry launch_sound=; the logout menu is named; one
+  self-test case for the launch-value restore (26 total).
 - October 21, 2026, release-1 round (second commit): the saved level is read
   from the stored value of the Effects slider (GameOptions, resolved once in
   OnInit) when that accessor resolves; the m_volume_sound path with the
