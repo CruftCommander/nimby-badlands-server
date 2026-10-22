@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "title": "NIMBY Badlands | Enhanced Vanilla | RP | 1PP",
+  "tagline": "Where all hope dies and the Badlands begin.",
+  "openDelaySeconds": 2,
+  "openRetrySeconds": 30,
+  "sections": [
+    {
+      "heading": "Welcome",
+      "body": "Hardcore survival on Nasdara, the Badlands map. Fresh world as of October 15, 2026.\n\nRestarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).\n\nThis window shows again only when the text changes. You can reopen it any time from the pause menu under Server info."
+    },
+    {
+      "heading": "The one rule",
+      "body": "Don't be a dick.\n\nThat is the whole rulebook. There are no PvP or PvE zones, no safe zones, and no rules on how you play: choose your own adventure. Glitch bases (built through walls, floors, or terrain) are the one exception: they get removed."
+    },
+    {
+      "heading": "Discord",
+      "body": "Our Discord is the place for questions, reports, and the mod roadmap. Ask in #faq-and-help or ping an admin.\n\nJoin Discord opens the invite in the Steam overlay. Copy invite puts the link on your clipboard. The link is:\nhttps://discord.gg/kH3eJ5mdEv\n\nTo invite someone else, send them that same link.",
+      "url": "https://discord.gg/kH3eJ5mdEv"
+    },
+    {
+      "heading": "How to join",
+      "body": "DZSA Launcher or the in-game browser: search NIMBY Badlands.\nDirect connect: 104.192.227.46:2302\n\nRequires the Badlands DLC. Nasdara servers do not let you in without it.\nVersion: DayZ 1.30. Your game must match the server build.\nMods: the @NIMBY Workshop item (see the Mods section). Subscribe once; the launcher keeps it current.\nSlots: 80\nLocation: Chicago, IL (US Central)"
+    },
+    {
+      "heading": "Restarts",
+      "body": "Every 12 hours, at 12 AM and 12 PM Central.\nWarnings in chat at 15, 5, and 1 minute before the reboot.\nThe server locks to new joins at the 5-minute warning to prevent abuse. Find a safe spot and log out."
+    },
+    {
+      "heading": "Difficulty",
+      "body": "Full hardcore:\n- First person only\n- No crosshair\n- No personal light. Nights are dark; bring a light source.\n- Server time is persistent, so a restart can land you in the middle of the night.\n\nWhy the browser says 3rd & 1st Person: DayZ 1.30 added a separate third-person setting for vehicles, and it looks to be on by default. Bohemia has not published its name yet, so we cannot turn it off. On foot you are locked to first person. Once the setting is documented, we switch it off and the label goes back to first person only."
+    },
+    {
+      "heading": "Enhanced Vanilla",
+      "body": "Vanilla-plus, not easier:\n- Weight hits harder. The stamina penalty starts at 5 kg carried (vanilla is 6 kg) and costs 2% per kg (vanilla is 1.75%). At 15 kg you have 80% stamina instead of 84%.\n- No hit direction indicator. The red hit flash stays; find the shooter by sound.\n- More base building spots. Placement angle and collision checks are relaxed. Glitch bases are still against the rules and get removed.\n\nLoot is stock Nasdara for now. Tuning comes once we see how the map plays."
+    },
+    {
+      "heading": "Mods",
+      "body": "Everything comes in one Workshop item, @NIMBY. Every key below is rebindable in Options > Controls under the NIMBY tab.\n\nLegs - Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back.\n\nEars - Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected.\n\nScrawl - Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days.\n\nGreet - This window. Reopen it from the pause menu under Server info.\n\nComing later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
+    },
+    {
+      "heading": "Questions",
+      "body": "How do I invite someone to this Discord? Send them https://discord.gg/kH3eJ5mdEv (the Copy invite button on the Discord page puts it on your clipboard).\n\nAnything else: ask in the #faq-and-help channel or ping an admin.",
+      "url": "https://discord.gg/kH3eJ5mdEv"
+    }
+  ]
+}
