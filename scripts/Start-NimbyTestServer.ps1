@@ -12,7 +12,12 @@
        log also names the -Server and -Dev companion outputs, loaded when present. Every PBO is
        hashed and compared with the sha256 the build log recorded for it ("ADDON OK"); a PBO
        that changed, went missing, or was added since the build is a HASH MISMATCH and is
-       refused unless -Force is given.
+       refused unless -Force is given. -BuildPath, -ServerModPath, and -DevPath are resolved
+       to absolute paths before the -mod= and -servermod= arguments are built, and a folder
+       that does not exist is refused by name. The server starts with its own install as the
+       working directory, so a relative path would reach it unchanged and be read against that
+       folder, not the shell's: on October 21, 2026 a relative -BuildPath loaded only the dev
+       harness and crashed the server (NIMBY-T-017, study/hands-t010 record).
     2. Copies nimby.bikey (and the dev key when a -Dev build is loaded) into the server's keys
        folder so clients that load the pack pass signature verification (verifySignatures = 2).
     3. Writes a throwaway server config from pack.json "testServer" with the join password from
@@ -44,7 +49,10 @@
               password comes from -JoinPassword, else <profile>\join-password.txt, else the
               standing value in the NIMBY_JOIN_PASSWORD environment variable or
               <repo>\scripts\testserver.local.json ("joinPassword"; git-ignored by *.local.json),
-              else a random value. It is shown once on screen. With -ProfileName an explicit or
+              else a random value. A -JoinPassword, profile, or random value is shown once on
+              screen. A standing value is never printed: the start-up line reads "Join
+              password: standing value (not shown)" followed by its source (NIMBY_JOIN_PASSWORD
+              or the local file). With -ProfileName an explicit or
               random value is saved to <profile>\join-password.txt (git-ignored) and reused by
               later runs of that profile; a standing value is never saved there. The manifest
               records only the source, never the value. Both passwords sit in config files under
@@ -58,7 +66,9 @@
 
 .PARAMETER BuildPath
     The build\@NIMBY-<stamp> folder to run. Alias -ModPath. When omitted, the newest build whose
-    build.log records SUMMARY PASS is used.
+    build.log records SUMMARY PASS is used. A relative path is accepted and resolved against the
+    shell's current folder before it reaches the server; the server itself would read it against
+    its own install folder (NIMBY-T-017).
 
 .PARAMETER ServerModPath
     A build\@NIMBY-Server-<stamp> folder for -servermod=. Defaults from the chosen build's log.
@@ -157,6 +167,41 @@ function Test-ModFolder {
     if (-not $Path) { return $false }
     $addons = Join-Path $Path 'addons'
     return ((Test-Path -LiteralPath $addons) -and @(Get-ChildItem -LiteralPath $addons -Filter '*.pbo').Count -gt 0)
+}
+
+function Resolve-ModFolderPath {
+    # The absolute path of a mod folder for the -mod= or -servermod= argument. The server runs
+    # with its own install as the working directory, so a relative path handed through unchanged
+    # is read against D:\DayZServer (or wherever the server lives), not the shell's folder, and
+    # the folder silently fails to load: on October 21, 2026 a relative -BuildPath loaded only the
+    # dev harness and crashed the server (NIMBY-T-017). Throws, naming the parameter, when the
+    # folder does not exist.
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw ("{0} '{1}' does not exist (a relative path is read from {2}). Pass a folder that exists." -f $Label, $Path, (Get-Location).ProviderPath)
+    }
+    return (Resolve-Path -LiteralPath $Path).ProviderPath
+}
+
+function Get-JoinPasswordDisplay {
+    # What the start-up line shows after "Join password:". A standing value (NIMBY_JOIN_PASSWORD
+    # or scripts\testserver.local.json) is never printed; the line says so and names the source.
+    # A -JoinPassword, profile, or random value is shown, as before.
+    param(
+        [Parameter(Mandatory)][string]$Password,
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$RepoRoot
+    )
+
+    switch ($Source) {
+        'env' { return 'standing value (not shown), from NIMBY_JOIN_PASSWORD' }
+        'local-file' { return ('standing value (not shown), from {0}' -f (Get-NimbyLocalSettingPath -RepoRoot $RepoRoot)) }
+        default { return $Password }
+    }
 }
 
 function Get-BuildLogForBuild {
@@ -480,7 +525,8 @@ try {
         Write-Manifest -LogPath $manifest -Line 'BUILD none (vanilla control boot)'
     }
     elseif ($BuildPath) {
-        if (-not (Test-ModFolder -Path $BuildPath)) { throw "No addons\*.pbo under -BuildPath '$BuildPath'." }
+        if (-not (Test-ModFolder -Path $BuildPath)) { throw "No addons\*.pbo under -BuildPath '$BuildPath' (a relative path is read from $((Get-Location).ProviderPath))." }
+        $BuildPath = Resolve-ModFolderPath -Path $BuildPath -Label '-BuildPath'
         $buildLogPath = Get-BuildLogForBuild -BuildPath $BuildPath -LogRoot $logRoot -ModFolderName $pack.modFolderName
         if ($buildLogPath) { $build = Read-BuildLog -Path $buildLogPath }
         $explicitVerdict = 'UNKNOWN'
@@ -504,8 +550,13 @@ try {
         if (-not $DevPath -and $build.DevPath) { $DevPath = $build.DevPath }
         Write-Manifest -LogPath $manifest -Line ("BUILD selected verdict=PASS log={0}" -f $build.Path)
     }
-    if ($ServerModPath -and -not (Test-ModFolder -Path $ServerModPath)) { throw "No addons\*.pbo under -ServerModPath '$ServerModPath'." }
-    if ($DevPath -and -not (Test-ModFolder -Path $DevPath)) { throw "No addons\*.pbo under -DevPath '$DevPath'." }
+    if ($ServerModPath -and -not (Test-ModFolder -Path $ServerModPath)) { throw "No addons\*.pbo under -ServerModPath '$ServerModPath' (a relative path is read from $((Get-Location).ProviderPath))." }
+    if ($DevPath -and -not (Test-ModFolder -Path $DevPath)) { throw "No addons\*.pbo under -DevPath '$DevPath' (a relative path is read from $((Get-Location).ProviderPath))." }
+    # Absolute paths only from here on: the -mod= argument is read by the server from its own
+    # working directory, never the shell's (NIMBY-T-017).
+    if (-not $Vanilla) { $BuildPath = Resolve-ModFolderPath -Path $BuildPath -Label '-BuildPath' }
+    if ($ServerModPath) { $ServerModPath = Resolve-ModFolderPath -Path $ServerModPath -Label '-ServerModPath' }
+    if ($DevPath) { $DevPath = Resolve-ModFolderPath -Path $DevPath -Label '-DevPath' }
     if ($Vanilla) { Write-Manifest -LogPath $manifest -Line 'MOD none' } else { Write-Manifest -LogPath $manifest -Line "MOD $BuildPath" }
     if ($ServerModPath) { Write-Manifest -LogPath $manifest -Line "SERVERMOD $ServerModPath" } else { Write-Manifest -LogPath $manifest -Line 'SERVERMOD none' }
     if ($DevPath) { Write-Manifest -LogPath $manifest -Line "DEV $DevPath" } else { Write-Manifest -LogPath $manifest -Line 'DEV none' }
@@ -581,7 +632,7 @@ try {
     $runStart = Get-Date
     $process = Start-Process -FilePath (Join-Path $ServerPath 'DayZServer_x64.exe') -ArgumentList $quoted -WorkingDirectory $ServerPath -PassThru -WindowStyle Minimized
 
-    Write-Information -MessageData ("Server starting on port {0}. Join password: {1}" -f $test.port, $password) -InformationAction Continue
+    Write-Information -MessageData ("Server starting on port {0}. Join password: {1}" -f $test.port, (Get-JoinPasswordDisplay -Password $password -Source $join.Source -RepoRoot $RepoRoot)) -InformationAction Continue
     if ($Vanilla) { Write-Information -MessageData 'Client mod folder: none (vanilla)' -InformationAction Continue } else { Write-Information -MessageData ("Client mod folder: {0}" -f $BuildPath) -InformationAction Continue }
     if ($DevPath) { Write-Information -MessageData ("Dev harness folder (load beside the pack): {0}" -f $DevPath) -InformationAction Continue }
     Write-Information -MessageData 'Run the test, then press Enter (or Ctrl+C) here to stop the server (RCON #shutdown) and summarize.' -InformationAction Continue
