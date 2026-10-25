@@ -11,6 +11,11 @@
 //           there. Voice notifications keep their own player-name keys.
 // Moves to a shared NIMBY base addon when a second NIMBY mod needs it.
 // Style   : One statement per line (Enforce rejects continuation lines).
+// Upkeep  : The body below is a copy of NotificationUI.RemoveNotification
+//           (NotificationUI.c:74-83) with only the map key changed, and it does not
+//           call super. Re-diff it against that method on every game update.
+//           m_WidgetTimers is map<string, Widget> (NotificationUI.c:16), so the
+//           string key is the vanilla type.
 // -----------------------------------------------------------------------------
 
 modded class NotificationUI

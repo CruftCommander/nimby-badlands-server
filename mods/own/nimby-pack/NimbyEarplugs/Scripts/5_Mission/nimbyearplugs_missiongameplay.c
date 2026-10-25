@@ -3,11 +3,33 @@
 // Purpose : Reads UANimbyEarplugsToggle, applies or restores the scene effect
 //           volume, reapplies it when something else writes the level (E9), and
 //           stands down while vanilla owns the level (dead or unconscious, E7).
+//           The key is ignored while any scripted menu is open (E12) and while
+//           the player is dead or unconscious; earplugs come out when the
+//           mission ends so a disconnect never carries the reduced level into
+//           the main menu.
 // Logs    : [NIMBY][Earplugs] lines in the client script log (Print).
-//           Production: reapplies and the death take-out only (shared rules 4.3).
-//           Debug ($profile:NimbyEarplugs\debug): toggles, menu changes, the first
-//           drifted sample as RESET, one sample per second while earplugs are in,
-//           and the vanilla respawn restore. These are the Phase 0 evidence.
+//           Production: reapplies, the death take-out, and the mission-finish
+//           take-out (shared rules 4.3: forced clears and audit records only).
+//           Debug ($profile:NimbyEarplugs\debug): loaded, toggles, ignored
+//           presses, menu changes, the first drifted sample as RESET, one sample
+//           per second while earplugs are in, and the vanilla respawn restore.
+//           The sample line is built only when the flag is set.
+// Vanilla : GetUApi().GetInputByName and UAInput.LocalPress (UAInput.c:218, :60);
+//           UIManager.GetMenu and UIScriptedMenu.GetID (UIManager.c:59,
+//           UIScriptedMenu.c:151); SoundScene GetSoundVolume/SetSoundVolume
+//           (Sound.c:71-72) is the scene effect channel: a multiplier the engine
+//           applies on top of the Options Effects slider, read at 1 on every
+//           launch, cached once by DayZGame.DeferredInit into g_Game.m_volume_sound
+//           (DayZGame.c:1147, scheduled at :1093) and restored from that cache on
+//           respawn (missionGameplay.c:1690) and on waking (PlayerBase.c:3832).
+//           The Effects slider is a separate quantity: its option store
+//           (OptionsMenuSounds.c:363-366) reads on its own 0 to 10 range
+//           (NumericOptionsAccess.GetMin/GetMax, gameplay.c:1425-1426) and Options
+//           Apply never writes the channel (test record, NIMBY-T-018 and
+//           NIMBY-T-019), so Ears never reads the slider (E14). OnMissionFinish
+//           (gameplay.c:702, overridden at missionGameplay.c:266);
+//           Man.IsUnconscious (Man.c:63, PlayerBase.c:3925), Object.IsAlive
+//           (Object.c:517).
 // Style   : One statement per line and no multi-line expressions. The Enforce
 //           compiler rejected a string built across continuation lines
 //           ("Invalid statement ')'", build 20261016-162750).
@@ -16,6 +38,12 @@
 modded class MissionGameplay extends MissionBase
 {
     protected ref NimbyEarplugsLevel m_NimbyEarplugs;
+    // Resolved once in OnInit; vanilla caches its inputs the same way (Inventory.c:71).
+    protected UAInput m_NimbyEarplugsInput;
+    // The launch value of the scene effect channel (E14), read once in OnInit before any press.
+    // Earplugs in writes 0.15 of it; take-out writes it back. The Options Effects slider is the
+    // player's own setting, applied by the engine on top of this channel, and is never read.
+    protected float m_NimbyEarplugsLaunch;
     protected bool m_NimbyEarplugsDebug;
     protected float m_NimbyEarplugsSampleClock;
     protected int m_NimbyEarplugsLastMenuId = -2;
@@ -26,7 +54,19 @@ modded class MissionGameplay extends MissionBase
         super.OnInit();
         m_NimbyEarplugs = new NimbyEarplugsLevel();
         m_NimbyEarplugsDebug = FileExist("$profile:NimbyEarplugs\\debug");
-        string line = "loaded; input=UANimbyEarplugsToggle debug=" + NimbyEarplugsBool(m_NimbyEarplugsDebug);
+        if (GetUApi())
+        {
+            m_NimbyEarplugsInput = GetUApi().GetInputByName("UANimbyEarplugsToggle");
+        }
+        m_NimbyEarplugsLaunch = g_Game.GetSoundScene().GetSoundVolume();
+        bool bound = false;
+        if (m_NimbyEarplugsInput)
+        {
+            bound = true;
+        }
+        string line = "loaded; input=UANimbyEarplugsToggle bound=" + NimbyEarplugsBool(bound);
+        line = line + NimbyEarplugsLaunchToken();
+        line = line + " debug=" + NimbyEarplugsBool(m_NimbyEarplugsDebug);
         line = line + NimbyEarplugsLevels();
         NimbyEarplugsDebugLog(line);
     }
@@ -37,9 +77,31 @@ modded class MissionGameplay extends MissionBase
 
         NimbyEarplugsTrackMenu();
 
-        if (NimbyEarplugsPressed())
+        bool pressed = NimbyEarplugsPressed();
+        if (!pressed && !m_NimbyEarplugs.IsIn())
         {
-            NimbyEarplugsToggle();
+            return;
+        }
+
+        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+        bool alive = true;
+        bool unconscious = false;
+        if (player)
+        {
+            alive = player.IsAlive();
+            unconscious = player.IsUnconscious();
+        }
+
+        if (pressed)
+        {
+            if (NimbyEarplugsLevel.CanToggle(alive, unconscious))
+            {
+                NimbyEarplugsToggle();
+            }
+            else
+            {
+                NimbyEarplugsDebugLog("press ignored: player dead or unconscious; vanilla owns the level");
+            }
         }
 
         if (!m_NimbyEarplugs.IsIn())
@@ -49,10 +111,9 @@ modded class MissionGameplay extends MissionBase
 
         m_NimbyEarplugs.Tick(timeslice);
 
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
         if (player)
         {
-            if (!player.IsAlive())
+            if (!alive)
             {
                 // E7: vanilla silences everything at death and restores the saved level on
                 // respawn; earplugs come out so the two agree.
@@ -60,7 +121,7 @@ modded class MissionGameplay extends MissionBase
                 NimbyEarplugsLog("earplugs out: player died; vanilla owns the level until respawn");
                 return;
             }
-            m_NimbyEarplugs.SetSuppressed(player.IsUnconscious());
+            m_NimbyEarplugs.SetSuppressed(unconscious);
         }
 
         m_NimbyEarplugsSampleClock = m_NimbyEarplugsSampleClock + timeslice;
@@ -83,30 +144,56 @@ modded class MissionGameplay extends MissionBase
         NimbyEarplugsDebugLog(line);
     }
 
-    protected bool NimbyEarplugsPressed()
+    // Nothing in vanilla restores the scene level between leaving a server and the main menu's
+    // own write (MainMenuVideo.c:32-42), so earplugs come out here. The Relog row of the
+    // release-1 record (October 21, 2026) saw this hook run on the exit path.
+    override void OnMissionFinish()
     {
-        if (!GetUApi())
+        if (m_NimbyEarplugs && m_NimbyEarplugs.IsIn())
         {
-            return false;
+            float target = m_NimbyEarplugs.TakeOut(NimbyEarplugsSavedLevel());
+            g_Game.GetSoundScene().SetSoundVolume(target, 0);
+            string line = "earplugs out: mission finished; target=" + target.ToString();
+            line = line + NimbyEarplugsLaunchToken();
+            line = line + NimbyEarplugsLevels();
+            NimbyEarplugsLog(line);
         }
-        UAInput inp = GetUApi().GetInputByName("UANimbyEarplugsToggle");
-        if (!inp)
-        {
-            return false;
-        }
-        return inp.LocalPress();
+        super.OnMissionFinish();
     }
 
-    // E3: the saved level is the baseline and is never written. Falls back to the live scene
-    // level if the saved field is not populated yet (DayZGame.c:1147 runs on option refresh).
+    // E12: a press counts only when no scripted menu is open. An ignored press is logged (debug)
+    // so the chat row has positive evidence that the key reached the input and was refused.
+    protected bool NimbyEarplugsPressed()
+    {
+        if (!m_NimbyEarplugsInput)
+        {
+            return false;
+        }
+        if (!m_NimbyEarplugsInput.LocalPress())
+        {
+            return false;
+        }
+        int menuId = NimbyEarplugsCurrentMenuId();
+        if (NimbyEarplugsLevel.PressAllowed(menuId))
+        {
+            return true;
+        }
+        NimbyEarplugsDebugLog("press ignored: menu=" + NimbyEarplugsMenuName(menuId) + " open");
+        return false;
+    }
+
+    // E3, E13, E14: the saved level is the launch value of the channel and is never written.
+    // When that read was 0 (E13), the scene level captured while earplugs were out stands in.
     protected float NimbyEarplugsSavedLevel()
     {
-        float saved = g_Game.m_volume_sound;
-        if (saved <= 0)
-        {
-            saved = g_Game.GetSoundScene().GetSoundVolume();
-        }
-        return saved;
+        float scene = g_Game.GetSoundScene().GetSoundVolume();
+        return m_NimbyEarplugs.ResolveSaved(m_NimbyEarplugsLaunch, scene);
+    }
+
+    // " launch_sound=<channel value read in OnInit>"
+    protected string NimbyEarplugsLaunchToken()
+    {
+        return " launch_sound=" + m_NimbyEarplugsLaunch.ToString();
     }
 
     protected void NimbyEarplugsToggle()
@@ -132,34 +219,39 @@ modded class MissionGameplay extends MissionBase
         m_NimbyEarplugsSampleClock = 0;
 
         string line = "toggle " + detail + "; before=" + before.ToString() + " target=" + target.ToString();
+        line = line + NimbyEarplugsLaunchToken();
         line = line + NimbyEarplugsLevels();
-        line = line + " menu=" + NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
         NimbyEarplugsDebugLog(line);
         NotificationSystem.AddNotificationExtended(3, "Ears", detail);
     }
 
-    // Once a second while earplugs are in: log the sample (debug), flag the first drift as RESET
-    // (debug), and write the expected level back when the state machine says so (production).
+    // Once a second while earplugs are in: write the expected level back when the state machine
+    // says so (production), and with the debug flag log the sample, flag the first drift as
+    // RESET, and note when the level is back. The sample line is built only under the flag.
     protected void NimbyEarplugsSampleAndReapply()
     {
         float current = g_Game.GetSoundScene().GetSoundVolume();
         float saved = NimbyEarplugsSavedLevel();
         float expected = m_NimbyEarplugs.Expected(saved);
-        string menu = NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
-        string line = "expected=" + expected.ToString();
-        line = line + NimbyEarplugsLevels();
-        line = line + " menu=" + menu;
-
         bool drifted = NimbyEarplugsLevel.IsReset(current, expected);
-        if (drifted && !m_NimbyEarplugsResetLogged)
+
+        string line = "";
+        if (m_NimbyEarplugsDebug)
         {
-            m_NimbyEarplugsResetLogged = true;
-            NimbyEarplugsDebugLog("RESET " + line);
-        }
-        if (!drifted && m_NimbyEarplugsResetLogged)
-        {
-            m_NimbyEarplugsResetLogged = false;
-            NimbyEarplugsDebugLog("level back at expected; " + line);
+            line = "expected=" + expected.ToString();
+            line = line + NimbyEarplugsLaunchToken();
+            line = line + NimbyEarplugsLevels();
+            line = line + " menu=" + NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
+            if (drifted && !m_NimbyEarplugsResetLogged)
+            {
+                m_NimbyEarplugsResetLogged = true;
+                NimbyEarplugsDebugLog("RESET " + line);
+            }
+            if (!drifted && m_NimbyEarplugsResetLogged)
+            {
+                m_NimbyEarplugsResetLogged = false;
+                NimbyEarplugsDebugLog("level back at expected; " + line);
+            }
         }
 
         if (m_NimbyEarplugs.ShouldReapply(current, saved))
@@ -167,7 +259,10 @@ modded class MissionGameplay extends MissionBase
             float target = m_NimbyEarplugs.Reapply(saved);
             g_Game.GetSoundScene().SetSoundVolume(target, NimbyEarplugsLevel.FADE_SECONDS);
             int count = m_NimbyEarplugs.ReapplyCount();
-            string reapply = "reapply #" + count.ToString() + " from=" + current.ToString() + " to=" + target.ToString() + " menu=" + menu;
+            string reapply = "reapply #" + count.ToString() + " from=" + current.ToString() + " to=" + target.ToString();
+            reapply = reapply + NimbyEarplugsLaunchToken();
+            reapply = reapply + NimbyEarplugsLevels();
+            reapply = reapply + " menu=" + NimbyEarplugsMenuName(NimbyEarplugsCurrentMenuId());
             NimbyEarplugsLog(reapply);
             return;
         }
@@ -203,6 +298,7 @@ modded class MissionGameplay extends MissionBase
         return menu.GetID();
     }
 
+    // Menu ids from 3_Game/DayZ/constants.c:184-209 (MENU_LOGOUT at :201).
     protected string NimbyEarplugsMenuName(int menuId)
     {
         if (menuId < 0)
@@ -220,6 +316,18 @@ modded class MissionGameplay extends MissionBase
         if (menuId == MENU_OPTIONS)
         {
             return "options";
+        }
+        if (menuId == MENU_CHAT_INPUT)
+        {
+            return "chat";
+        }
+        if (menuId == MENU_NOTE)
+        {
+            return "note";
+        }
+        if (menuId == MENU_LOGOUT)
+        {
+            return "logout";
         }
         if (menuId == MENU_KEYBINDINGS)
         {

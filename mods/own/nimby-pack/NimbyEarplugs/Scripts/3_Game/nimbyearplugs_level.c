@@ -3,9 +3,12 @@
 // Purpose : Everything about Ears that can be unit-tested without the engine:
 //           the reduced level, the reset detector, the in/out state, the settle
 //           window after an apply, the suppression while the player is dead or
-//           unconscious, and the reapply decision. The mission layer owns the
-//           engine calls; this class never touches g_Game.
-// Plan    : Ears E3 (15 percent of the saved level, 0.5 s fade), E7-E9 (v0.6).
+//           unconscious, the reapply decision, the saved-level resolution with
+//           its captured fallback, and the two press gates (menu open, player
+//           dead or unconscious). The mission layer owns the engine calls; this
+//           class never touches g_Game.
+// Plan    : Ears E3 (15 percent of the launch value, 0.5 s fade), E7, E9, E12-E14 (v0.11;
+//           E8 superseded by E14: the saved level is the launch value of the channel).
 // -----------------------------------------------------------------------------
 class NimbyEarplugsLevel
 {
@@ -26,6 +29,9 @@ class NimbyEarplugsLevel
     protected float m_SinceApplied;
     protected float m_SinceReapply;
     protected int m_ReapplyCount;
+    // Scene level captured while earplugs were out, used as the saved level only when the
+    // saved field reads 0 (E13). Never re-read from the scene while earplugs are in.
+    protected float m_Fallback;
 
     bool IsIn()
     {
@@ -50,16 +56,18 @@ class NimbyEarplugsLevel
         return Reduced(savedLevel);
     }
 
-    // Earplugs come out. Returns the level to apply (the saved level, unchanged).
+    // Earplugs come out. Returns the level to apply (the saved level, unchanged). Suppression
+    // ends with the state it belonged to, so the object never rests at in=false suppressed=true.
     float TakeOut(float savedLevel)
     {
         m_In = false;
+        m_Suppressed = false;
         OnApplied();
         return savedLevel;
     }
 
-    // The level Ears expects the scene to sit at for the given saved level (E8: the saved
-    // level is read live, so a slider change while earplugs are in moves the target with it).
+    // The level Ears expects the scene to sit at for the given saved level (E14: the launch
+    // value of the channel, so a slider move never moves the target; E8 superseded).
     float Expected(float savedLevel)
     {
         if (m_In)
@@ -67,6 +75,38 @@ class NimbyEarplugsLevel
             return Reduced(savedLevel);
         }
         return savedLevel;
+    }
+
+    // The saved level Ears works from (E13, E14). The populated saved field, the launch value
+    // of the channel read once in OnInit, wins. When it reads 0
+    // the scene level stands in: captured while earplugs are out and held while they are in,
+    // so a sample never reads the reduced level that Ears itself wrote back as the baseline
+    // (one step per second toward silence, review E-2). A player whose slider really is 0 gets 0.
+    float ResolveSaved(float savedField, float sceneLevel)
+    {
+        if (savedField > 0)
+        {
+            return savedField;
+        }
+        if (m_In)
+        {
+            return m_Fallback;
+        }
+        m_Fallback = sceneLevel;
+        return m_Fallback;
+    }
+
+    // E12: the toggle key is ignored while any scripted menu is open. Chat input is the case
+    // that matters (typing an n toggled earplugs); the inventory is blocked with the rest.
+    static bool PressAllowed(int menuId)
+    {
+        return menuId < 0;
+    }
+
+    // E7: a press while dead or unconscious would write over the silence vanilla owns; ignored.
+    static bool CanToggle(bool alive, bool unconscious)
+    {
+        return alive && !unconscious;
     }
 
     // Vanilla owns the level while the player is unconscious (fades to 0, PlayerBase.c:3778)
@@ -171,6 +211,41 @@ class NimbyEarplugsLevel
         s.Tick(1.5);
         failures += SelfTestCase(results, "out never reapplies", !s.ShouldReapply(0.3, 0.8));
         failures += SelfTestCase(results, "zero saved stays zero", Near(Reduced(0), 0));
+
+        // E13: saved-level resolution and the captured fallback.
+        NimbyEarplugsLevel f = new NimbyEarplugsLevel();
+        failures += SelfTestCase(results, "populated saved field wins", Near(f.ResolveSaved(0.8, 0.12), 0.8));
+        float fallbackOut = f.ResolveSaved(0, 0.6);
+        failures += SelfTestCase(results, "fallback while out reads scene", Near(fallbackOut, 0.6));
+        f.PutIn(fallbackOut);
+        float fallbackIn = f.ResolveSaved(0, 0.09);
+        failures += SelfTestCase(results, "fallback while in keeps captured level", Near(fallbackIn, 0.6));
+        float restoredFallback = f.TakeOut(f.ResolveSaved(0, 0.09));
+        failures += SelfTestCase(results, "take out restores captured fallback", Near(restoredFallback, 0.6));
+        NimbyEarplugsLevel z = new NimbyEarplugsLevel();
+        float zeroOut = z.ResolveSaved(0, 0);
+        float zeroApplied = z.PutIn(zeroOut);
+        float zeroIn = z.ResolveSaved(0, 0);
+        failures += SelfTestCase(results, "legitimate zero stays zero", Near(zeroOut, 0) && Near(zeroApplied, 0) && Near(zeroIn, 0));
+
+        // E12 and E7: the press gates. Menu ids: chat input 17, inventory 11 (constants.c:192, :186).
+        failures += SelfTestCase(results, "press blocked while a menu is open", !PressAllowed(17) && !PressAllowed(11) && !PressAllowed(0));
+        failures += SelfTestCase(results, "press allowed with no menu", PressAllowed(-1));
+        failures += SelfTestCase(results, "toggle only while alive and conscious", CanToggle(true, false) && !CanToggle(false, false) && !CanToggle(true, true));
+        NimbyEarplugsLevel u = new NimbyEarplugsLevel();
+        u.PutIn(0.8);
+        u.SetSuppressed(true);
+        u.TakeOut(0.8);
+        failures += SelfTestCase(results, "take out clears suppressed", !u.IsSuppressed() && !u.IsIn());
+
+        // E14: the launch value of the channel is the saved level; in writes 0.15 of it, the
+        // reduced channel read while in never moves it, and take-out writes it back.
+        NimbyEarplugsLevel l = new NimbyEarplugsLevel();
+        float launch = l.ResolveSaved(1, 0.5);
+        float launchIn = l.PutIn(launch);
+        float launchHeld = l.ResolveSaved(1, launchIn);
+        float launchOut = l.TakeOut(launchHeld);
+        failures += SelfTestCase(results, "launch value restored on take out", Near(launch, 1) && Near(launchIn, 0.15) && Near(launchHeld, 1) && Near(launchOut, 1));
         return failures;
     }
 
