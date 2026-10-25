@@ -7,5 +7,5 @@ release (plan G15); none yet.
 Changes, newest first:
 
 - October 25, 2026, stub: config.cpp, the rules constants (caps from plan G9, RPC ids
-  from G1 and G5, the file names), and one self-test case, so the pack.json row builds
+  from G1 and G5, the file names), and nine self-test cases, so the pack.json row builds
   and the boot check's self-test gate sees Greet (shared rules 8). No window yet.

@@ -24,8 +24,11 @@ class NimbyGreetRules
     static const int MAX_HEADING_CHARS = 40;
     static const int MAX_ID_CHARS = 32;
 
-    // G5: set from the Phase 0 item 8 measurement; 1500 is the plan's starting value.
-    static const int CHUNK_CHARS = 1500;
+    // G5: bytes per chunk, set from the Phase 0 item 8 measurement; 1500 is the plan's starting value.
+    static const int CHUNK_BYTES = 1500;
+
+    // G5, G6: UIScriptedMenu id; vanilla's highest is MENU_UNDERGROUND_TRIGGER_EDITOR = 48 (constants.c:223).
+    static const int MENU_ID = 65511;
 
     // G3, G4, G17: file names under $profile:NimbyGreet\.
     static const string DIR = "$profile:NimbyGreet";
@@ -36,28 +39,29 @@ class NimbyGreetRules
     static const string FILE_DEBUG = "$profile:NimbyGreet\\debug";
     static const string FILE_SELFTEST = "$profile:NimbyGreet\\selftest";
 
-    // Cuts text to at most cap characters. Returns the input when it fits.
+    // Cuts text to at most cap characters (UTF-8 characters, not bytes: EnString.c:137,206).
+    // Returns the input when it fits.
     static string CapText(string text, int cap)
     {
         if (cap < 0)
         {
             return "";
         }
-        if (text.Length() <= cap)
+        if (text.LengthUtf8() <= cap)
         {
             return text;
         }
-        return text.Substring(0, cap);
+        return text.SubstringUtf8(0, cap);
     }
 
-    // How many chunks of CHUNK_CHARS a payload of length chars needs (G5). 0 for 0.
-    static int ChunkCount(int chars)
+    // How many chunks of CHUNK_BYTES a serialized payload of the given byte length needs (G5). 0 for 0.
+    static int ChunkCount(int bytes)
     {
-        if (chars <= 0)
+        if (bytes <= 0)
         {
             return 0;
         }
-        return (chars + CHUNK_CHARS - 1) / CHUNK_CHARS;
+        return (bytes + CHUNK_BYTES - 1) / CHUNK_BYTES;
     }
 
     // Returns the number of failures; the caller prints one PASS|FAIL line per case.
@@ -69,9 +73,10 @@ class NimbyGreetRules
         failures += SelfTestCase(results, "cap: zero cap gives empty", CapText("abc", 0) == "");
         failures += SelfTestCase(results, "chunks: 0 chars is 0 chunks", ChunkCount(0) == 0);
         failures += SelfTestCase(results, "chunks: one char is 1 chunk", ChunkCount(1) == 1);
-        failures += SelfTestCase(results, "chunks: exact multiple", ChunkCount(CHUNK_CHARS * 2) == 2);
-        failures += SelfTestCase(results, "chunks: one over rounds up", ChunkCount(CHUNK_CHARS * 2 + 1) == 3);
-        failures += SelfTestCase(results, "chunks: total cap fits in 27", ChunkCount(MAX_TOTAL_CHARS) == 27);
+        failures += SelfTestCase(results, "chunks: exact multiple", ChunkCount(CHUNK_BYTES * 2) == 2);
+        failures += SelfTestCase(results, "chunks: one over rounds up", ChunkCount(CHUNK_BYTES * 2 + 1) == 3);
+        failures += SelfTestCase(results, "chunks: 40000 bytes is 27 chunks", ChunkCount(40000) == 27);
+        failures += SelfTestCase(results, "cap: multibyte text cut by characters", CapText("дайз", 2).LengthUtf8() == 2);
         return failures;
     }
 
