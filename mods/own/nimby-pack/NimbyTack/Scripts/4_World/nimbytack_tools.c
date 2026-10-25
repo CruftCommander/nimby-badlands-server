@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// NimbyTack - the pin actions on the fasteners (T2, T7).
+// NimbyTack - the pin actions on the fasteners (T2, T7) and the burn on the igniters (T18).
 // Purpose : Each fastener class offers its pin action when it is in hands. The
 //           class lists live in NimbyTackRules (IsHammerTool, IsKnife); adding a
 //           class means a modded class here and a line there (T8).
@@ -131,5 +131,63 @@ modded class Machete
     {
         super.SetActions();
         AddAction(ActionNimbyTackPinKnife);
+    }
+}
+
+// T18 (NIMBY-T-022): the burn on a pinned note, offered by every class that carries vanilla
+// ActionLightItemOnFire (Matchbox.c:37, PetrolLighter.c:37, HandDrillKit.c:29, Roadflare.c:460,
+// Torch.c:765 on FlammableBase, PortableGasStove.c:417; Jeff, October 25, 2026). Whether the item
+// can light right now is vanilla CanIgniteItem, checked by the action.
+modded class Matchbox
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
+    }
+}
+
+modded class PetrolLighter
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
+    }
+}
+
+modded class HandDrillKit
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
+    }
+}
+
+modded class Roadflare
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
+    }
+}
+
+modded class FlammableBase
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
+    }
+}
+
+modded class PortableGasStove
+{
+    override void SetActions()
+    {
+        super.SetActions();
+        AddAction(ActionNimbyTackBurn);
     }
 }

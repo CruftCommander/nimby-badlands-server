@@ -742,6 +742,53 @@ class NimbyTackWorld
         LogFootprintLayer("view", ObjIntersectView, player, hit, points, wallOffset);
         LogFootprintLayer("fire", ObjIntersectFire, player, hit, points, wallOffset);
         LogFootprintLayer("physics", -1, player, hit, points, wallOffset);
+        LogPostNormals(player, hit, right);
+    }
+
+    // NIMBY-T-025 study (debug only, Jeff, October 25, 2026): a note on a thin post can hang
+    // turned against the fence, because its normal comes from the post's own collision shape.
+    // Two more building-layer rays, this far either side of the hit along the sheet's width,
+    // record the normal beside the post, its angle to the hit normal, and its depth, so the
+    // record can tell whether a broad-face normal would hang the note flush. Moves nothing.
+    static const float POST_PROBE_SIDE_METERS = 0.2;
+
+    protected static void LogPostNormals(PlayerBase player, NimbyTackHit hit, vector right)
+    {
+        string line = "post-normals wall=" + ClassOf(hit.wall) + " hit=" + hit.normal.ToString();
+        line = line + " left=" + SideNormalTag(player, hit, right, -POST_PROBE_SIDE_METERS);
+        line = line + " right=" + SideNormalTag(player, hit, right, POST_PROBE_SIDE_METERS);
+        line = line + " " + PositionTag(hit.position);
+        NimbyTackLog.Debug(line);
+    }
+
+    // normal/angle=<deg>/depth=<m>/obj=<class>, or none when the ray finds no building.
+    protected static string SideNormalTag(PlayerBase player, NimbyTackHit hit, vector right, float side)
+    {
+        vector start = hit.position + right * side + hit.normal * 1.0;
+        vector end = hit.position + right * side - hit.normal * 0.3;
+        Object hitObject;
+        vector hitPosition;
+        vector hitNormal;
+        float hitFraction;
+        if (!DayZPhysics.RayCastBullet(start, end, PhxInteractionLayers.BUILDING, player, hitObject, hitPosition, hitNormal, hitFraction))
+        {
+            return "none";
+        }
+        if (hitNormal.Length() < 0.5)
+        {
+            return "zero";
+        }
+        hitNormal.Normalize();
+        // Facing the player, as WallNormal flips it (the ray runs along -hit.normal).
+        if (vector.Dot(hitNormal, hit.normal) < 0.0)
+        {
+            hitNormal = hitNormal * -1;
+        }
+        float angle = NimbyTackRules.NormalAngleDegrees(hitNormal, hit.normal);
+        float depth = NimbyTackRules.SignedDepth(hitPosition, hit.position, hit.normal);
+        string tag = hitNormal.ToString() + "/angle=" + angle.ToString();
+        tag = tag + "/depth=" + depth.ToString() + "/obj=" + ClassOf(hitObject);
+        return tag;
     }
 
     // One B5 line: intersectType is ObjIntersectView or ObjIntersectFire, or -1 for the physics

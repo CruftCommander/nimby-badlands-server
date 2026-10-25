@@ -352,9 +352,12 @@ class NimbyTackRules
         before = config.areaCapRadiusMeters;
         config.areaCapRadiusMeters = Math.Clamp(before, 1.0, 500.0);
         changed = changed + Changed(before, config.areaCapRadiusMeters);
+        // NIMBY-T-023 (Jeff, October 24, 2026): a negative cap is a typo, so it takes the default
+        // instead of 0, which disables the cap; 0 written on purpose still disables it.
         if (config.areaCapCount < 0)
         {
-            config.areaCapCount = 0;
+            NimbyTackConfig defaults = new NimbyTackConfig();
+            config.areaCapCount = defaults.areaCapCount;
             changed = changed + 1;
         }
         return changed;
@@ -425,6 +428,32 @@ class NimbyTackRules
     static bool PhysicsHitAccepted(float depth, float limitMeters)
     {
         return depth <= limitMeters;
+    }
+
+    // NIMBY-T-022 and T-024 (T18, Jeff, October 24, 2026): the full check runs when an action
+    // starts; during the hold only the same target is confirmed, with its frozen cursor point
+    // within this reach of the head or the feet. Vanilla's start limit is UAMaxDistances.DEFAULT
+    // (2.0 m); the full-body animation moves the camera and the feet past it at the edge of
+    // reach. A code constant, not a config key, like PHYSICS_DEPTH_LIMIT_METERS.
+    static const float HOLD_REACH_METERS = 2.5;
+
+    // T18: true while the hold may continue. Written as two positive comparisons so a NaN
+    // distance refuses.
+    static bool WithinHoldReach(float headDistance, float feetDistance, float limitMeters)
+    {
+        if (headDistance <= limitMeters)
+        {
+            return true;
+        }
+        return feetDistance <= limitMeters;
+    }
+
+    // NIMBY-T-025 study (debug only): the angle in degrees between two unit normals, 0 for the
+    // same direction. The dot product is clamped first, so rounding cannot make Acos return NaN.
+    static float NormalAngleDegrees(vector a, vector b)
+    {
+        float dot = Math.Clamp(vector.Dot(a, b), -1.0, 1.0);
+        return Math.Acos(dot) * Math.RAD2DEG;
     }
 
     // Part B (B1): what one Paper in inventory counts as on the no-single-sheet line, in the order
@@ -616,6 +645,22 @@ class NimbyTackRules
         failures += Case(results, "sanitize caps reach at 3 m", bad.reachMeters == 3.0);
         failures += Case(results, "sanitize floors angle at 0", bad.wallAngleDegrees == 0.0);
         failures += Case(results, "sanitize caps damage at paper hitpoints", bad.takeDownDamageNail == PAPER_HITPOINTS);
+        failures += Case(results, "sanitize resets a negative cap to the default", bad.areaCapCount == defaults.areaCapCount);
+        NimbyTackConfig capOff = new NimbyTackConfig();
+        capOff.areaCapCount = 0;
+        failures += Case(results, "sanitize keeps cap 0 (disabled on purpose)", Sanitize(capOff) == 0 && capOff.areaCapCount == 0);
+
+        // T18: the hold reach.
+        failures += Case(results, "hold continues with the head in reach", WithinHoldReach(2.4, 2.9, HOLD_REACH_METERS));
+        failures += Case(results, "hold continues with the feet in reach", WithinHoldReach(2.9, 2.4, HOLD_REACH_METERS));
+        failures += Case(results, "hold continues at exactly the reach", WithinHoldReach(2.5, 9.0, HOLD_REACH_METERS));
+        failures += Case(results, "hold stops with both past the reach", !WithinHoldReach(2.6, 2.7, HOLD_REACH_METERS));
+        failures += Case(results, "hold stops on NaN distances", !WithinHoldReach(Math.Sqrt(-1.0), Math.Sqrt(-1.0), HOLD_REACH_METERS));
+        failures += Case(results, "hold reach is looser than the vanilla 2 m start", HOLD_REACH_METERS > 2.0);
+
+        // NIMBY-T-025 study: the angle helper.
+        failures += Case(results, "normal angle of a vector with itself is 0", NormalAngleDegrees("1 0 0", "1 0 0") < 0.01);
+        failures += Case(results, "normal angle of perpendicular normals is 90", Math.AbsFloat(NormalAngleDegrees("1 0 0", "0 0 1") - 90.0) < 0.01);
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
 
         // T6: the version 1 to 2 upgrade adds roughSurfaceOffsetMeters once.

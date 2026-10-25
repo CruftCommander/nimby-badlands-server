@@ -25,7 +25,89 @@
 // Guard   : NIMBY-T-015 (T17, October 21, 2026): a probe refused with reason
 //           physics-ahead gets its own status message, because the wall is there
 //           but the note would be buried inside it.
+// Hold    : NIMBY-T-022 and T-024 (T18, Jeff, October 24, 2026). Vanilla freezes the
+//           action target at setup (ActionBase.c:174) but re-runs the target condition
+//           and ActionConditionContinue on every tick (ActionBase.c:975-990). Tack's
+//           condition re-ran the wall probe from the moving head and the full-body
+//           animation cancelled the hold at the edge of reach. Now the full check
+//           runs when the action starts; during the hold CCTNimbyTackHold confirms
+//           the same target within NimbyTackRules.HOLD_REACH_METERS of the frozen
+//           cursor point, the pin re-checks only its tool, and the server pins from
+//           the hit it probed at the start (NimbyTackPinActionData). The burn is a
+//           Tack action (ActionNimbyTackBurn) under the same rule; vanilla Ignite no
+//           longer offers on a pinned note. With the debug flag, a stopped hold
+//           writes one hold-cancel line naming why.
 // -----------------------------------------------------------------------------
+
+// T18: a hold-cancel line, debug only, written once (the action ends on the first false).
+class NimbyTackHold
+{
+    static bool Refuse(string reason, string detail, PlayerBase player)
+    {
+        if (NimbyTackLog.IsDebug())
+        {
+            NimbyTackLog.Debug("hold-cancel reason=" + reason + " detail=" + detail + " server=" + NimbyTackLog.Bool(GetGame().IsServer()) + " " + NimbyTackWorld.PlayerTag(player));
+        }
+        return false;
+    }
+}
+
+// T18: vanilla's cursor condition when the action starts (CCTCursor.c:15-36, 2.0 m from the
+// head or the feet); during the hold, the same target, still there, with its frozen cursor point
+// within HOLD_REACH_METERS of the head or the feet. The cursor point does not move during an
+// action, so the live aim (a chain-link mesh's gaps, TK-F6) cannot cancel it.
+class CCTNimbyTackHold : CCTCursor
+{
+    override bool CanContinue(PlayerBase player, ActionTarget target)
+    {
+        if (!player || !target)
+        {
+            return NimbyTackHold.Refuse("no-target", "-", player);
+        }
+        Object targetObject = target.GetObject();
+        if (!targetObject)
+        {
+            targetObject = target.GetParent();
+        }
+        if (!targetObject)
+        {
+            return NimbyTackHold.Refuse("target-gone", "-", player);
+        }
+        if (targetObject.IsDamageDestroyed())
+        {
+            return NimbyTackHold.Refuse("target-destroyed", NimbyTackWorld.ClassOf(targetObject), player);
+        }
+        EntityAI entity = EntityAI.Cast(targetObject);
+        if (entity && entity.IsSetForDeletion())
+        {
+            return NimbyTackHold.Refuse("target-deleted", NimbyTackWorld.ClassOf(targetObject), player);
+        }
+        vector cursor = target.GetCursorHitPos();
+        float head = vector.Distance(MiscGameplayFunctions.GetPlayerHeadPosition(player), cursor);
+        float feet = vector.Distance(player.GetPosition(), cursor);
+        if (NimbyTackRules.WithinHoldReach(head, feet, NimbyTackRules.HOLD_REACH_METERS))
+        {
+            return true;
+        }
+        string detail = "-";
+        if (NimbyTackLog.IsDebug())
+        {
+            detail = "head=" + head.ToString() + " feet=" + feet.ToString() + " limit=" + NimbyTackRules.HOLD_REACH_METERS.ToString();
+        }
+        return NimbyTackHold.Refuse("reach", detail, player);
+    }
+}
+
+// T18: the wall hit the server probed when the pin started, used again at the finish.
+class NimbyTackPinActionData : ActionData
+{
+    ref NimbyTackHit m_NimbyHit;
+    // m_NimbyStartProbed is set by OnStartServer; until then the hold check does not judge the hit.
+    bool m_NimbyStartProbed;
+    bool m_NimbyHitValid;
+    string m_NimbyProbeReason;
+    string m_NimbyProbeDetail;
+}
 class ActionNimbyTackPinCB : ActionContinuousBaseCB
 {
     override void CreateActionComponent()
@@ -67,7 +149,13 @@ class ActionNimbyTackPinBase : ActionContinuousBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINonRuined;
-        m_ConditionTarget = new CCTCursor(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTNimbyTackHold;
+    }
+
+    override ActionData CreateActionData()
+    {
+        NimbyTackPinActionData action_data = new NimbyTackPinActionData;
+        return action_data;
     }
 
     // Each fastener class answers these three.
@@ -302,6 +390,80 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         return true;
     }
 
+    // T18: during the hold, no wall probe (ActionCondition ran it when the action was offered and
+    // requested). Only the tool is re-checked, and on the server a start probe that failed ends
+    // the hold early instead of after the full animation.
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        ItemBase item = action_data.m_MainItem;
+        NimbyTackConfig config = NimbyTackConfigLoader.Get();
+        if (!item || !ToolMatches(item) || !ToolHasPortion(item, config))
+        {
+            return NimbyTackHold.Refuse("tool", "fastener=" + NimbyTackFastener.Name(GetFastener()), action_data.m_Player);
+        }
+        if (GetGame().IsServer())
+        {
+            NimbyTackPinActionData pinData = NimbyTackPinActionData.Cast(action_data);
+            if (pinData && pinData.m_NimbyStartProbed && !pinData.m_NimbyHitValid)
+            {
+                return NimbyTackHold.Refuse("start-probe", pinData.m_NimbyProbeReason, action_data.m_Player);
+            }
+        }
+        return true;
+    }
+
+    // T18: the server's full wall check, once, when the action starts. The request check ran the
+    // same probe a moment earlier (ActionManagerServer.c:168 through Can), so this normally
+    // passes; it is stored so the finish pins where the check passed, not where the animation has
+    // moved the head by then.
+    override void OnStartServer(ActionData action_data)
+    {
+        super.OnStartServer(action_data);
+        NimbyTackPinActionData pinData = NimbyTackPinActionData.Cast(action_data);
+        if (!pinData)
+        {
+            return;
+        }
+        NimbyTackConfig config = NimbyTackConfigLoader.Get();
+        NimbyTackHit hit;
+        pinData.m_NimbyHitValid = NimbyTackWorld.ProbeWall(action_data.m_Player, action_data.m_Target, config, true, hit);
+        pinData.m_NimbyStartProbed = true;
+        pinData.m_NimbyHit = hit;
+        pinData.m_NimbyProbeReason = NimbyTackWorld.LastProbeReason();
+        pinData.m_NimbyProbeDetail = NimbyTackWorld.LastProbeDetail();
+        if (!pinData.m_NimbyHitValid)
+        {
+            RefuseNoWall(action_data.m_Player, action_data.m_Target, pinData.m_NimbyProbeReason, pinData.m_NimbyProbeDetail, "start");
+            return;
+        }
+        if (NimbyTackLog.IsDebug())
+        {
+            NimbyTackLog.Debug("pin start fastener=" + NimbyTackFastener.Name(GetFastener()) + " surface=" + hit.surface + " " + NimbyTackWorld.PositionTag(hit.position) + " " + NimbyTackWorld.PlayerTag(action_data.m_Player));
+        }
+    }
+
+    // The production refuse pin line for a failed probe, with the target and the cursor, and the
+    // status message. at= says whether the start probe or the finish fallback refused.
+    protected void RefuseNoWall(PlayerBase player, ActionTarget target, string reason, string detail, string at)
+    {
+        string name = NimbyTackFastener.Name(GetFastener());
+        string refuseLine = "refuse pin fastener=" + name + " reason=no-wall detail=" + reason + " probe-detail=" + detail + " at=" + at;
+        refuseLine = refuseLine + " " + NimbyTackWorld.TargetTag(target) + " " + NimbyTackWorld.ReachTag(player, target) + " " + NimbyTackWorld.PlayerTag(player);
+        NimbyTackLog.Info(refuseLine);
+        if (!player)
+        {
+            return;
+        }
+        if (reason == NimbyTackRules.REASON_PHYSICS_AHEAD)
+        {
+            player.MessageStatus("The wall is not where it looks; the note would be buried.");
+        }
+        else
+        {
+            player.MessageStatus("There is no wall there.");
+        }
+    }
+
     override void OnFinishProgressServer(ActionData action_data)
     {
         PlayerBase player = action_data.m_Player;
@@ -331,24 +493,33 @@ class ActionNimbyTackPinBase : ActionContinuousBase
                 return;
             }
         }
-        NimbyTackHit hit;
-        // wantSurface is true here, so hit.surface already holds the view lookup or, when that is
-        // empty, the fire-geometry lookup. OffsetFor below reads it; no further raycast is needed.
-        if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, true, hit))
+        // T18: the hit the server probed when the action started (OnStartServer). The probe ran
+        // with wantSurface true, so hit.surface already holds the view lookup or, when that is
+        // empty, the fire-geometry lookup; OffsetFor below reads it. Without a start record (not
+        // expected) the finish probes once, as before T18.
+        NimbyTackHit hit = null;
+        NimbyTackPinActionData pinData = NimbyTackPinActionData.Cast(action_data);
+        if (pinData && pinData.m_NimbyStartProbed)
         {
-            // Part B: the target and the cursor ride on this line, so a refusal at pin time names
-            // the object the player aimed at without the debug flag.
-            string refuseLine = "refuse pin fastener=" + name + " reason=no-wall detail=" + NimbyTackWorld.LastProbeReason() + " probe-detail=" + NimbyTackWorld.LastProbeDetail();
-            refuseLine = refuseLine + " " + NimbyTackWorld.TargetTag(action_data.m_Target) + " " + NimbyTackWorld.ReachTag(player, action_data.m_Target) + " " + who;
-            NimbyTackLog.Info(refuseLine);
-            if (NimbyTackWorld.LastProbeReason() == NimbyTackRules.REASON_PHYSICS_AHEAD)
+            if (!pinData.m_NimbyHitValid || !pinData.m_NimbyHit)
             {
-                player.MessageStatus("The wall is not where it looks; the note would be buried.");
+                // The hold should have ended at the first tick; refused again here, without a
+                // second status message.
+                NimbyTackLog.Info("refuse pin fastener=" + name + " reason=no-wall detail=" + pinData.m_NimbyProbeReason + " at=finish-stored " + who);
+                return;
             }
-            else
-            {
-                player.MessageStatus("There is no wall there.");
-            }
+            hit = pinData.m_NimbyHit;
+        }
+        else if (!NimbyTackWorld.ProbeWall(player, action_data.m_Target, config, true, hit))
+        {
+            RefuseNoWall(player, action_data.m_Target, NimbyTackWorld.LastProbeReason(), NimbyTackWorld.LastProbeDetail(), "finish");
+            return;
+        }
+        // T18: a player-built wall can be dismantled or destroyed during the hold.
+        if (!hit.wall || hit.wall.IsDamageDestroyed())
+        {
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=wall-gone " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+            player.MessageStatus("There is no wall there.");
             return;
         }
         if (fastener == NimbyTackFastener.KNIFE && !NimbyTackRules.IsWoodSurface(hit.surface))
@@ -780,6 +951,97 @@ class ActionNimbyTackTakeDown : ActionContinuousBase
     }
 }
 
+// T18 (NIMBY-T-022, Jeff, October 24, 2026): burn a pinned note with an igniter in hands. Replaces
+// vanilla ActionLightItemOnFire on the note, whose CCTNonRuined measured the feet to the note on
+// every tick and cancelled at the edge of reach; the pinned note now refuses vanilla Ignite
+// (CanBeIgnitedBy). Same animation, stance, and time as vanilla ignite (ActionLightItemOnFire.c:5,
+// 14-16), the hold rule of the pin, and vanilla's success path at the finish: the igniter pays
+// (Matchbox.OnIgnitedTarget takes one match) and the note burns (NimbyTack_PinnedNote.OnIgnitedThis
+// drops a knife, logs the burn line, and deletes the note). Offered by the igniters that carry
+// vanilla Ignite (nimbytack_tools.c). The target lock stays at its default, as on take-down, so a
+// take-down and a burn cannot both finish on one note.
+class ActionNimbyTackBurnCB : ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        m_ActionData.m_ActionComponent = new CAContinuousTime(UATimeSpent.FIREPLACE_IGNITE);
+    }
+}
+
+class ActionNimbyTackBurn : ActionContinuousBase
+{
+    void ActionNimbyTackBurn()
+    {
+        m_CallbackClass = ActionNimbyTackBurnCB;
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_STARTFIRE;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_Text = "Burn note";
+    }
+
+    override void CreateConditionComponents()
+    {
+        m_ConditionItem = new CCINonRuined;
+        m_ConditionTarget = new CCTNimbyTackHold;
+    }
+
+    // The igniter must be able to light (vanilla CanIgniteItem: a match left and dry, a lighter
+    // with fuel, a torch, flare, or stove already burning).
+    override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
+    {
+        if (!player || !target || !item)
+        {
+            return false;
+        }
+        NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(target.GetObject());
+        if (!pinned || pinned.IsSetForDeletion() || pinned.GetNimbyTackFastener() < 0)
+        {
+            return false;
+        }
+        return item.CanIgniteItem(pinned);
+    }
+
+    // During the hold: the same checks, which measure no distance (the target condition does).
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+        {
+            return true;
+        }
+        string source = "none";
+        if (action_data.m_MainItem)
+        {
+            source = action_data.m_MainItem.GetType();
+        }
+        return NimbyTackHold.Refuse("burn-condition", "source=" + source, action_data.m_Player);
+    }
+
+    override void OnFinishProgressServer(ActionData action_data)
+    {
+        PlayerBase player = action_data.m_Player;
+        ItemBase igniter = action_data.m_MainItem;
+        string who = NimbyTackWorld.PlayerTag(player);
+        NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(action_data.m_Target.GetObject());
+        if (!player || !igniter || !pinned)
+        {
+            NimbyTackLog.Info("refuse burn reason=no-target " + who);
+            return;
+        }
+        if (pinned.IsSetForDeletion())
+        {
+            NimbyTackLog.Info("refuse burn reason=deleted class=" + pinned.GetType() + " " + who + " " + NimbyTackWorld.PositionTag(pinned.GetPosition()));
+            return;
+        }
+        if (!igniter.CanIgniteItem(pinned))
+        {
+            NimbyTackLog.Info("refuse burn reason=igniter source=" + igniter.GetType() + " " + who);
+            return;
+        }
+        igniter.OnIgnitedTarget(pinned);
+        pinned.OnIgnitedThis(igniter);
+    }
+}
+
 modded class ActionConstructor
 {
     override void RegisterActions(TTypenameArray actions)
@@ -791,5 +1053,6 @@ modded class ActionConstructor
         actions.Insert(ActionNimbyTackPinKnife);
         actions.Insert(ActionNimbyTackRead);
         actions.Insert(ActionNimbyTackTakeDown);
+        actions.Insert(ActionNimbyTackBurn);
     }
 }
