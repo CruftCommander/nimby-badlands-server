@@ -18,33 +18,32 @@
 // -----------------------------------------------------------------------------
 class NimbyTackConfig
 {
-    // 2 since October 20, 2026 (roughSurfaceOffsetMeters). A file written at version 1 is
-    // upgraded once on load and written back, see NimbyTackRules.UpgradeConfig.
-    int version = 2;
+    // 3 since October 25, 2026 (faceClearanceMeters added, roughSurfaceOffsetMeters retired,
+    // NIMBY-T-028); 2 since October 20, 2026. A file written at an older version is upgraded once
+    // on load and written back, see NimbyTackRules.UpgradeConfig.
+    int version = 3;
     // T2: a wall hit by the raycast within this many meters of the player's head.
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
     float wallAngleDegrees = 25.0;
-    // T3: how far off the wall the sheet is created, along the outward normal. This initializer
-    // is the only place the default lives (self-test and client read it through a fresh
-    // instance). The October 17, 2026 clipping was not relief depth: the offset was applied along
-    // the ray, into the wall (see NimbyTackWorld). Re-measured with the physics normal on
-    // October 18, 2026; moves only once a value is confirmed in game.
+    // T3, NIMBY-T-028 (Jeff, October 25, 2026): how far in front of the most forward point of the
+    // fire geometry, measured across the sheet at pin time, the sheet is created. What the player
+    // sees follows the fire geometry, so the note clipped where that face stands in front of the
+    // view hit and floated where it stands behind; measuring it fixes both. Clamped 5 mm to 5 cm.
+    float faceClearanceMeters = 0.015;
+    // T3: the fallback offset off the view hit, along the outward normal, used when fewer than
+    // NimbyTackRules.FIRE_MIN_HITS fire samples land on the wall (Jeff, October 25, 2026: fall
+    // back to the pre-T-028 offsets). This initializer is the only place the default lives
+    // (self-test and client read it through a fresh instance).
     float wallOffsetMeters = 0.03;
-    // T3: the offset used instead when the wall reports no surface material from either
+    // T3: the fallback offset instead when the wall reports no surface material from either
     // lookup (view and fire geometry). NIMBY-T-008, October 19, 2026: Land_TradTent_Small reports
     // none, and its physics shell sits 3 to 5 cm behind the visible cloth, so 1 cm from the view
     // hit showed through to the inside. Jeff ruled tents stay pinnable with a larger offset.
+    // The rough-surface offset (roughSurfaceOffsetMeters, Takistan mud brick 0.08, NIMBY-T-013) is
+    // retired by NIMBY-T-028: the fire measurement covers the stones. A version 2 file still
+    // carries the key; the reader ignores it and the version 3 write-back drops it.
     float unknownSurfaceOffsetMeters = 0.06;
-    // T3: the offset used instead on a rough material (NimbyTackRules.IsRoughSurface, a code list
-    // starting with Takistan mud brick). NIMBY-T-013, October 20, 2026: the stones stand 3 to 11 cm
-    // proud of the point the sheet is placed from, so a taped note at 3 cm clipped into them. Jeff
-    // ruled a per-material offset (option (a) of the T-013 study); every other surface keeps 3 cm.
-    // TK-P10, October 21, 2026: at 6 cm a 7.0 cm stone still clipped the sheet and 8 cm sat a bit
-    // off the wall, acceptable; Jeff ruled 0.08. No config version bump for this move: a version 2
-    // file keeps whatever it holds, because a version 3 could not tell a hand-set 0.06 from the
-    // old default (TGA-009 scenario 7).
-    float roughSurfaceOffsetMeters = 0.08;
     // T4: health taken from the sheet per take-down, by fastener. Paper has 15 hitpoints.
     float takeDownDamageNail = 5.0;
     float takeDownDamageTape = 3.0;
@@ -165,8 +164,8 @@ class NimbyTackConfigLoader
             NimbyTackLog.Info("config clamped; fields=" + clamped.ToString());
         }
         s_Config = loaded;
-        string line = "config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " offset=" + loaded.wallOffsetMeters.ToString();
-        line = line + " unknown-offset=" + loaded.unknownSurfaceOffsetMeters.ToString() + " rough-offset=" + loaded.roughSurfaceOffsetMeters.ToString();
+        string line = "config reach=" + loaded.reachMeters.ToString() + " angle=" + loaded.wallAngleDegrees.ToString() + " clearance=" + loaded.faceClearanceMeters.ToString();
+        line = line + " fallback-offset=" + loaded.wallOffsetMeters.ToString() + " unknown-offset=" + loaded.unknownSurfaceOffsetMeters.ToString();
         line = line + " cap=" + loaded.areaCapCount.ToString() + "/" + loaded.areaCapRadiusMeters.ToString() + "m version=" + loaded.version.ToString();
         NimbyTackLog.Debug(line);
     }

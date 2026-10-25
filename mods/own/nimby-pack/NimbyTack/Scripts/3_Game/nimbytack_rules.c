@@ -8,7 +8,10 @@
 //           the per-area cap (T6), the config clamps and upgrade (T6), the
 //           pure parts of the Part B diagnostics (pin-check gate, signed depth,
 //           sheet kinds, footprint standoff; T-014 study, October 20, 2026), and
-//           the physics-depth guard (NIMBY-T-015, T17, October 21, 2026).
+//           the physics-depth guard (NIMBY-T-015, T17, October 21, 2026; 20 cm since
+//           NIMBY-T-030), and the placement round of October 25, 2026: the fire front
+//           (NIMBY-T-028, T19), the post run (NIMBY-T-025, T20), and the door rule
+//           (NIMBY-T-029, T21).
 // -----------------------------------------------------------------------------
 class NimbyTackFastener
 {
@@ -65,9 +68,9 @@ class NimbyTackRules
 {
     // Paper has 15 hitpoints (DZ/gear/consumables/config.cpp:40).
     static const float PAPER_HITPOINTS = 15.0;
-    // The three offsets (T3) have one home each: NimbyTackConfig.wallOffsetMeters,
-    // unknownSurfaceOffsetMeters, and roughSurfaceOffsetMeters. Callers read them from the loaded
-    // config, or from a fresh NimbyTackConfig for the client-side default, through OffsetFor.
+    // The placement numbers (T3, T19) have one home each: NimbyTackConfig.faceClearanceMeters, and
+    // the two fallbacks wallOffsetMeters and unknownSurfaceOffsetMeters. Callers read them from the
+    // loaded config, or from a fresh NimbyTackConfig for the client-side default.
     // Part B (B5): a footprint sample that did not hit the wall.
     static const float DEPTH_MISS = -999.0;
     // Part B (B1): what one sheet in inventory counts as, for the no-single-sheet line.
@@ -174,47 +177,208 @@ class NimbyTackRules
         return hitPosition + normal * offsetMeters;
     }
 
-    // T3, NIMBY-T-008 and NIMBY-T-013: the offset for one pin. A wall with no surface name after
-    // both lookups (the Afghan tent's cloth, October 19, 2026) gets the unknown-surface offset,
-    // because its physics shell can sit centimeters behind what is drawn; a rough material
-    // (Takistan mud brick, October 20, 2026) gets the rough-surface offset, because its stones
-    // stand proud of the point the sheet is placed from; every other named surface keeps the wall
-    // offset.
+    // T3, NIMBY-T-008, T19: the fallback offset off the view hit, used only when the fire
+    // measurement has fewer than FIRE_MIN_HITS samples. A wall with no surface name after both
+    // lookups (the Afghan tent's cloth, October 19, 2026) gets the unknown-surface offset, because
+    // its physics shell can sit centimeters behind what is drawn; every other surface keeps the
+    // wall offset. The rough-surface branch (Takistan mud brick, NIMBY-T-013) is retired by
+    // NIMBY-T-028 (Jeff, October 25, 2026): the fire measurement covers the stones.
     static float OffsetFor(string surfaceName, NimbyTackConfig config)
     {
         if (surfaceName == "")
         {
             return config.unknownSurfaceOffsetMeters;
         }
-        if (IsRoughSurface(surfaceName))
-        {
-            return config.roughSurfaceOffsetMeters;
-        }
         return config.wallOffsetMeters;
     }
 
-    // T3, NIMBY-T-013: the rough materials, by the full .bisurf path the fire geometry reports
-    // (October 20, 2026: dz\data_takistan\data\penetration\mud_brick.bisurf on every Takistan
-    // mud-brick wall tried). A code list, like the tool lists (T8), so the client and the server
-    // agree; Jeff ruled the list starts with mud brick alone.
-    static bool IsRoughSurface(string surfaceName)
+    // ---- T19, NIMBY-T-028 (Jeff, October 25, 2026): fire-relative placement ----
+    // The server samples the fire geometry across the sheet before it creates the note; the note
+    // sits faceClearanceMeters in front of the most forward sample. A sample further than
+    // FIRE_SAMPLE_CAP_METERS either way from the view hit is ignored (a window, a sill, the next
+    // piece), and fewer than FIRE_MIN_HITS samples fall back to OffsetFor (Jeff, October 25, 2026).
+    // The sheet's size, from the pinned note's collision box as the footprint read it on
+    // October 25, 2026 (size=0.223137x0.31625 size-source=box on every pin). Placement runs before
+    // the note exists, so it cannot read the box itself; the debug footprint still does.
+    static const float SHEET_WIDTH_METERS = 0.223;
+    static const float SHEET_HEIGHT_METERS = 0.316;
+    static const int FIRE_MIN_HITS = 3;
+    static const float FIRE_SAMPLE_CAP_METERS = 0.1;
+    static const string PLACEMENT_FIRE = "fire";
+    static const string PLACEMENT_FALLBACK = "fallback";
+
+    // How many samples hit within the cap.
+    static int FireHits(array<float> depths, float cap)
     {
-        string key = NormalizeSurface(surfaceName);
-        if (key == "dz\\data_takistan\\data\\penetration\\mud_brick.bisurf")
+        int hits = 0;
+        foreach (float depth : depths)
+        {
+            if (depth == DEPTH_MISS)
+            {
+                continue;
+            }
+            if (Math.AbsFloat(depth) > cap)
+            {
+                continue;
+            }
+            hits = hits + 1;
+        }
+        return hits;
+    }
+
+    // The most forward sample within the cap, signed (negative is behind the view hit), or
+    // DEPTH_MISS when none qualifies. Unlike FootprintStandoff this is not floored at 0, so a
+    // face that stands behind the view hit pulls the note in.
+    static float FireFront(array<float> depths, float cap)
+    {
+        float front = DEPTH_MISS;
+        foreach (float depth : depths)
+        {
+            if (depth == DEPTH_MISS)
+            {
+                continue;
+            }
+            if (Math.AbsFloat(depth) > cap)
+            {
+                continue;
+            }
+            if (front == DEPTH_MISS || depth > front)
+            {
+                front = depth;
+            }
+        }
+        return front;
+    }
+
+    static bool UseFire(int hits)
+    {
+        return hits >= FIRE_MIN_HITS;
+    }
+
+    // The offset off the view-hit plane, along the outward normal, for a fire placement.
+    static float FireOffset(float front, float clearance)
+    {
+        return front + clearance;
+    }
+
+    // ---- T20, NIMBY-T-025 (Jeff, October 25, 2026): notes on posts ----
+    // A horizontal fire scan across the hit, POST_SCAN_HALF_METERS either side in
+    // POST_SCAN_STEP_METERS steps (31 samples, the hit at index 15). The run of hits around the
+    // hit, bridging gaps of POST_SCAN_MAX_GAP samples, is a post when misses end it on both sides
+    // inside the scan and it is narrower than the sheet; the note then moves onto the middle of the
+    // run and faces along the fence line when the two side probes agree within
+    // POST_SIDE_AGREE_DEGREES.
+    static const float POST_SCAN_HALF_METERS = 0.3;
+    static const float POST_SCAN_STEP_METERS = 0.02;
+    static const int POST_SCAN_MAX_GAP = 1;
+    static const int POST_SEED_REACH = 2;
+    static const float POST_SIDE_AGREE_DEGREES = 10.0;
+
+    // 0.3 m either side in 2 cm steps: 31 samples, the hit at index 15. Kept as integers so no
+    // float is rounded into an index; the self-test checks they agree with the meters above.
+    static const int POST_SCAN_COUNT = 31;
+    static const int POST_SCAN_CENTRE = 15;
+
+    // The hit index nearest centre within reach, or -1. The centre itself is tried first.
+    static int RunSeed(array<bool> hits, int centre, int reach)
+    {
+        for (int distance = 0; distance <= reach; distance++)
+        {
+            int left = centre - distance;
+            if (left >= 0 && left < hits.Count() && hits[left])
+            {
+                return left;
+            }
+            int right = centre + distance;
+            if (right >= 0 && right < hits.Count() && hits[right])
+            {
+                return right;
+            }
+        }
+        return -1;
+    }
+
+    // The first (step -1) or last (step +1) hit index of the run through seed: the walk stops at
+    // maxGap + 1 misses in a row or at the end of the scan.
+    static int RunEdge(array<bool> hits, int seed, int step, int maxGap)
+    {
+        int edge = seed;
+        int misses = 0;
+        int index = seed + step;
+        while (index >= 0 && index < hits.Count())
+        {
+            if (hits[index])
+            {
+                edge = index;
+                misses = 0;
+            }
+            else
+            {
+                misses = misses + 1;
+                if (misses > maxGap)
+                {
+                    break;
+                }
+            }
+            index = index + step;
+        }
+        return edge;
+    }
+
+    // True when misses, not the end of the scan, end the run on both sides.
+    static bool RunBounded(array<bool> hits, int first, int last, int maxGap)
+    {
+        if (first - (maxGap + 1) < 0)
+        {
+            return false;
+        }
+        return last + maxGap + 1 <= hits.Count() - 1;
+    }
+
+    // The run's width, counting each sample as one step wide.
+    static float RunWidth(int first, int last, float step)
+    {
+        // Float first: Enforce types a binary expression by its left operand.
+        float count = last - first + 1;
+        return step * count;
+    }
+
+    // How far the middle of the run stands from the hit, along the sheet's width.
+    static float RunShift(int first, int last, int centre, float step)
+    {
+        float middle = first + last;
+        middle = middle * 0.5;
+        float centreIndex = centre;
+        return step * (middle - centreIndex);
+    }
+
+    static bool IsPost(bool bounded, float width, float sheetWidth)
+    {
+        return bounded && width < sheetWidth;
+    }
+
+    static bool SidesAgree(vector left, vector right, float maxDegrees)
+    {
+        if (left.Length() < 0.5 || right.Length() < 0.5)
+        {
+            return false;
+        }
+        return NormalAngleDegrees(left, right) <= maxDegrees;
+    }
+
+    // ---- T21, NIMBY-T-029 (Jeff, October 25, 2026): notes on doors ----
+    // A note on a door leaf attaches to the door (each client parents its copy to the door's
+    // pivot) and the server keeps it where the closed door holds it, so nothing new is saved;
+    // a door leaf that is not closed refuses the pin. doorIndex is -1 off a door.
+    static const string REASON_DOOR_NOT_CLOSED = "door-not-closed";
+
+    static bool DoorPinAllowed(int doorIndex, bool doorClosed)
+    {
+        if (doorIndex < 0)
         {
             return true;
         }
-        return false;
-    }
-
-    // Lowercase with backslashes, because one data tree is reported as both "penetration" and
-    // "Penetration" (fabricP.bisurf, October 19, 2026).
-    static string NormalizeSurface(string surfaceName)
-    {
-        string key = surfaceName;
-        key.ToLower();
-        key.Replace("/", "\\");
-        return key;
+        return doorClosed;
     }
 
     // T4: health taken from the sheet by one take-down.
@@ -328,9 +492,9 @@ class NimbyTackRules
         before = config.unknownSurfaceOffsetMeters;
         config.unknownSurfaceOffsetMeters = Math.Clamp(before, 0.005, 0.2);
         changed = changed + Changed(before, config.unknownSurfaceOffsetMeters);
-        before = config.roughSurfaceOffsetMeters;
-        config.roughSurfaceOffsetMeters = Math.Clamp(before, 0.005, 0.2);
-        changed = changed + Changed(before, config.roughSurfaceOffsetMeters);
+        before = config.faceClearanceMeters;
+        config.faceClearanceMeters = Math.Clamp(before, 0.005, 0.05);
+        changed = changed + Changed(before, config.faceClearanceMeters);
         before = config.takeDownDamageNail;
         config.takeDownDamageNail = Math.Clamp(before, 0.0, PAPER_HITPOINTS);
         changed = changed + Changed(before, config.takeDownDamageNail);
@@ -365,12 +529,12 @@ class NimbyTackRules
 
     // T6: bring a file written by an older build to the current version; true when it changed
     // something, so the loader writes the file back once. Version 1 files (October 17-20, 2026)
-    // can lack the surface offsets added since. Whether the JSON reader leaves a missing key at
-    // its initializer or at zero is native and unstated, so a surface offset that reads zero or
-    // below takes the default here and a value the operator wrote by hand is kept. The rough
-    // default's move from 0.06 to 0.08 (TK-P10, October 21, 2026) did not bump the version: a
-    // version 2 file keeps what it holds, because an upgrade could not tell a hand-set 0.06 from
-    // the old default. A file newer than the build is left alone (version 3 returns false here).
+    // can lack the surface offsets added since, and version 1 and 2 files lack faceClearanceMeters
+    // (version 3, NIMBY-T-028, October 25, 2026). Whether the JSON reader leaves a missing key at
+    // its initializer or at zero is native and unstated, so a value that reads zero or below takes
+    // the default here and a value the operator wrote by hand is kept. A version 2 file's
+    // roughSurfaceOffsetMeters is no longer a field; the write-back drops it. A file newer than
+    // the build is left alone (version 4 returns false here).
     static bool UpgradeConfig(NimbyTackConfig config, NimbyTackConfig defaults)
     {
         if (config.version >= defaults.version)
@@ -381,9 +545,9 @@ class NimbyTackRules
         {
             config.unknownSurfaceOffsetMeters = defaults.unknownSurfaceOffsetMeters;
         }
-        if (config.roughSurfaceOffsetMeters <= 0.0)
+        if (config.faceClearanceMeters <= 0.0)
         {
-            config.roughSurfaceOffsetMeters = defaults.roughSurfaceOffsetMeters;
+            config.faceClearanceMeters = defaults.faceClearanceMeters;
         }
         config.version = defaults.version;
         return true;
@@ -412,10 +576,10 @@ class NimbyTackRules
     // NIMBY-T-015 (T17, Jeff, October 21, 2026): the physics hit may stand at most this far in
     // front of the placement point (the view hit). On Land_House_2M1 it stood 0.6 to 0.98 m in
     // front and the note was buried inside the wall (TK-P5, two faces); the visible pins of
-    // October 21 reached 10.3 cm (TK-P4, mud brick) and the T-016 shed face reads 15.6 cm, which
-    // this also refuses. A code constant, not a config key: a key would need config version 3, an
-    // UpgradeConfig branch, a Sanitize clamp, and the write-back path.
-    static const float PHYSICS_DEPTH_LIMIT_METERS = 0.15;
+    // October 21 reached 10.3 cm (TK-P4, mud brick). NIMBY-T-030 (Jeff, October 25, 2026): 0.15
+    // refused most of the Land_House_2W04_Blue front face at 16 to 17 cm and the T-016 shed face at
+    // 15.6 cm, so the limit is 0.20. A code constant, not a config key.
+    static const float PHYSICS_DEPTH_LIMIT_METERS = 0.2;
     // The probe reason the guard reports (the production refuse line's detail= and the pin-check
     // line's reason=).
     static const string REASON_PHYSICS_AHEAD = "physics-ahead";
@@ -578,29 +742,20 @@ class NimbyTackRules
         failures += Case(results, "concrete surface keeps the wall offset", Math.AbsFloat(concretePicked - defaults.wallOffsetMeters) < 0.0001);
         float woodPicked = OffsetFor("dz\\data\\data\\penetration\\wood.bisurf", defaults);
         failures += Case(results, "wood surface keeps the wall offset", Math.AbsFloat(woodPicked - defaults.wallOffsetMeters) < 0.0001);
-        // NIMBY-T-013: Takistan mud brick takes the rough-surface offset; nothing else does.
+        // NIMBY-T-028 (T19): the rough-surface offset is retired; mud brick falls back like any
+        // named surface, and the fire clearance is 1.5 cm, clamped 5 mm to 5 cm.
         string mudBrick = "dz\\data_takistan\\data\\penetration\\mud_brick.bisurf";
-        float roughPicked = OffsetFor(mudBrick, defaults);
-        failures += Case(results, "mud brick takes the rough-surface offset", Math.AbsFloat(roughPicked - defaults.roughSurfaceOffsetMeters) < 0.0001);
-        failures += Case(results, "rough-surface default is 8 cm", Math.AbsFloat(defaults.roughSurfaceOffsetMeters - 0.08) < 0.0001);
-        failures += Case(results, "mud brick match ignores case and slash direction", IsRoughSurface("DZ/Data_Takistan/Data/Penetration/Mud_Brick.bisurf"));
-        failures += Case(results, "mud brick in another folder is not on the list", !IsRoughSurface("dz\\data\\data\\penetration\\mud_brick.bisurf"));
-        failures += Case(results, "concrete is not a rough surface", !IsRoughSurface("dz\\data\\data\\penetration\\concrete.bisurf"));
-        failures += Case(results, "empty surface is not a rough surface", !IsRoughSurface(""));
-        NimbyTackConfig tunedRough = new NimbyTackConfig();
-        tunedRough.roughSurfaceOffsetMeters = 0.09;
-        float tunedPicked = OffsetFor(mudBrick, tunedRough);
-        failures += Case(results, "mud brick uses the configured rough-surface offset", Math.AbsFloat(tunedPicked - 0.09) < 0.0001);
-        float tunedConcrete = OffsetFor("dz\\data\\data\\penetration\\concrete.bisurf", tunedRough);
-        failures += Case(results, "rough-surface offset leaves concrete at the wall offset", Math.AbsFloat(tunedConcrete - tunedRough.wallOffsetMeters) < 0.0001);
-        NimbyTackConfig lowRough = new NimbyTackConfig();
-        lowRough.roughSurfaceOffsetMeters = 0.0;
-        Sanitize(lowRough);
-        failures += Case(results, "rough-surface offset below 5 mm clamps to 5 mm", Math.AbsFloat(lowRough.roughSurfaceOffsetMeters - 0.005) < 0.0001);
-        NimbyTackConfig highRough = new NimbyTackConfig();
-        highRough.roughSurfaceOffsetMeters = 1.0;
-        Sanitize(highRough);
-        failures += Case(results, "rough-surface offset above 20 cm clamps to 20 cm", Math.AbsFloat(highRough.roughSurfaceOffsetMeters - 0.2) < 0.0001);
+        float mudPicked = OffsetFor(mudBrick, defaults);
+        failures += Case(results, "mud brick falls back to the wall offset (rough offset retired)", Math.AbsFloat(mudPicked - defaults.wallOffsetMeters) < 0.0001);
+        failures += Case(results, "face clearance default is 1.5 cm", Math.AbsFloat(defaults.faceClearanceMeters - 0.015) < 0.0001);
+        NimbyTackConfig lowClearance = new NimbyTackConfig();
+        lowClearance.faceClearanceMeters = 0.0;
+        Sanitize(lowClearance);
+        failures += Case(results, "face clearance below 5 mm clamps to 5 mm", Math.AbsFloat(lowClearance.faceClearanceMeters - 0.005) < 0.0001);
+        NimbyTackConfig highClearance = new NimbyTackConfig();
+        highClearance.faceClearanceMeters = 1.0;
+        Sanitize(highClearance);
+        failures += Case(results, "face clearance above 5 cm clamps to 5 cm", Math.AbsFloat(highClearance.faceClearanceMeters - 0.05) < 0.0001);
         NimbyTackConfig lowUnknown = new NimbyTackConfig();
         lowUnknown.unknownSurfaceOffsetMeters = 0.0;
         Sanitize(lowUnknown);
@@ -663,20 +818,25 @@ class NimbyTackRules
         failures += Case(results, "normal angle of perpendicular normals is 90", Math.AbsFloat(NormalAngleDegrees("1 0 0", "0 0 1") - 90.0) < 0.01);
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
 
-        // T6: the version 1 to 2 upgrade adds roughSurfaceOffsetMeters once.
+        // T6: the version 2 to 3 upgrade adds faceClearanceMeters once (NIMBY-T-028).
+        failures += Case(results, "config version is 3", defaults.version == 3);
         NimbyTackConfig oldFile = new NimbyTackConfig();
-        oldFile.version = 1;
-        oldFile.roughSurfaceOffsetMeters = 0.0;
+        oldFile.version = 2;
+        oldFile.faceClearanceMeters = 0.0;
         bool upgraded = UpgradeConfig(oldFile, defaults);
-        failures += Case(results, "version 1 file is upgraded", upgraded && oldFile.version == defaults.version);
-        failures += Case(results, "upgrade fills a missing rough-surface offset with the default", Math.AbsFloat(oldFile.roughSurfaceOffsetMeters - defaults.roughSurfaceOffsetMeters) < 0.0001);
-        // 0.11 is no default of any version, so this case fails if the upgrade ever overwrites a
-        // hand-set value (0.08 became the default on October 21, 2026).
+        failures += Case(results, "version 2 file is upgraded", upgraded && oldFile.version == defaults.version);
+        failures += Case(results, "upgrade fills a missing face clearance with the default", Math.AbsFloat(oldFile.faceClearanceMeters - defaults.faceClearanceMeters) < 0.0001);
+        // 0.022 is no default of any version, so this case fails if the upgrade ever overwrites a
+        // hand-set value.
         NimbyTackConfig handSet = new NimbyTackConfig();
-        handSet.version = 1;
-        handSet.roughSurfaceOffsetMeters = 0.11;
+        handSet.version = 2;
+        handSet.faceClearanceMeters = 0.022;
         UpgradeConfig(handSet, defaults);
-        failures += Case(results, "upgrade keeps a hand-set rough-surface offset", Math.AbsFloat(handSet.roughSurfaceOffsetMeters - 0.11) < 0.0001);
+        failures += Case(results, "upgrade keeps a hand-set face clearance", Math.AbsFloat(handSet.faceClearanceMeters - 0.022) < 0.0001);
+        NimbyTackConfig oldestFile = new NimbyTackConfig();
+        oldestFile.version = 1;
+        bool upgradedOldest = UpgradeConfig(oldestFile, defaults);
+        failures += Case(results, "version 1 file is upgraded to 3", upgradedOldest && oldestFile.version == 3);
         NimbyTackConfig oldUnknown = new NimbyTackConfig();
         oldUnknown.version = 1;
         oldUnknown.unknownSurfaceOffsetMeters = 0.0;
@@ -685,19 +845,21 @@ class NimbyTackRules
         NimbyTackConfig current = new NimbyTackConfig();
         failures += Case(results, "current file is not upgraded", !UpgradeConfig(current, defaults));
         NimbyTackConfig future = new NimbyTackConfig();
-        future.version = 3;
-        future.roughSurfaceOffsetMeters = 0.11;
+        future.version = 4;
+        future.faceClearanceMeters = 0.022;
         bool futureTouched = UpgradeConfig(future, defaults);
-        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 3 && Math.AbsFloat(future.roughSurfaceOffsetMeters - 0.11) < 0.0001);
+        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 4 && Math.AbsFloat(future.faceClearanceMeters - 0.022) < 0.0001);
 
-        // NIMBY-T-015 (T17): the physics-depth guard against the depths measured on October 21, 2026.
+        // NIMBY-T-015 (T17) and NIMBY-T-030: the physics-depth guard at 20 cm.
         float depthLimit = PHYSICS_DEPTH_LIMIT_METERS;
-        failures += Case(results, "physics depth limit is 15 cm", Math.AbsFloat(depthLimit - 0.15) < 0.0001);
+        failures += Case(results, "physics depth limit is 20 cm", Math.AbsFloat(depthLimit - 0.2) < 0.0001);
         failures += Case(results, "physics 0.979 m ahead refuses (TK-P5 first face)", !PhysicsHitAccepted(0.979, depthLimit));
         failures += Case(results, "physics 0.635 m ahead refuses (TK-P5 second face)", !PhysicsHitAccepted(0.635, depthLimit));
-        failures += Case(results, "physics 15.6 cm ahead refuses (TK-P3 shed face, T-016)", !PhysicsHitAccepted(0.156, depthLimit));
-        failures += Case(results, "physics 15.01 cm ahead refuses", !PhysicsHitAccepted(0.1501, depthLimit));
-        failures += Case(results, "physics exactly 15 cm ahead is accepted", PhysicsHitAccepted(0.15, depthLimit));
+        failures += Case(results, "physics 20.01 cm ahead refuses", !PhysicsHitAccepted(0.2001, depthLimit));
+        failures += Case(results, "physics exactly 20 cm ahead is accepted", PhysicsHitAccepted(0.2, depthLimit));
+        failures += Case(results, "physics 17 cm ahead is accepted (2W04_Blue front, T-030)", PhysicsHitAccepted(0.17, depthLimit));
+        failures += Case(results, "physics 16 cm ahead is accepted (2W04_Blue front, T-030)", PhysicsHitAccepted(0.16, depthLimit));
+        failures += Case(results, "physics 15.6 cm ahead is accepted (TK-P3 shed face, T-016)", PhysicsHitAccepted(0.156, depthLimit));
         failures += Case(results, "physics 10.3 cm ahead is accepted (TK-P4 right face)", PhysicsHitAccepted(0.103, depthLimit));
         failures += Case(results, "physics 7 cm ahead is accepted (18:15 shed face)", PhysicsHitAccepted(0.07, depthLimit));
         failures += Case(results, "physics 4 cm ahead is accepted (chain-link fence)", PhysicsHitAccepted(0.040, depthLimit));
@@ -732,9 +894,87 @@ class NimbyTackRules
         failures += Case(results, "standoff is 0 when no sample stands proud", FootprintStandoff(behind, 0.1) == 0.0);
         failures += Case(results, "a missed sample prints as miss", DepthTag(DEPTH_MISS) == "miss");
 
+        // T19, NIMBY-T-028: the fire front, against footprint depths logged on October 25, 2026.
+        array<float> mixed = new array<float>;
+        mixed.Insert(0.01);
+        mixed.Insert(DEPTH_MISS);
+        mixed.Insert(0.045);
+        mixed.Insert(0.3);
+        mixed.Insert(-0.02);
+        failures += Case(results, "fire hits skip misses and samples past the cap", FireHits(mixed, FIRE_SAMPLE_CAP_METERS) == 3);
+        failures += Case(results, "fire front is the most forward sample inside the cap", Math.AbsFloat(FireFront(mixed, FIRE_SAMPLE_CAP_METERS) - 0.045) < 0.0001);
+        array<float> clipper = new array<float>;
+        clipper.Insert(0.0574);
+        clipper.Insert(0.0621);
+        clipper.Insert(0.0588);
+        clipper.Insert(0.0634);
+        float clipFront = FireFront(clipper, FIRE_SAMPLE_CAP_METERS);
+        failures += Case(results, "clipping face pushes the note out (test 46: 7.8 cm)", Math.AbsFloat(FireOffset(clipFront, defaults.faceClearanceMeters) - 0.0784) < 0.0001);
+        array<float> floater = new array<float>;
+        floater.Insert(-0.0753);
+        floater.Insert(-0.0829);
+        floater.Insert(-0.0938);
+        floater.Insert(-0.0973);
+        float floatFront = FireFront(floater, FIRE_SAMPLE_CAP_METERS);
+        failures += Case(results, "face behind the view hit pulls the note in (test 43: -6.0 cm)", Math.AbsFloat(FireOffset(floatFront, defaults.faceClearanceMeters) + 0.0603) < 0.0001);
+        array<float> twoHits = new array<float>;
+        twoHits.Insert(DEPTH_MISS);
+        twoHits.Insert(0.0);
+        twoHits.Insert(DEPTH_MISS);
+        twoHits.Insert(0.0);
+        failures += Case(results, "two fire hits fall back", !UseFire(FireHits(twoHits, FIRE_SAMPLE_CAP_METERS)));
+        failures += Case(results, "three fire hits place by fire", UseFire(3));
+        array<float> noFront = new array<float>;
+        noFront.Insert(DEPTH_MISS);
+        noFront.Insert(0.5);
+        failures += Case(results, "no qualifying sample has no front", FireFront(noFront, FIRE_SAMPLE_CAP_METERS) == DEPTH_MISS);
+
+        // T20, NIMBY-T-025: the post run.
+        float scanSpan = POST_SCAN_COUNT - 1;
+        scanSpan = POST_SCAN_STEP_METERS * scanSpan;
+        failures += Case(results, "post scan constants agree", Math.AbsFloat(scanSpan - 2.0 * POST_SCAN_HALF_METERS) < 0.0001 && POST_SCAN_CENTRE * 2 == POST_SCAN_COUNT - 1);
+        float sheetWidth = SHEET_WIDTH_METERS;
+        array<bool> post = ScanPattern(16, 20, -1);
+        int postSeed = RunSeed(post, POST_SCAN_CENTRE, POST_SEED_REACH);
+        int postFirst = RunEdge(post, postSeed, -1, POST_SCAN_MAX_GAP);
+        int postLast = RunEdge(post, postSeed, 1, POST_SCAN_MAX_GAP);
+        failures += Case(results, "post seed is the nearest hit", postSeed == 16);
+        failures += Case(results, "post run spans the post", postFirst == 16 && postLast == 20);
+        failures += Case(results, "post narrower than the sheet is a post", IsPost(RunBounded(post, postFirst, postLast, POST_SCAN_MAX_GAP), RunWidth(postFirst, postLast, POST_SCAN_STEP_METERS), sheetWidth));
+        failures += Case(results, "note moves onto the post's middle (6 cm)", Math.AbsFloat(RunShift(postFirst, postLast, POST_SCAN_CENTRE, POST_SCAN_STEP_METERS) - 0.06) < 0.0001);
+        array<bool> gapped = ScanPattern(12, 18, 15);
+        int gappedSeed = RunSeed(gapped, POST_SCAN_CENTRE, POST_SEED_REACH);
+        failures += Case(results, "one missed sample does not split a post", RunEdge(gapped, gappedSeed, -1, POST_SCAN_MAX_GAP) == 12 && RunEdge(gapped, gappedSeed, 1, POST_SCAN_MAX_GAP) == 18);
+        array<bool> wall = ScanPattern(0, POST_SCAN_COUNT - 1, -1);
+        failures += Case(results, "a run that reaches the scan's end is not a post", !RunBounded(wall, 0, POST_SCAN_COUNT - 1, POST_SCAN_MAX_GAP));
+        array<bool> pillar = ScanPattern(3, 27, -1);
+        failures += Case(results, "a pillar wider than the sheet is not a post", !IsPost(RunBounded(pillar, 3, 27, POST_SCAN_MAX_GAP), RunWidth(3, 27, POST_SCAN_STEP_METERS), sheetWidth));
+        array<bool> aside = ScanPattern(24, 28, -1);
+        failures += Case(results, "a run beyond the seed reach has no seed", RunSeed(aside, POST_SCAN_CENTRE, POST_SEED_REACH) == -1);
+        failures += Case(results, "side normals of one fence agree", SidesAgree("0.1045 0 -0.9945", "0.1044 0 -0.9945", POST_SIDE_AGREE_DEGREES));
+        failures += Case(results, "side normals 90 degrees apart disagree", !SidesAgree("1 0 0", "0 0 1", POST_SIDE_AGREE_DEGREES));
+        failures += Case(results, "a missing side normal disagrees", !SidesAgree("0 0 0", "0 0 1", POST_SIDE_AGREE_DEGREES));
+
+        // T21, NIMBY-T-029: the door rule.
+        failures += Case(results, "a wall that is no door pins", DoorPinAllowed(-1, false));
+        failures += Case(results, "a closed door pins", DoorPinAllowed(2, true));
+        failures += Case(results, "an open door refuses", !DoorPinAllowed(2, false));
+
         failures += Case(results, "pinned class per fastener", NimbyTackFastener.PinnedClass(NimbyTackFastener.KNIFE) == "NimbyTack_PinnedNote_Knife");
         failures += Case(results, "unknown fastener has no class", NimbyTackFastener.PinnedClass(9) == "");
         return failures;
+    }
+
+    // Self-test helper: a post scan with hits from first to last, and one miss at gap (-1: none).
+    protected static array<bool> ScanPattern(int first, int last, int gap)
+    {
+        array<bool> pattern = new array<bool>;
+        for (int index = 0; index < POST_SCAN_COUNT; index++)
+        {
+            bool hit = index >= first && index <= last && index != gap;
+            pattern.Insert(hit);
+        }
+        return pattern;
     }
 
     protected static int Case(out array<string> results, string name, bool passed)

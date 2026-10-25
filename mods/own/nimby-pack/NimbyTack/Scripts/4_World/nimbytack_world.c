@@ -20,6 +20,9 @@
 //           (B2), the client's probe lines held for the pin-check gate (B3), the
 //           fire line's ray= and engine-computed depth= (B4), and the footprint
 //           samples at pin time (B5). None changes where or whether a note pins.
+// Place   : Where the note goes is decided by NimbyTackPlace (nimbytack_placement.c,
+//           October 25, 2026 placement round); this file probes the wall, refuses a
+//           door leaf that is not closed (T21), and creates the note.
 // Cost    : The probe's detail strings and probe: lines are built only when they
 //           can be read: with the debug flag, or (the detail alone) on the server,
 //           whose production refuse line prints it once per request. The client
@@ -31,6 +34,9 @@ class NimbyTackHit
     vector normal;
     string surface;
     Object wall;
+    // T21: the aimed component and its door index (-1 off a door).
+    int component = -1;
+    int doorIndex = -1;
 }
 
 class NimbyTackWorld
@@ -251,11 +257,31 @@ class NimbyTackWorld
             {
                 Trace("probe: hit=" + result.obj.GetType() + " surface=" + surfaceName + " normal=" + normal.ToString() + " " + PositionTag(result.pos));
             }
+            // T21 (NIMBY-T-029): the action target's component names the door, as vanilla
+            // ActionLockDoors.c:38; only when the probe hit the target object itself.
+            int component = -1;
+            int doorIndex = -1;
+            if (result.obj == wall)
+            {
+                component = target.GetComponentIndex();
+                doorIndex = NimbyTackPlace.DoorIndexOf(wall, component);
+            }
+            if (!NimbyTackRules.DoorPinAllowed(doorIndex, NimbyTackPlace.DoorClosed(wall, doorIndex)))
+            {
+                s_LastProbeReason = NimbyTackRules.REASON_DOOR_NOT_CLOSED;
+                if (WantDetail())
+                {
+                    s_LastProbeDetail = "door=" + doorIndex.ToString() + " component=" + component.ToString();
+                }
+                return false;
+            }
             hit = new NimbyTackHit();
             hit.position = result.pos;
             hit.normal = normal;
             hit.surface = surfaceName;
             hit.wall = result.obj;
+            hit.component = component;
+            hit.doorIndex = doorIndex;
             return true;
         }
         s_LastProbeReason = "no-building-hit";
@@ -831,6 +857,10 @@ class NimbyTackWorld
         RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
         params.sorted = true;
         params.type = intersectType;
+        // First contact per object: the note just created stands on the centre ray, and with the
+        // default NEARESTCONTACT it hid the wall (centre sample missed on 49 of 54 pins, October
+        // 25, 2026).
+        params.flags = CollisionFlags.ALLOBJECTS;
         array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
         if (!DayZPhysics.RaycastRVProxy(params, results))
         {
@@ -847,19 +877,17 @@ class NimbyTackWorld
         return NimbyTackRules.DEPTH_MISS;
     }
 
-    // T3: create the pinned class at the hit point, offsetMeters off the wall along the normal,
-    // facing out, with the sheet's text and health. The caller picks the offset with
-    // NimbyTackRules.OffsetFor (wall, rough, or unknown surface) and logs the same value. No
-    // ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the engine does not drop it to the ground
-    // (CentralEconomy.c:28).
-    static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackHit hit, Paper sheet, float offsetMeters)
+    // T3: create the pinned class where NimbyTackPlace.Compute put it (T19, T20), facing out along
+    // its normal, with the sheet's text and health. No ECE_CREATEPHYSICS; ECE_KEEPHEIGHT so the
+    // engine does not drop it to the ground (CentralEconomy.c:28).
+    static NimbyTack_PinnedNote CreatePinned(int fastener, NimbyTackPlacement placement, Paper sheet)
     {
         string className = NimbyTackFastener.PinnedClass(fastener);
         if (className == "")
         {
             return null;
         }
-        vector position = NimbyTackRules.PinPosition(hit.position, hit.normal, offsetMeters);
+        vector position = placement.position;
         Object created = GetGame().CreateObjectEx(className, position, ECE_KEEPHEIGHT | ECE_SETUP);
         NimbyTack_PinnedNote pinned = NimbyTack_PinnedNote.Cast(created);
         if (!pinned)
@@ -874,7 +902,7 @@ class NimbyTackWorld
         // (the outward normal, toward the player) and model +Y takes world up. The reasoning
         // and the failed forms are recorded on FaceDirection.
         vector transform[4];
-        Math3D.DirectionAndUpMatrix(NimbyTackRules.FaceDirection(hit.normal), vector.Up, transform);
+        Math3D.DirectionAndUpMatrix(NimbyTackRules.FaceDirection(placement.normal), vector.Up, transform);
         transform[3] = position;
         pinned.SetTransform(transform);
         pinned.NimbyTackFreeze();

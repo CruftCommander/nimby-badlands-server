@@ -37,6 +37,10 @@
 //           Tack action (ActionNimbyTackBurn) under the same rule; vanilla Ignite no
 //           longer offers on a pinned note. With the debug flag, a stopped hold
 //           writes one hold-cancel line naming why.
+// Place   : October 25, 2026 placement round (plan v0.15): the finish measures where
+//           the note goes before creating it (NimbyTackPlace.Compute: post centring
+//           T20, fire-relative offset T19), refuses a door leaf the door has left
+//           (T21, "Close the door first."), and attaches a door note (T21).
 // -----------------------------------------------------------------------------
 
 // T18: a hold-cancel line, debug only, written once (the action ends on the first false).
@@ -384,7 +388,7 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         // the server's matches unless its config.json changes the offsets.
         if (debugOn)
         {
-            m_NimbyDetail = "surface=" + hit.surface + " offset=" + NimbyTackRules.OffsetFor(hit.surface, config).ToString();
+            m_NimbyDetail = "surface=" + hit.surface + " fallback-offset=" + NimbyTackRules.OffsetFor(hit.surface, config).ToString() + " door=" + hit.doorIndex.ToString();
         }
         m_NimbyReason = REASON_PASSED;
         return true;
@@ -457,6 +461,10 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         if (reason == NimbyTackRules.REASON_PHYSICS_AHEAD)
         {
             player.MessageStatus("The wall is not where it looks; the note would be buried.");
+        }
+        else if (reason == NimbyTackRules.REASON_DOOR_NOT_CLOSED)
+        {
+            player.MessageStatus("Close the door first.");
         }
         else
         {
@@ -535,12 +543,19 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             player.MessageStatus("Too many notes on these walls already.");
             return;
         }
-        // NIMBY-T-008: a surface with no name (the tent's cloth) takes the unknown-surface offset;
-        // NIMBY-T-013: a rough material (mud brick) takes the rough-surface offset.
-        float pinOffset = NimbyTackRules.OffsetFor(hit.surface, config);
+        // T21: the door may have been opened during the hold; the note goes up only where the
+        // closed door holds it.
+        if (hit.doorIndex >= 0 && !NimbyTackPlace.DoorClosed(hit.wall, hit.doorIndex))
+        {
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=" + NimbyTackRules.REASON_DOOR_NOT_CLOSED + " door=" + hit.doorIndex.ToString() + " at=finish " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+            player.MessageStatus("Close the door first.");
+            return;
+        }
+        // T19, T20: where the note goes, measured before it exists (NIMBY-T-028, T-025).
+        NimbyTackPlacement placement = NimbyTackPlace.Compute(player, hit, config);
         // Read before the sheet is deleted (NIMBY-T-009: the log tells which sheet went up).
         string textTag = NimbyTackRules.TextTag(NimbyTackWorld.IsWritten(sheet));
-        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, hit, sheet, pinOffset);
+        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, placement, sheet);
         if (!pinned)
         {
             NimbyTackLog.Info("failed pin fastener=" + name + " reason=create " + who + " " + NimbyTackWorld.PositionTag(hit.position));
@@ -548,12 +563,19 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         }
         ConsumeFastener(player, tool, nail, pinned, config);
         GetGame().ObjectDelete(sheet);
-        // Built in two statements: one concatenation this long is "Formula too complex" to Enforce.
-        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + NimbyTackWorld.ClassOf(hit.wall) + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
+        // T21: a note on a door leaf syncs its door and pivot so each client swings it.
+        string doorTag = "-";
+        if (hit.doorIndex >= 0)
+        {
+            doorTag = pinned.NimbyTackAttachDoorServer(hit.wall, hit.doorIndex, hit.component, "pin");
+        }
+        // Built in statements: one concatenation this long is "Formula too complex" to Enforce.
+        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + NimbyTackWorld.ClassOf(hit.wall) + " surface=" + hit.surface + " normal=" + placement.normal.ToString() + " offset=" + placement.offset.ToString();
+        line = line + " " + placement.Tag() + " door=" + doorTag;
         line = line + " text=" + textTag + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
         NimbyTackLog.Info(line);
         // Part B (B5): debug only; measures the footprint, moves nothing.
-        NimbyTackWorld.LogFootprint(player, hit, pinned, pinOffset, config.wallOffsetMeters);
+        NimbyTackWorld.LogFootprint(player, hit, pinned, placement.offset, config.wallOffsetMeters);
     }
 
     // T2: what the pin costs. Nail, tape, and epoxy are spent and never come back; the knife
