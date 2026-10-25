@@ -15,7 +15,11 @@
 // Fire    : A lit match burns the note off the wall (Jeff, October 17, 2026). Vanilla
 //           Paper turns a lit sheet into a fireplace and refuses that on a wall, so the
 //           Ignite prompt did nothing. Here ignition always succeeds, a knife in the
-//           Knife slot drops to the ground, and the note is deleted.
+//           Knife slot drops to the ground, and the note is deleted. Since T18
+//           (NIMBY-T-022, October 24, 2026) the only fire path is the Tack burn
+//           (ActionNimbyTackBurn), which calls OnIgnitedThis directly; vanilla Ignite is
+//           refused here (CanBeIgnitedBy) because its target condition cancelled the
+//           strike at the edge of reach.
 // -----------------------------------------------------------------------------
 class NimbyTack_PinnedNote : Paper
 {
@@ -42,8 +46,18 @@ class NimbyTack_PinnedNote : Paper
         return -1;
     }
 
-    // Fire: always succeeds; the burn is the deletion. Server side only (the ignite action
-    // calls these from OnFinishProgressServer, ActionLightItemOnFire.c:115,129).
+    // T18: vanilla ActionLightItemOnFire offers when the target CanBeIgnitedBy the igniter
+    // (ActionLightItemOnFire.c:77; its other branch needs Paper.CanIgniteItem, false at
+    // Paper.c:48-51). Paper answers !GetHierarchyParent() (Paper.c:43-46), true on a wall; a
+    // pinned note says no, so only ActionNimbyTackBurn offers.
+    override bool CanBeIgnitedBy(EntityAI igniter = null)
+    {
+        return false;
+    }
+
+    // Fire: always succeeds; the burn is the deletion. Server side only: ActionNimbyTackBurn
+    // calls OnIgnitedThis from OnFinishProgressServer. IsThisIgnitionSuccessful stays true for
+    // any other caller of vanilla's ignition path.
     override bool IsThisIgnitionSuccessful(EntityAI item_source = null)
     {
         return true;
