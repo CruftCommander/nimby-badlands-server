@@ -1,0 +1,11 @@
+NimbyGreet (Greet) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+Will modify the vanilla DayZ 1.30 MissionServer, MissionBase, PlayerBase, and InGameMenu
+classes (Bohemia Interactive) to fetch and show the server welcome text; no third-party
+mod code. Media shipped under Media/ is listed here with its source and license at each
+release (plan G15); none yet.
+
+Changes, newest first:
+
+- October 25, 2026, stub: config.cpp, the rules constants (caps from plan G9, RPC ids
+  from G1 and G5, the file names), and one self-test case, so the pack.json row builds
+  and the boot check's self-test gate sees Greet (shared rules 8). No window yet.
