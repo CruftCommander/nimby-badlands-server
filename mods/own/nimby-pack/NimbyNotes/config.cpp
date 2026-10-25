@@ -1,9 +1,13 @@
 // -----------------------------------------------------------------------------
-// NimbyNotes - Scrawl. Paper stacks to 5, written notes never merge, and the
-// 1.30 pen-and-paper write and read actions are reachable again.
-// Plan: docs/plans/2026-10-15-scrawl-plan.md (v0.3). Owner: Jeff Fabish.
+// NimbyNotes - Scrawl. Paper stacks to 5, written notes never merge (on the server
+// and, through a net-synced flag, on the client), the 1.30 pen-and-paper write and
+// read actions are reachable again in every order (pen in hands, sheet in hands, the
+// inventory Combine drop), a note is capped at vanilla's 512 characters, and the
+// server accepts a write only from the writer.
+// Plan: docs/plans/2026-10-15-scrawl-plan.md (v0.9). Owner: Jeff Fabish.
 // Content addon (shared rules 6.1): the Paper quantity override changes what an
 // existing sheet saves, so the save-reload round trip and the removal boot gate it.
+// The modded Paper.OnStoreSave writes no byte (decision N14).
 // -----------------------------------------------------------------------------
 class CfgPatches
 {
