@@ -27,6 +27,15 @@
 //           super closes the window the October 19 fix left open: a save that
 //           landed while a write menu was open cleared the pen before the write
 //           RPC arrived (the October 21 "no pen reference" line, review S-3).
+// Load    : The flag follows the loaded text from two vanilla events. AfterStoreLoad
+//           runs for an entity loaded from the player database or the world storage,
+//           after its children (EntityAI.c:1418-1419); vanilla restores every item's
+//           saved quantity there (ItemBase.c:3218-3231), so carried items should too.
+//           EEOnAfterLoad is the "connected system" event of the world storage
+//           (EntityAI.c:1380-1381) and never reached a note restored with its player
+//           (NIMBY-T-026, October 24, 2026). Both stay; the sync logs only on a change.
+//           nimbynotes_playerbase.c syncs again from PlayerBase.AfterStoreLoad as a
+//           backstop and logs from=player-load only if this file's events missed.
 // Owner   : The vanilla m_Paper reference always names the sheet the data belongs
 //           to when vanilla binds it (ActionWritePaper.c:84,88); Scrawl binds it
 //           from construction and again after load, so modded SetNoteText can
@@ -204,9 +213,20 @@ modded class Paper
         NimbyNotesBindOwner();
     }
 
-    // Entity event after the storage load, not OnStoreLoad (EntityAI.c:1380-1381,
-    // ItemBase.c:3234): the loaded note data carries null references, so the owner is bound
-    // again and the flag follows the loaded text.
+    // Entity event after a load from the player database or the world storage, after the
+    // children (EntityAI.c:1418-1419, ItemBase.c:3218), not OnStoreLoad: the loaded note data
+    // carries null references, so the owner is bound again and the flag follows the loaded
+    // text. This is the event expected to reach a note restored in a player's inventory
+    // (NIMBY-T-026; Test 23 proves it).
+    override void AfterStoreLoad()
+    {
+        super.AfterStoreLoad();
+        NimbyNotesBindOwner();
+        NimbyNotesSyncWritten("store-load");
+    }
+
+    // World-storage event (EntityAI.c:1380-1381, ItemBase.c:3234). Kept: when AfterStoreLoad
+    // has already synced the sheet, this binds again and logs nothing.
     override void EEOnAfterLoad()
     {
         super.EEOnAfterLoad();
