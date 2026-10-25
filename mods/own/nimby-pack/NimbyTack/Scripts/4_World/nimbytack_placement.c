@@ -35,6 +35,8 @@ class NimbyTackPlacement
     float postWidth = -1.0;
     float shift = 0.0;
     string face = "hit";
+    // T22: the per-model and door allowance included in offset.
+    float allowance = 0.0;
 
     // The pin line's placement tokens.
     string Tag()
@@ -46,6 +48,7 @@ class NimbyTackPlacement
         }
         string tag = "placement=" + method + " front=" + NimbyTackRules.DepthTag(front) + " samples=" + fireHits.ToString() + "/" + fireSamples.ToString();
         tag = tag + " post=" + post + " shift=" + shift.ToString() + " face=" + face;
+        tag = tag + " allowance=" + allowance.ToString();
         return tag;
     }
 }
@@ -140,13 +143,31 @@ class NimbyTackPlace
             placement.method = NimbyTackRules.PLACEMENT_FIRE;
             placement.offset = NimbyTackRules.FireOffset(placement.front, config.faceClearanceMeters);
         }
+        else if (hit.doorIndex >= 0)
+        {
+            // A door leaf with no fire geometry (Land_House_1C1 front door, 0 of 9, October 25,
+            // 2026) is a thin plane at the view hit; the unknown-surface 6 cm floated it.
+            placement.method = NimbyTackRules.PLACEMENT_FALLBACK;
+            placement.offset = config.faceClearanceMeters;
+        }
         else
         {
             placement.method = NimbyTackRules.PLACEMENT_FALLBACK;
             placement.offset = NimbyTackRules.OffsetFor(hit.surface, config);
         }
+        // T22, NIMBY-T-032: models whose drawn surface stands in front of every ray layer, and door
+        // leaves, sit further out by their allowance.
+        placement.allowance = NimbyTackRules.AllowanceFor(config, NimbyTackWorld.ClassOf(hit.wall), hit.doorIndex >= 0);
+        placement.offset = placement.offset + placement.allowance;
         placement.normal = normal;
         placement.position = NimbyTackRules.PinPosition(origin, normal, placement.offset);
+        if (NimbyTackLog.IsDebug())
+        {
+            // NIMBY-T-032 study (debug only): every object the centre ray crosses, unfiltered.
+            LogCentreRay("view", ObjIntersectView, player, origin, normal);
+            LogCentreRay("fire", ObjIntersectFire, player, origin, normal);
+            LogCentreRay("geom", ObjIntersectGeom, player, origin, normal);
+        }
         if (NimbyTackLog.IsDebug())
         {
             string grid = "";
@@ -188,6 +209,36 @@ class NimbyTackPlace
             return NimbyTackRules.SignedDepth(result.pos, point, normal);
         }
         return NimbyTackRules.DEPTH_MISS;
+    }
+
+    // NIMBY-T-032 study (debug only, October 25, 2026): on Land_House_1C1 a note 1.5 cm in front of
+    // the fire face was hidden, and on Land_HouseBlock_2C1 a note clipped where physics stood 7.6 cm
+    // proud; this lists every object on the centre ray, with its depth, so a drawn part that is a
+    // separate object (proxy) shows up. Moves nothing.
+    static void LogCentreRay(string layer, int intersectType, PlayerBase player, vector origin, vector normal)
+    {
+        vector start = origin + normal * RAY_FRONT_METERS;
+        vector end = origin - normal * RAY_BACK_METERS;
+        RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
+        params.sorted = true;
+        params.type = intersectType;
+        params.flags = CollisionFlags.ALLOBJECTS;
+        array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
+        string line = "centre-ray layer=" + layer;
+        if (!DayZPhysics.RaycastRVProxy(params, results))
+        {
+            NimbyTackLog.Debug(line + " hits=0");
+            return;
+        }
+        line = line + " hits=" + results.Count().ToString();
+        foreach (RaycastRVResult result : results)
+        {
+            float depth = NimbyTackRules.SignedDepth(result.pos, origin, normal);
+            string item = " [" + NimbyTackWorld.ClassOf(result.obj) + " shape=" + NimbyTackWorld.ShapeOf(result.obj) + " hier=" + result.hierLevel.ToString();
+            item = item + " parent=" + NimbyTackWorld.ClassOf(result.parent) + " component=" + result.component.ToString() + " depth=" + depth.ToString() + "]";
+            line = line + item;
+        }
+        NimbyTackLog.Debug(line);
     }
 
     // T20: the physics normal of the wall object beside the post, facing the player; "0 0 0" when

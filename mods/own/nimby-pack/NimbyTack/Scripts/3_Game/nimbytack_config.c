@@ -16,12 +16,27 @@
 // Logging : [NIMBY][Tack] prefix (shared rules 4.1); debug lines only when
 //           $profile:NimbyTack\debug exists (shared rules 4.3).
 // -----------------------------------------------------------------------------
+// T22, NIMBY-T-032 (Jeff, October 25, 2026): extra distance off the wall for one building model whose
+// drawn surface stands in front of every layer a ray can hit (Land_House_1C1).
+class NimbyTackAllowance
+{
+    string model;
+    float meters;
+
+    void NimbyTackAllowance(string modelName = "", float allowanceMeters = 0.0)
+    {
+        model = modelName;
+        meters = allowanceMeters;
+    }
+}
+
 class NimbyTackConfig
 {
-    // 3 since October 25, 2026 (faceClearanceMeters added, roughSurfaceOffsetMeters retired,
-    // NIMBY-T-028); 2 since October 20, 2026. A file written at an older version is upgraded once
-    // on load and written back, see NimbyTackRules.UpgradeConfig.
-    int version = 3;
+    // 4 since October 25, 2026 (doorAllowanceMeters and modelAllowances, NIMBY-T-032); 3 the same
+    // day (faceClearanceMeters added, roughSurfaceOffsetMeters retired, NIMBY-T-028); 2 since
+    // October 20, 2026. A file written at an older version is upgraded once on load and written
+    // back, see NimbyTackRules.UpgradeConfig, so the operator sees the keys added since.
+    int version = 4;
     // T2: a wall hit by the raycast within this many meters of the player's head.
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
@@ -55,6 +70,24 @@ class NimbyTackConfig
     // T6: at most this many pinned notes within the radius; 0 disables the cap.
     int areaCapCount = 20;
     float areaCapRadiusMeters = 50.0;
+    // T22, NIMBY-T-032 (Jeff, October 25, 2026: per-model allowance): added to the placement offset
+    // on a door leaf (the drawn leaf stands in front of its geometry, October 25, 2026 on
+    // Land_House_2B01) and for each model on the list. Server only: placement runs on the server,
+    // so the client never reads these. Starting values are guesses to be measured in game; a
+    // model can appear more than once and the last entry wins, so an entry the operator appends
+    // overrides the built-in one. Clamped 0 to 15 cm.
+    float doorAllowanceMeters = 0.02;
+    ref array<ref NimbyTackAllowance> modelAllowances;
+
+    void NimbyTackConfig()
+    {
+        modelAllowances = new array<ref NimbyTackAllowance>;
+        // October 25, 2026: 1C1 buried at 5.5 cm off the view hit and floated a bit at 11.3 cm
+        // (fire 4.8 + 1.5 + 5); 3 cm is the current measurement. Land_HouseBlock_2C1 has no entry:
+        // its drawn front varies spot to spot (notes at 1.8, 4.8 and 5.3 cm each clipped or sat
+        // flush), and Jeff ruled it a known clipping model (T-032).
+        modelAllowances.Insert(new NimbyTackAllowance("Land_House_1C1", 0.03));
+    }
 }
 
 class NimbyTackLog

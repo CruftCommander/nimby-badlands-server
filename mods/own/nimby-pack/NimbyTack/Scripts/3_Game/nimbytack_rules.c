@@ -372,6 +372,46 @@ class NimbyTackRules
     // a door leaf that is not closed refuses the pin. doorIndex is -1 off a door.
     static const string REASON_DOOR_NOT_CLOSED = "door-not-closed";
 
+    // T22, NIMBY-T-032: the extra offset for one pin: the last allowance listed for the model, plus
+    // the door allowance on a door leaf.
+    static float ModelAllowance(NimbyTackConfig config, string model)
+    {
+        float meters = 0.0;
+        if (!config || !config.modelAllowances)
+        {
+            return meters;
+        }
+        foreach (NimbyTackAllowance allowance : config.modelAllowances)
+        {
+            if (allowance && allowance.model == model)
+            {
+                meters = allowance.meters;
+            }
+        }
+        return meters;
+    }
+
+    // A door leaf takes the door allowance alone: the model allowances describe a building's walls,
+    // and the 1C1 front door floated 11 cm with both (October 25, 2026).
+    static float AllowanceFor(NimbyTackConfig config, string model, bool onDoor)
+    {
+        if (onDoor)
+        {
+            return config.doorAllowanceMeters;
+        }
+        return ModelAllowance(config, model);
+    }
+
+    // T22: the store data of a door note is sane: no door, or a door index 0 to 63 with a pivot.
+    static bool DoorDataValid(int doorIndex, int pivot)
+    {
+        if (doorIndex == -1)
+        {
+            return true;
+        }
+        return doorIndex >= 0 && doorIndex <= 63 && pivot >= 0;
+    }
+
     static bool DoorPinAllowed(int doorIndex, bool doorClosed)
     {
         if (doorIndex < 0)
@@ -516,6 +556,22 @@ class NimbyTackRules
         before = config.areaCapRadiusMeters;
         config.areaCapRadiusMeters = Math.Clamp(before, 1.0, 500.0);
         changed = changed + Changed(before, config.areaCapRadiusMeters);
+        before = config.doorAllowanceMeters;
+        config.doorAllowanceMeters = Math.Clamp(before, 0.0, 0.15);
+        changed = changed + Changed(before, config.doorAllowanceMeters);
+        if (config.modelAllowances)
+        {
+            foreach (NimbyTackAllowance allowance : config.modelAllowances)
+            {
+                if (!allowance)
+                {
+                    continue;
+                }
+                before = allowance.meters;
+                allowance.meters = Math.Clamp(before, 0.0, 0.15);
+                changed = changed + Changed(before, allowance.meters);
+            }
+        }
         // NIMBY-T-023 (Jeff, October 24, 2026): a negative cap is a typo, so it takes the default
         // instead of 0, which disables the cap; 0 written on purpose still disables it.
         if (config.areaCapCount < 0)
@@ -548,6 +604,11 @@ class NimbyTackRules
         if (config.faceClearanceMeters <= 0.0)
         {
             config.faceClearanceMeters = defaults.faceClearanceMeters;
+        }
+        // Version 4 (NIMBY-T-032): a file without the allowance list takes the built-in one.
+        if (!config.modelAllowances || config.modelAllowances.Count() == 0)
+        {
+            config.modelAllowances = defaults.modelAllowances;
         }
         config.version = defaults.version;
         return true;
@@ -819,7 +880,30 @@ class NimbyTackRules
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
 
         // T6: the version 2 to 3 upgrade adds faceClearanceMeters once (NIMBY-T-028).
-        failures += Case(results, "config version is 3", defaults.version == 3);
+        failures += Case(results, "config version is 4", defaults.version == 4);
+        // T22, NIMBY-T-032: allowances.
+        failures += Case(results, "1C1 allowance default is 3 cm", Math.AbsFloat(ModelAllowance(defaults, "Land_House_1C1") - 0.03) < 0.0001);
+        failures += Case(results, "2C1 has no allowance (known clipping, T-032)", ModelAllowance(defaults, "Land_HouseBlock_2C1") == 0.0);
+        failures += Case(results, "a door leaf ignores the model allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_House_1C1", true) - defaults.doorAllowanceMeters) < 0.0001);
+        failures += Case(results, "door data with no door is valid", DoorDataValid(-1, -1));
+        failures += Case(results, "door data with a door and a pivot is valid", DoorDataValid(2, 83886083));
+        failures += Case(results, "a junk door index is invalid", !DoorDataValid(1065353216, 0));
+        failures += Case(results, "a door without a pivot is invalid", !DoorDataValid(0, -1));
+        failures += Case(results, "an unlisted model has no allowance", ModelAllowance(defaults, "Land_House_2B01") == 0.0);
+        failures += Case(results, "a door leaf adds the door allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_House_2B01", true) - defaults.doorAllowanceMeters) < 0.0001);
+        NimbyTackConfig tuned = new NimbyTackConfig();
+        tuned.modelAllowances.Insert(new NimbyTackAllowance("Land_House_1C1", 0.08));
+        failures += Case(results, "the last allowance listed for a model wins", Math.AbsFloat(ModelAllowance(tuned, "Land_House_1C1") - 0.08) < 0.0001);
+        NimbyTackConfig wild = new NimbyTackConfig();
+        wild.doorAllowanceMeters = 1.0;
+        wild.modelAllowances.Insert(new NimbyTackAllowance("Land_House_1C1", -0.5));
+        Sanitize(wild);
+        failures += Case(results, "allowances clamp to 0 and 15 cm", Math.AbsFloat(wild.doorAllowanceMeters - 0.15) < 0.0001 && ModelAllowance(wild, "Land_House_1C1") == 0.0);
+        NimbyTackConfig v3File = new NimbyTackConfig();
+        v3File.version = 3;
+        v3File.modelAllowances = new array<ref NimbyTackAllowance>;
+        bool upgradedV3 = UpgradeConfig(v3File, defaults);
+        failures += Case(results, "version 3 file gains the built-in allowance list", upgradedV3 && v3File.version == 4 && Math.AbsFloat(ModelAllowance(v3File, "Land_House_1C1") - 0.03) < 0.0001);
         NimbyTackConfig oldFile = new NimbyTackConfig();
         oldFile.version = 2;
         oldFile.faceClearanceMeters = 0.0;
@@ -836,7 +920,7 @@ class NimbyTackRules
         NimbyTackConfig oldestFile = new NimbyTackConfig();
         oldestFile.version = 1;
         bool upgradedOldest = UpgradeConfig(oldestFile, defaults);
-        failures += Case(results, "version 1 file is upgraded to 3", upgradedOldest && oldestFile.version == 3);
+        failures += Case(results, "version 1 file is upgraded to 4", upgradedOldest && oldestFile.version == 4);
         NimbyTackConfig oldUnknown = new NimbyTackConfig();
         oldUnknown.version = 1;
         oldUnknown.unknownSurfaceOffsetMeters = 0.0;
@@ -845,10 +929,10 @@ class NimbyTackRules
         NimbyTackConfig current = new NimbyTackConfig();
         failures += Case(results, "current file is not upgraded", !UpgradeConfig(current, defaults));
         NimbyTackConfig future = new NimbyTackConfig();
-        future.version = 4;
+        future.version = 5;
         future.faceClearanceMeters = 0.022;
         bool futureTouched = UpgradeConfig(future, defaults);
-        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 4 && Math.AbsFloat(future.faceClearanceMeters - 0.022) < 0.0001);
+        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 5 && Math.AbsFloat(future.faceClearanceMeters - 0.022) < 0.0001);
 
         // NIMBY-T-015 (T17) and NIMBY-T-030: the physics-depth guard at 20 cm.
         float depthLimit = PHYSICS_DEPTH_LIMIT_METERS;

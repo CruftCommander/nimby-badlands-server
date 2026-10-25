@@ -296,3 +296,59 @@ Rulings, October 25, 2026 (Jeff):
 - **NIMBY-T-029:** a note on a door leaf attaches to the door and swings with it (not refused). The placement round's plan covers the attachment, save and load, take-down from an open door, and the area cap; gates on player builds follow the same design.
 - **NIMBY-T-030:** `PHYSICS_DEPTH_LIMIT_METERS` rises from 0.15 to 0.20.
 - **NIMBY-T-025:** on a target narrower than the sheet, the note is centred on the post's axis and faces along the fence line, from the side probes; posts stay pinnable (the wired fence takes notes only on its posts, NIMBY-T-031).
+
+## Placement round in game, October 25, 2026 (evening)
+
+Branch `feat/tack-placement` from `main` `09da55e` (plan v0.15: T19 fire-relative placement, T20 posts, T21 and T21b doors, T22 per-model allowance, T17 limit 0.20). Builds, all SUMMARY PASS with 0 `SCRIPT (E)`: `@NIMBY-20261025-163840` (Tack 127 cases), `-171028` (pivot range fix, centre-ray diagnostic), `-174211` (allowances, config version 4; 133), `-181720` (T21b server-driven doors, store data; 134), `-183015` (door-only allowance, door fallback, load sanity check; 139). Replica `D:\DayZServer`, instance 999, profile `main-round1` (range and debug flags on). Range `init.c` candidate 7 (one-shot `NimbyRange\clear-notes`: 35 notes removed at 16:45, flag deleted) then candidate 8 (kit: one pen, paper in stacks of 5 to at least 22 sheets; SHA256 `debd53c3...`; rollback candidate 7 `e95826d2...`). Session tests continue from 56. Verdicts are Jeff's; "front" is the most forward of the 9 fire samples, from the `fire-grid` line.
+
+| Test | Row / object | Result | Evidence |
+| --- | --- | --- | --- |
+| 57 | Tape burn (open since test 26) | PASS; no flame drawn (by design, T13) | `16:53:24.429 burn class=NimbyTack_PinnedNote_Tape source=Matchbox`; that tape pin read `placement=fire front=0 samples=9/9` |
+| 58 | Config upgrade (TK-019) | PASS | `16:44:41.508 config upgraded; from=2 to=3`; the file lost `roughSurfaceOffsetMeters` and gained `faceClearanceMeters`; `17:48:21.480 config upgraded; from=3 to=4` added `doorAllowanceMeters` and `modelAllowances` |
+| 59 | `Wall_M5_Corner` | Not covered | No pin this round |
+| 60 | `Wall_B1_5` (brick) | PASS (Jeff, batch verdict) | 17:40:34 front +1.7 cm, offset 3.2 cm |
+| 61 | `Wall_Bremer_High_4` | PASS (batch) | 17:40:27 front 0 |
+| 62 | `Wall_IndCnc4_Desert_8` (floated in test 33) | PASS (batch) | 17:40:18 front -2.0 cm, note pulled in to -0.5 cm off the view hit |
+| 63 | `Mil_WiredFence` post (TK-016) | PASS (batch) | 17:40:10 `post=0.22 shift=0.08`, the note moved 8 cm onto the post |
+| 64 | `Wall_CBrk_5` | PASS (batch) | 17:40:00 front +0.6 cm |
+| 65 | `Wall_CGry_5` (floated in test 36) | PASS (batch) | 17:39:46 front -0.1 cm |
+| 66, 67 | `Wall_FenW_7` boards and round post | Not covered | No pin this round; the round-post centring (T20) stays untested |
+| 68 | `Wall_Fen1_5` end post | PASS (batch); no post detected | 17:39:24 fire 6/9, `post=-` (a run reaching one end is not a post) |
+| 69 | `Wall_Fen4_8` chain-link | PASS (batch) | 17:39:14 fire 6/9, front +0.7 cm |
+| 70 | `Wall_Fen3_8` | PASS (batch) | 17:39:00 front -0.3 cm |
+| 71 | `Wall_IndCnc4_8` (floated in test 41) | PASS (batch) | 17:38:48 front -2.1 cm, note at -0.6 cm |
+| 72 | `Land_House_2M1` | Not covered | No pin |
+| 73 | `Land_House_1M3` (floated in test 43) | PASS | 16:57:15 front -8.3 cm on the leaning face, note pulled in to -6.8 cm; 16:57:34 front +0.7 cm |
+| 74 | `Land_Shed_W6` | PASS on the fallback | 16:57:55 and 17:50:45 fire 0 of 9 (cause not found), `placement=fallback` 3 cm |
+| 75 | `Land_TradTent_Small` | PASS | 16:58:14 front +0.5 cm |
+| 76 | `Land_House_1C1` walls | FAIL at 1.5 cm (buried, NIMBY-T-032); PASS with a 3 cm model allowance | 16:58:31 and 17:00:27 at 4.4 to 4.5 cm and 16:58:46 at 8.2 cm buried; 17:15:37 at 5.5 cm buried; 17:51:37 at 11.3 cm (5 cm allowance) floated a bit; 18:37:39, 18:38:21, 18:38:35 at 7.4 to 10.7 cm (3 cm allowance) "flush or very slightly off" |
+| 77 | `Land_HouseBlock_2C1` | Mixed: known clipping (NIMBY-T-032, ruled) | 17:04:29 (1.8 cm) clipped, 17:04:37 (1.5 cm) not flagged, 17:15:24 (1.8 cm) "fixed"; with a 3 cm allowance 18:24:34 (4.8 cm) flush and 18:24:49 (5.3 cm) clipped |
+| 78 | `Land_House_1W01` (floated in test 48) | Not covered | No pin; `Land_House_1W01_Red` (test 84) is the same model family |
+| 79, 80 | `Land_House_2B01`, `Land_Shed_M1` walls | Not covered | Only their doors were pinned (tests 87 to 92) |
+| 81 | `Land_Slum_House1` | PASS (batch) | 17:36:58 front 0 |
+| 82 | `Land_Village_Store_Enoch` | PASS (batch) | 17:36:40 front +0.07 cm |
+| 83 | `Land_Village_HealthCare_Enoch` | PASS (batch) | 17:36:31 front +0.07 cm |
+| 84 | `Land_House_1W01_Red` (floated in test 54) | PASS (batch) | 17:37:16, 17:37:23, 17:37:32 at 1.5 cm |
+| 85 | `Land_House_2W04_Blue` front (TK-017, NIMBY-T-030) | PASS (batch) | 17:37:42 pinned, front +5.1 cm; no `physics-ahead` refusal |
+| 86 | `Land_Tisy_Garages2_Sakhal` concrete (clipped in test 56) | PASS (batch) | 17:38:00 and 17:38:05 front 0 |
+| 87 | `Land_Shed_M1` door, prompt (TK-018) | PASS: an ajar door refuses | Client `pin-check ... reason=door-not-closed detail=door=0 component=2` (twice); Jeff confirmed the door was ajar |
+| 88 | Doors, client parenting (T21) | FAIL (NIMBY-T-033) | `@NIMBY-20261025-174211`: client `door attach-client result=ok` at 17:49:37 at the closed-door positions; at 17:49:49, as the character finished spawning, all three jumped to about 28118 / 340 / 10527 (`door trace`); the notes were invisible open or shut |
+| 89 | Doors, server-driven (T21b) | PASS: the note swings with the door | 18:23 `Land_House_1C1` front door: Jeff "rides along"; 18:37:01 fresh pin swings too |
+| 90 | Door note across a restart (T21b) | PASS | `18:32:14.594 door load result=restored ... door=0 wall=Land_House_1C1 closed=true moved=0`; the note still swings |
+| 91 | Notes saved before T21b, first load with the store fields | FAIL, one-time, test storage only (NIMBY-T-035) | 18:19 boot: 51 `Virtual Machine Exception` = `Scripted variables corrupted upon "NimbyTack_PinnedNote_..."`; door fields read as junk (`door=1065353216`); after the server saved them in the new format the 18:31 boot showed 0 corrupted, 48 `door load result=invalid-cleared`, 8 `result=found` |
+| 92 | Door note depth (T22 door allowance) | FAIL: floats heavily (NIMBY-T-034) | 18:23:28 at 11 cm (fallback 6 cm plus both allowances), 18:37:01 at 3.5 cm (1.5 cm clearance plus 2 cm door allowance) still "heavily floating"; on that door the fire layer has no hit and the geometry layer stands 13.2 cm behind the view hit |
+
+0 `hold-cancel` lines; 0 `SCRIPT (E)` on every boot except the 18:19 load of test 91.
+
+Findings:
+
+- **NIMBY-T-032 (medium, Tack, placement, ruled):** on some models the drawn surface stands in front of every layer a ray can hit. `Land_House_1C1`: notes 1.5 cm in front of a fire face that itself stood 2.9 to 6.7 cm in front of view and physics were buried; a centre-ray listing (view, fire, geometry; all objects) showed one object per layer, so no proxy is hiding it, and client and server see the house within 1 mm of each other. Jeff ruled a per-model allowance (T22); 1C1 measured at 3 cm. `Land_HouseBlock_2C1`: no depth fits (1.8, 4.8, 5.3 cm each clipped or sat flush); Jeff ruled it a known clipping model with no allowance.
+- **NIMBY-T-033 (high, Tack, doors, fixed by T21b):** a client that parents its copy of a networked item to a door pivot has the server's position update (sent when the player enters range) applied as an offset from the pivot, and the note leaves the map. Jeff ruled the server moves the note with the door and saves the door data (T21b).
+- **NIMBY-T-034 (medium, Tack, doors, open):** door-leaf depth varies by model like walls: `Land_House_2B01` leaves (every layer flush) clipped at 1.5 cm, the `Land_House_1C1` front door (no fire layer, geometry 13.2 cm behind the view hit) floats at 3.5 cm. Next step: measure door leaves from the geometry layer.
+- **NIMBY-T-035 (medium, Tack, save format, one-time):** notes saved before the store version existed cannot be read by a build that reads one: the engine hands the read the next bytes and flags the note as corrupted. No live notes exist (Tack is not released), so the live world never meets it; from build `-181720` on every note starts with its store version. The load sanity check (`DoorDataValid`) clears junk door data.
+- **NIMBY-T-036 (low, tooling):** `scripts\Start-NimbyTestClient.ps1` passes `-BuildPath` to the client as given; a relative path made the client start without the mod and the server kicked it ("Missing PBO from unknown origins", 16:47:42). An absolute path works. The server script already resolves its paths (NIMBY-T-017).
+- **Measurement fix (found while planning):** the debug footprint's centre sample missed on 49 of 54 survey pins because it ran after the note was created and the default `NEARESTCONTACT` ray stopped on the note. Placement now runs before creation and samples with `ALLOBJECTS`; centre samples hit from test 57 on.
+
+Not covered this round: `Wall_M5_Corner`, the `Wall_FenW_7` round post (T20's main case), `Land_House_2M1`, `Land_House_1W01`, the `2B01` and `Shed_M1` walls, player builds, knife and epoxy pins under fire placement, a second player.
+
+Rulings, October 25, 2026 (Jeff): range clean-up by flag; fall back to the old offsets when fewer than 3 fire samples land; door notes: first client swings with closed pins (T21), then, after NIMBY-T-033, the server moves the note and saves the door data (T21b); per-model allowance (T22); `Land_HouseBlock_2C1` known clipping; finish the evening with one build and the write-up.
