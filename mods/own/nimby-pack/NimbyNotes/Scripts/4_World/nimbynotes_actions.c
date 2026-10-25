@@ -289,6 +289,10 @@ modded class ActionWritePaper
     {
         super.OnStartClient(action_data);
         m_NimbyNotesWatch.Reset();
+        if (!NimbyNotesLog.IsDebug())
+        {
+            return;
+        }
         NimbyNotesWritePair pair = new NimbyNotesWritePair(action_data);
         if (pair.IsComplete())
         {
