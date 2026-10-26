@@ -21,8 +21,11 @@
 class NimbyGreetProbeMenu extends UIScriptedMenu
 {
     static const string URL = "https://discord.gg/kH3eJ5mdEv";
-    static const string VIDEO_PBO = "NimbyGreet/Media/probe.mp4";
-    static const string VIDEO_PBO_BACKSLASH = "NimbyGreet\\Media\\probe.mp4";
+    // Run 2: the PBO path resolves (ON_ERROR after 500 ms, against 8 ms for an unresolved path) but the
+    // run 1 clip (H.264 High, no audio) does not decode, so each press of Media (PBO) tries the next
+    // encoding; Video alt path tries the vanilla-style game-root video\ folder (Jeff copies the files).
+    static ref array<string> VIDEO_PBO_LIST = {"NimbyGreet/Media/probe.mp4", "NimbyGreet/Media/probe-base.mp4", "NimbyGreet/Media/probe-base-aac.mp4", "NimbyGreet/Media/probe-high-aac.mp4", "NimbyGreet/Media/probe-mpeg4.mp4"};
+    static ref array<string> VIDEO_ALT_LIST = {"video\\probe.mp4", "video\\probe-base-aac.mp4", "video\\probe-mpeg4.mp4", "video/probe-base-aac.mp4"};
     static const string VIDEO_LOOSE = "$profile:NimbyGreet\\probe.mp4";
     static const string IMAGE_EDDS = "NimbyGreet/Media/probe.edds";
     static const string IMAGE_PAA = "NimbyGreet/Media/probe.paa";
@@ -37,6 +40,8 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
     protected string m_Text;
     protected string m_LastVideoPath;
     protected int m_UpdatePressCount;
+    protected int m_VideoPboIndex;
+    protected int m_VideoAltIndex;
 
     void NimbyGreetProbeMenu()
     {
@@ -50,6 +55,7 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
         if (m_Body)
         {
             m_Body.SetText(text);
+            m_Body.SetContentOffset(0, false);
             NimbyGreetLog.Probe("body set bytes=" + text.Length().ToString() + " lines=" + m_Body.GetNumLines().ToString() + " contentHeight=" + m_Body.GetContentHeight().ToString());
         }
     }
@@ -208,7 +214,8 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
         }
         if (id == 13)
         {
-            ProbeVideo(VIDEO_PBO_BACKSLASH);
+            ProbeVideo(VIDEO_ALT_LIST.Get(m_VideoAltIndex));
+            m_VideoAltIndex = (m_VideoAltIndex + 1) % VIDEO_ALT_LIST.Count();
             return true;
         }
         if (id == 12)
@@ -294,7 +301,9 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
 
     protected void ProbeMedia()
     {
-        ProbeVideo(VIDEO_PBO);
+        string path = VIDEO_PBO_LIST.Get(m_VideoPboIndex);
+        m_VideoPboIndex = (m_VideoPboIndex + 1) % VIDEO_PBO_LIST.Count();
+        ProbeVideo(path);
         if (!m_Image)
         {
             return;
@@ -313,7 +322,7 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
         NimbyGreetLog.Probe("image: LoadImageFile edds=" + NimbyGreetLog.Bool(edds) + " paa=" + NimbyGreetLog.Bool(paa) + " size0=" + sx.ToString() + "x" + sy.ToString() + " setImage=" + NimbyGreetLog.Bool(shown));
         if (m_MediaNote)
         {
-            m_MediaNote.SetText("video " + VIDEO_PBO + " | image edds=" + NimbyGreetLog.Bool(edds) + " paa=" + NimbyGreetLog.Bool(paa));
+            m_MediaNote.SetText("video " + path + " | image edds=" + NimbyGreetLog.Bool(edds) + " paa=" + NimbyGreetLog.Bool(paa));
         }
     }
 
@@ -407,7 +416,13 @@ class NimbyGreetProbeMenu extends UIScriptedMenu
         s = s + "17 nested: <b>bold <i>bold italic</i> bold</b> end<br/>";
         s = s + "18 unterminated: <b>bold to the end of this line end<br/>";
         s = s + "19 cyrillic: дайз Бэдлендс end<br/>";
-        s = s + "20 cjk: 字符测试 end";
+        s = s + "20 cjk: 字符测试 end<br/>";
+        s = s + "21 lt no gt after: a < b end<br/>";
+        s = s + "22 single angle quotes: ‹b› NOT BOLD end<br/>";
+        s = s + "23 modifier arrowheads: ˂b˃ NOT BOLD end<br/>";
+        s = s + "24 math angle brackets: ⟨b⟩ NOT BOLD end<br/>";
+        s = s + "25 amp entity: &amp; and a bare & end<br/>";
+        s = s + "26 lt space: < b> maybe a tag end";
         return s;
     }
 

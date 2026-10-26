@@ -27,10 +27,10 @@
 modded class MissionGameplay extends MissionBase
 {
     static const int FETCH_DELAY_MS = 500;
-    static const int OPEN_DELAY_MS = 2000;
+    static const int OPEN_DELAY_MS = 1000;
     static const int OPEN_RETRY_MS = 1000;
     static const int OPEN_RETRY_MAX = 30;
-    static const int CEILING_TIMEOUT_MS = 4000;
+    static const int CEILING_TIMEOUT_MS = 3000;
 
     protected ref NimbyGreetFetch m_NimbyGreetFetch;
     protected UAInput m_NimbyGreetInput;
@@ -294,7 +294,7 @@ modded class MissionGameplay extends MissionBase
     {
         m_NimbyGreetCeilingPlan = new array<string>;
         array<string> kinds = {"ascii", "cyr", "cjk"};
-        array<int> sizes = {1000, 1500, 2000, 4000, 8000};
+        array<int> sizes = {1000, 1100, 1200, 1300, 1400, 1500};
         foreach (string kind : kinds)
         {
             foreach (int size : sizes)

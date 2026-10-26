@@ -31,8 +31,9 @@ class NimbyGreetRules
     static const int MAX_HEADING_CHARS = 40;
     static const int MAX_ID_CHARS = 32;
 
-    // G5: bytes per chunk, set from the Phase 0 item 8 measurement; 1500 is the plan's starting value.
-    static const int CHUNK_BYTES = 1500;
+    // G5: bytes per chunk. Phase 0 run 1 (October 25, 2026): a 1,000-byte RPC string arrives intact,
+    // a 1,500-byte one throws "String CORRUPTED" on Read; 1000 pending the run 2 narrowing.
+    static const int CHUNK_BYTES = 1000;
 
     // G5, G6: UIScriptedMenu id; vanilla's highest is MENU_UNDERGROUND_TRIGGER_EDITOR = 48 (constants.c:223).
     static const int MENU_ID = 65511;
@@ -187,7 +188,7 @@ class NimbyGreetRules
         failures += SelfTestCase(results, "chunks: one char is 1 chunk", ChunkCount(1) == 1);
         failures += SelfTestCase(results, "chunks: exact multiple", ChunkCount(CHUNK_BYTES * 2) == 2);
         failures += SelfTestCase(results, "chunks: one over rounds up", ChunkCount(CHUNK_BYTES * 2 + 1) == 3);
-        failures += SelfTestCase(results, "chunks: 40000 bytes is 27 chunks", ChunkCount(40000) == 27);
+        failures += SelfTestCase(results, "chunks: 40000 bytes is 40 chunks", ChunkCount(40000) == 40);
         failures += SelfTestCase(results, "cap: multibyte text cut by characters", CapText("дайз", 2).LengthUtf8() == 2);
         failures += SelfTestCase(results, "utf8: ascii byte is not a continuation byte", IsContinuationByte("abc", 1) == false);
         failures += SelfTestCase(results, "utf8: second byte of a cyrillic char is a continuation byte", IsContinuationByte("дайз", 1) == true);

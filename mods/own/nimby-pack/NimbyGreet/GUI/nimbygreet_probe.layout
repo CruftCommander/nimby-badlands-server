@@ -90,6 +90,7 @@ FrameWidgetClass Root {
      vexactsize 0
      mode blend
      "src alpha" 1
+     "no wrap" 1
      filter 1
     }
     TextWidgetClass MediaNote {
