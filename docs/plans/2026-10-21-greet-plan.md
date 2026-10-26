@@ -189,8 +189,8 @@ Phase 1 replaces the Phase 0 probe in place on `feat/greet`. What the probe prov
 
 - Jeff reviews the real `greet.json` (the G11 content in the G13 subset, `english` only) and sets `version` to 1, `forceShow` false. `scripts/Test-GreetText.ps1` passes on it.
 - `NimbyGreet/Media/` holds nothing but `manifest.json` (empty list) at release 1; the Phase 0 probe files are deleted and `NOTICE` says so. Test leftovers on Jeff's machine go too: `F:\SteamLibrary\steamapps\common\DayZ\video\probe*.mp4` and `%LOCALAPPDATA%\DayZ\NimbyGreet\probe.mp4` (harmless, but not left behind), and the malformed `profiles\greet-p0\NimbyGreet\greet.json` from Phase 0 run 2 is deleted so the next boot writes the default.
-- The join lines for Legs, Ears, and Scrawl move from the `messages.nimby-mods.patch.xml` on-connect block into Greet sections (G8); the release gate step 5 text is amended.
-- Gate per shared rules 9.2 with the first Workshop release; the Greet column on the checklist lists every row G-0 to G-23 below.
+- The join lines for Legs, Ears, and Scrawl move from the `messages.nimby-mods.patch.xml` on-connect block into Greet sections (G8); the release gate step 5 text is amended (done October 26, 2026: steps 5 and 9 rewritten, the patch file marked superseded; the Mods tab already carries the text).
+- Gate per shared rules 9.2 with the first Workshop release; the Greet column on the checklist lists every row G-0 to G-23 below (done October 26, 2026 as section 4 of the release gate, rows G-0 to G-30, with G-10, G-17b, G-25 and G-28 open).
 
 ## Tests
 
