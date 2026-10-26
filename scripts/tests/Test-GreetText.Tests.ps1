@@ -27,8 +27,8 @@ BeforeAll {
       "title": "NIMBY",
       "tagline": "Badlands",
       "sections": [
-        { "id": "welcome", "heading": "Welcome", "body": "Hello **there**.\n\n[Discord](https://discord.gg/x)" },
-        { "id": "rules", "heading": "Rules", "body": "Don't be a dick." }
+        { "id": "welcome", "heading": "Welcome", "body": ["Hello **there**.", "", "[Discord](https://discord.gg/x)"] },
+        { "id": "rules", "heading": "Rules", "body": ["Don't be a dick."] }
       ]
     }
   ]
@@ -127,7 +127,7 @@ Describe 'Test-GreetDocument' {
         ($errors -join "`n") | Should -Match 'defaultLanguage german is not among'
     }
     It 'rejects a bad id, a duplicate id, an empty heading and an empty body' {
-        $doc = New-GreetDoc { param($d) $d.languages[0].sections[0].id = 'Bad Id'; $d.languages[0].sections[1].id = 'rules'; $d.languages[0].sections[1].heading = ''; $d.languages[0].sections[1].body = '' }
+        $doc = New-GreetDoc { param($d) $d.languages[0].sections[0].id = 'Bad Id'; $d.languages[0].sections[1].id = 'rules'; $d.languages[0].sections[1].heading = ''; $d.languages[0].sections[1].body = @('') }
         $second = New-GreetDoc { param($d) $d.languages[0].sections[1].id = 'welcome' }
         $errors = Get-Errors (Test-GreetDocument -Document $doc -MediaIds @())
         ($errors -join "`n") | Should -Match 'id must be'
@@ -141,7 +141,7 @@ Describe 'Test-GreetDocument' {
             $d.languages[0].title = 't' * 61
             $d.languages[0].tagline = 'g' * 81
             $d.languages[0].sections[0].heading = 'h' * 41
-            $d.languages[0].sections[0].body = 'b' * 4001
+            $d.languages[0].sections[0].body = @(('b' * 1000), ('b' * 1000), ('b' * 1000), ('b' * 1000))
             $sections = @($d.languages[0].sections)
             while ($sections.Count -lt 17) { $sections += ($sections[1] | ConvertTo-Json -Depth 5 | ConvertFrom-Json); $sections[-1].id = ('s{0}' -f $sections.Count) }
             $d.languages[0].sections = $sections
@@ -150,20 +150,32 @@ Describe 'Test-GreetDocument' {
         ($warnings -join "`n") | Should -Match 'title is 61 characters'
         ($warnings -join "`n") | Should -Match 'tagline is 81 characters'
         ($warnings -join "`n") | Should -Match 'heading is 41 characters'
-        ($warnings -join "`n") | Should -Match 'body is 4001 characters'
+        ($warnings -join "`n") | Should -Match 'body is 4003 characters'
         ($warnings -join "`n") | Should -Match '17 sections'
         Get-Errors (Test-GreetDocument -Document $doc -MediaIds @()) | Should -BeNullOrEmpty
     }
     It 'rejects a non-https link and an unknown media id, warns on a v0.2 url field' {
         $doc = New-GreetDoc {
             param($d)
-            $d.languages[0].sections[0].body = "[x](http://a.b)`n![alt](nope)"
+            $d.languages[0].sections[0].body = @('[x](http://a.b)', '![alt](nope)')
             $d.languages[0].sections[0] | Add-Member -NotePropertyName url -NotePropertyValue 'https://a.b'
         }
         $findings = Test-GreetDocument -Document $doc -MediaIds @('map')
         ((Get-Errors $findings) -join "`n") | Should -Match 'link rejected'
         ((Get-Errors $findings) -join "`n") | Should -Match 'media id not in the manifest: nope'
         ((Get-Warnings $findings) -join "`n") | Should -Match "field 'url'"
+    }
+    It 'rejects a body written as one string, a line over 1,023 bytes and a line that is not a string (NIMBY-T-055)' {
+        $single = New-GreetDoc { param($d) $d.languages[0].sections[0].body = 'one string' }
+        ((Get-Errors (Test-GreetDocument -Document $single -MediaIds @())) -join "`n") | Should -Match 'must be an array of lines'
+        $long = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('ok', ('a' * 1024)) }
+        ((Get-Errors (Test-GreetDocument -Document $long -MediaIds @())) -join "`n") | Should -Match 'body line 2 is 1024 bytes'
+        $cyrillic = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 512) }
+        ((Get-Errors (Test-GreetDocument -Document $cyrillic -MediaIds @())) -join "`n") | Should -Match 'body line 1 is 1024 bytes'
+        $fits = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 511) }
+        Get-Errors (Test-GreetDocument -Document $fits -MediaIds @()) | Should -BeNullOrEmpty
+        $number = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('ok', 5) }
+        ((Get-Errors (Test-GreetDocument -Document $number -MediaIds @())) -join "`n") | Should -Match 'body line 2 is not a string'
     }
     It 'accepts forceShow written as 0 or 1 by the engine' {
         $doc = New-GreetDoc { param($d) $d.forceShow = 0 }

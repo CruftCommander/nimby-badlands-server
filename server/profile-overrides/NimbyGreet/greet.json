@@ -15,47 +15,132 @@
         {
           "id": "welcome",
           "heading": "Welcome",
-          "body": "# Welcome to NIMBY\n\nHardcore survival on Nasdara, the Badlands map. Fresh world as of October 15, 2026.\n\nRestarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).\n\nThis window opens each time you join. Tick **Don't show this again** before you close it and it stays closed; if the rules change in a way everyone must see, it comes back once. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**."
+          "body": [
+            "# Welcome to NIMBY",
+            "",
+            "Hardcore survival on Nasdara, the Badlands map. Fresh world as of October 15, 2026.",
+            "",
+            "Restarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).",
+            "",
+            "This window opens each time you join. Tick **Don't show this again** before you close it and it stays closed; if the rules change in a way everyone must see, it comes back once. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**."
+          ]
         },
         {
           "id": "rules",
           "heading": "The one rule",
-          "body": "# Don't be a dick.\n\nThat is the whole rulebook. There are no PvP or PvE zones, no safe zones, and no rules on how you play: choose your own adventure."
+          "body": [
+            "# Don't be a dick.",
+            "",
+            "That is the whole rulebook. There are no PvP or PvE zones, no safe zones, and no rules on how you play: choose your own adventure."
+          ]
         },
         {
           "id": "discord",
           "heading": "Discord",
-          "body": "# Discord\n\nOur Discord is the place for questions, reports, and the mod roadmap. Ask in #faq-and-help or ping an admin.\n\n[Join the NIMBY Discord](https://discord.gg/kH3eJ5mdEv)\n\n**Open** launches the invite in your default browser (DayZ cannot show it in the Steam overlay). **Copy** puts the link on your clipboard, so you can paste it to someone else:\n\nhttps://discord.gg/kH3eJ5mdEv"
+          "body": [
+            "# Discord",
+            "",
+            "Our Discord is the place for questions, reports, and the mod roadmap. Ask in #faq-and-help or ping an admin.",
+            "",
+            "[Join the NIMBY Discord](https://discord.gg/kH3eJ5mdEv)",
+            "",
+            "**Open** launches the invite in your default browser (DayZ cannot show it in the Steam overlay). **Copy** puts the link on your clipboard, so you can paste it to someone else:",
+            "",
+            "https://discord.gg/kH3eJ5mdEv"
+          ]
         },
         {
           "id": "how-to-join",
           "heading": "How to join",
-          "body": "# How to join\n\n| Item | Detail |\n| --- | --- |\n| Launcher | DZSA Launcher or the in-game browser: search **NIMBY Badlands** |\n| Direct connect | 104.192.227.46:2302 |\n| Requires | The Badlands DLC. Nasdara servers do not let you in without it |\n| Version | DayZ 1.30. Your game must match the server build |\n| Mods | The @NIMBY Workshop item (see the Mods tab). Subscribe once; the launcher keeps it current |\n| Slots | 80 |\n| Location | Chicago, IL (US Central) |"
+          "body": [
+            "# How to join",
+            "",
+            "| Item | Detail |",
+            "| --- | --- |",
+            "| Launcher | DZSA Launcher or the in-game browser: search **NIMBY Badlands** |",
+            "| Direct connect | 104.192.227.46:2302 |",
+            "| Requires | The Badlands DLC. Nasdara servers do not let you in without it |",
+            "| Version | DayZ 1.30. Your game must match the server build |",
+            "| Mods | The @NIMBY Workshop item (see the Mods tab). Subscribe once; the launcher keeps it current |",
+            "| Slots | 80 |",
+            "| Location | Chicago, IL (US Central) |"
+          ]
         },
         {
           "id": "restarts",
           "heading": "Restarts",
-          "body": "# Restarts\n\n| When | What |\n| --- | --- |\n| 12:00 AM Central | Restart |\n| 12:00 PM Central | Restart |\n| 15, 5, and 1 minute before | Warning in chat |\n| 5 minutes before | The server locks to new joins to prevent abuse |\n\nFind a safe spot and log out before the reboot."
+          "body": [
+            "# Restarts",
+            "",
+            "| When | What |",
+            "| --- | --- |",
+            "| 12:00 AM Central | Restart |",
+            "| 12:00 PM Central | Restart |",
+            "| 15, 5, and 1 minute before | Warning in chat |",
+            "| 5 minutes before | The server locks to new joins to prevent abuse |",
+            "",
+            "Find a safe spot and log out before the reboot."
+          ]
         },
         {
           "id": "difficulty",
           "heading": "Difficulty",
-          "body": "# Full hardcore\n\n- First person only\n- No crosshair\n- No personal light. Nights are dark; bring a light source.\n- Server time is persistent, so a restart can land you in the middle of the night.\n\n## Why the browser says 3rd & 1st Person\n\nDayZ 1.30 added a separate third-person setting for vehicles, and it looks to be on by default. Bohemia has not published its name yet, so we cannot turn it off. On foot you are locked to first person. Once the setting is documented, we switch it off and the label goes back to first person only."
+          "body": [
+            "# Full hardcore",
+            "",
+            "- First person only",
+            "- No crosshair",
+            "- No personal light. Nights are dark; bring a light source.",
+            "- Server time is persistent, so a restart can land you in the middle of the night.",
+            "",
+            "## Why the browser says 3rd & 1st Person",
+            "",
+            "DayZ 1.30 added a separate third-person setting for vehicles, and it looks to be on by default. Bohemia has not published its name yet, so we cannot turn it off. On foot you are locked to first person. Once the setting is documented, we switch it off and the label goes back to first person only."
+          ]
         },
         {
           "id": "enhanced-vanilla",
           "heading": "Enhanced Vanilla",
-          "body": "# Vanilla-plus, not easier\n\n- **Weight hits harder.** The stamina penalty starts at 5 kg carried (vanilla is 6 kg) and costs 2% per kg (vanilla is 1.75%). At 15 kg you have 80% stamina instead of 84%.\n- **No hit direction indicator.** The red hit flash stays; find the shooter by sound.\n- **More base building spots.** Placement angle and collision checks are relaxed.\n\nLoot is stock Nasdara for now. Tuning comes once we see how the map plays."
+          "body": [
+            "# Vanilla-plus, not easier",
+            "",
+            "- **Weight hits harder.** The stamina penalty starts at 5 kg carried (vanilla is 6 kg) and costs 2% per kg (vanilla is 1.75%). At 15 kg you have 80% stamina instead of 84%.",
+            "- **No hit direction indicator.** The red hit flash stays; find the shooter by sound.",
+            "- **More base building spots.** Placement angle and collision checks are relaxed.",
+            "",
+            "Loot is stock Nasdara for now. Tuning comes once we see how the map plays."
+          ]
         },
         {
           "id": "mods",
           "heading": "Mods",
-          "body": "# Mods\n\nEverything comes in one Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls under the NIMBY tab.\n\n| Mod | What it does |\n| --- | --- |\n| Legs | Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back |\n| Ears | Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected |\n| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |\n| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |\n\nComing later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
+          "body": [
+            "# Mods",
+            "",
+            "Everything comes in one Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls under the NIMBY tab.",
+            "",
+            "| Mod | What it does |",
+            "| --- | --- |",
+            "| Legs | Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back |",
+            "| Ears | Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected |",
+            "| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |",
+            "| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |",
+            "",
+            "Coming later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
+          ]
         },
         {
           "id": "questions",
           "heading": "Questions",
-          "body": "# Questions\n\n**How do I invite someone to this Discord?** Send them the invite link. The **Copy** button on the Discord tab puts it on your clipboard.\n\n[NIMBY Discord invite](https://discord.gg/kH3eJ5mdEv)\n\nAnything else: ask in the #faq-and-help channel or ping an admin."
+          "body": [
+            "# Questions",
+            "",
+            "**How do I invite someone to this Discord?** Send them the invite link. The **Copy** button on the Discord tab puts it on your clipboard.",
+            "",
+            "[NIMBY Discord invite](https://discord.gg/kH3eJ5mdEv)",
+            "",
+            "Anything else: ask in the #faq-and-help channel or ping an admin."
+          ]
         }
       ]
     }

@@ -182,14 +182,14 @@ class NimbyGreetSelfTest
             language.sections.Insert(NimbyGreetText.MakeSection("s" + s.ToString(), "Heading", NimbyGreetRules.Repeat("b", 100)));
             s = s + 1;
         }
-        language.sections.Get(0).body = NimbyGreetRules.Repeat("x", 4500);
+        NimbyGreetText.SetBodyText(language.sections.Get(0), NimbyGreetRules.Repeat("x", 4500));
         language.sections.Get(1).id = "Bad Id!";
         language.sections.Get(2).heading = NimbyGreetRules.Repeat("h", 50);
         array<string> notes;
         int cuts = NimbyGreetText.ApplyCaps(language, notes);
         failures += Case(results, "caps: title cut to 60", language.title.LengthUtf8() == 60);
         failures += Case(results, "caps: sections cut to 16", language.sections.Count() == 16);
-        failures += Case(results, "caps: body cut to 4000", language.sections.Get(0).body.LengthUtf8() == 4000);
+        failures += Case(results, "caps: body cut to 4000", NimbyGreetText.BodyText(language.sections.Get(0)).LengthUtf8() == 4000);
         failures += Case(results, "caps: invalid id replaced", language.sections.Get(1).id == "section-2");
         failures += Case(results, "caps: heading cut to 40", language.sections.Get(2).heading.LengthUtf8() == 40);
         failures += Case(results, "caps: every cut is noted", cuts == 5 && notes.Count() == 5);
@@ -205,9 +205,10 @@ class NimbyGreetSelfTest
         int sum = 0;
         foreach (NimbyGreetSection section : total.sections)
         {
-            sum = sum + section.body.LengthUtf8();
+            sum = sum + NimbyGreetText.BodyText(section).LengthUtf8();
         }
-        failures += Case(results, "caps: total held to 40000 characters", sum == 40000 && total.sections.Get(10).body.Length() == 0);
+        failures += Case(results, "caps: total held to 40000 characters", sum == 40000 && NimbyGreetText.BodyText(total.sections.Get(10)).Length() == 0);
+        failures += BodyLineCases(results);
 
         NimbyGreetFile file = new NimbyGreetFile();
         file.openDelaySeconds = 99.0;
@@ -334,6 +335,75 @@ class NimbyGreetSelfTest
         NimbyGreetDone blank = NimbyGreetDone.FromJson("{}", error);
         failures += Case(results, "done: empty object parses to defaults", blank != null && blank.version == 0 && blank.languages != null && blank.languages.Count() == 0 && blank.reason == "");
         failures += Case(results, "fetch: duplicate done dropped without refusing", !fetch.AcceptDone(7, 3, back, 0.6, why) && why == "duplicate done" && !fetch.IsRefused());
+        return failures;
+    }
+
+    // ---- NIMBY-T-055: the body is an array of lines ----------------------------------------
+
+    protected static int BodyLineCases(array<string> results)
+    {
+        int failures = 0;
+        NimbyGreetSection joined = NimbyGreetText.MakeSection("j", "J", "a\n\nb");
+        failures += Case(results, "body: text stored as lines, empty line kept", joined.body.Count() == 3 && joined.body.Get(1) == "");
+        failures += Case(results, "body: lines join with a newline", NimbyGreetText.BodyText(joined) == "a\n\nb");
+        NimbyGreetSection none = new NimbyGreetSection();
+        none.body = null;
+        failures += Case(results, "body: missing body reads as empty", NimbyGreetText.BodyText(none) == "");
+
+        NimbyGreetLanguage spread = new NimbyGreetLanguage();
+        NimbyGreetSection five = new NimbyGreetSection();
+        five.id = "five";
+        five.heading = "Five";
+        int k = 0;
+        while (k < 5)
+        {
+            five.body.Insert(NimbyGreetRules.Repeat("x", 1000));
+            k = k + 1;
+        }
+        spread.sections.Insert(five);
+        array<string> notes;
+        int cuts = NimbyGreetText.ApplyCaps(spread, notes);
+        failures += Case(results, "caps: body cut across lines to 4000", cuts == 1 && five.body.Count() == 4 && five.body.Get(3).Length() == 997 && NimbyGreetText.BodyText(five).LengthUtf8() == 4000);
+
+        NimbyGreetLanguage limit = new NimbyGreetLanguage();
+        NimbyGreetSection near = NimbyGreetText.MakeSection("near", "Near", NimbyGreetRules.Repeat("z", NimbyGreetRules.ENGINE_STRING_WARN_BYTES));
+        limit.sections.Insert(near);
+        cuts = NimbyGreetText.ApplyCaps(limit, notes);
+        failures += Case(results, "caps: a line at the engine string limit is noted", cuts == 1 && notes.Count() == 1 && notes.Get(0).IndexOf("engine") >= 0);
+        NimbyGreetLanguage under = new NimbyGreetLanguage();
+        under.sections.Insert(NimbyGreetText.MakeSection("under", "Under", NimbyGreetRules.Repeat("z", NimbyGreetRules.ENGINE_STRING_WARN_BYTES - 1)));
+        failures += Case(results, "caps: a line below the engine limit is not noted", NimbyGreetText.ApplyCaps(under, notes) == 0);
+
+        // The engine behavior itself (G-P1-34, G-P1-35): a guard for a future DayZ that changes it.
+        NimbyGreetLanguage wire = new NimbyGreetLanguage();
+        wire.language = "english";
+        NimbyGreetSection lines = new NimbyGreetSection();
+        lines.id = "wire";
+        lines.heading = "Wire";
+        lines.body.Insert(NimbyGreetRules.Repeat("a", 1000));
+        lines.body.Insert("");
+        lines.body.Insert(NimbyGreetRules.Repeat("b", 1000));
+        lines.body.Insert(NimbyGreetRules.Repeat("c", 1100));
+        wire.sections.Insert(lines);
+        JsonSerializer serializer = new JsonSerializer();
+        string json;
+        serializer.WriteToString(wire, false, json);
+        NimbyGreetLanguage back = new NimbyGreetLanguage();
+        string error;
+        bool read = serializer.ReadFromString(back, json, error);
+        bool intact = read && back.sections.Count() == 1 && back.sections.Get(0).body.Count() == 4;
+        if (intact)
+        {
+            array<string> got = back.sections.Get(0).body;
+            intact = got.Get(0).Length() == 1000 && got.Get(1) == "" && got.Get(2).Length() == 1000;
+        }
+        failures += Case(results, "body: lines of 1000 bytes survive a JSON round trip", intact);
+        bool cutAtLimit = read && back.sections.Count() == 1 && back.sections.Get(0).body.Count() == 4;
+        if (cutAtLimit)
+        {
+            cutAtLimit = back.sections.Get(0).body.Get(3).Length() == NimbyGreetRules.ENGINE_STRING_BYTES;
+        }
+        failures += Case(results, "engine: a JSON string value is kept to 1023 bytes", cutAtLimit);
         return failures;
     }
 

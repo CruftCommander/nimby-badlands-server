@@ -10,6 +10,10 @@
 //           is the safe shape. The server builds the code to Language lookup after load.
 // Caps    : ApplyCaps truncates, never rejects (G9), and reports every cut so the server
 //           logs "greet.json truncated" once per load and the validator prints the same.
+// Body    : NIMBY-T-055: "body" is an array of lines, never one string, because the engine's
+//           JSON reader keeps at most 1,023 bytes of a string value (ENGINE_STRING_BYTES) on
+//           the server's load and again on the client's read of the payload. BodyText joins
+//           the lines with "\n" for the converter and the caps; SetBodyText splits them back.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
 
@@ -17,7 +21,7 @@ class NimbyGreetSection
 {
     string id = "";
     string heading = "";
-    string body = "";
+    ref array<string> body = new array<string>;   // lines, joined with "\n" (NIMBY-T-055)
 }
 
 class NimbyGreetLanguage
@@ -132,6 +136,22 @@ class NimbyGreetText
                 notes.Insert("section " + section.id + " heading cut to " + NimbyGreetRules.MAX_HEADING_CHARS.ToString());
                 cuts = cuts + 1;
             }
+            if (!section.body)
+            {
+                section.body = new array<string>;
+            }
+            int lineIndex = 0;
+            while (lineIndex < section.body.Count())
+            {
+                int lineBytes = section.body.Get(lineIndex).Length();
+                if (lineBytes >= NimbyGreetRules.ENGINE_STRING_WARN_BYTES)
+                {
+                    notes.Insert("section " + section.id + " line " + (lineIndex + 1).ToString() + " is " + lineBytes.ToString() + " bytes, at the engine's " + NimbyGreetRules.ENGINE_STRING_BYTES.ToString() + "-byte string limit; it may have been cut on load");
+                    cuts = cuts + 1;
+                }
+                lineIndex = lineIndex + 1;
+            }
+            string bodyText = BodyText(section);
             int allowed = NimbyGreetRules.MAX_BODY_CHARS;
             int remaining = NimbyGreetRules.MAX_TOTAL_CHARS - total;
             if (remaining < allowed)
@@ -142,13 +162,14 @@ class NimbyGreetText
             {
                 allowed = 0;
             }
-            if (section.body.LengthUtf8() > allowed)
+            if (bodyText.LengthUtf8() > allowed)
             {
-                section.body = NimbyGreetRules.CapText(section.body, allowed);
+                bodyText = NimbyGreetRules.CapText(bodyText, allowed);
+                SetBodyText(section, bodyText);
                 notes.Insert("section " + section.id + " body cut to " + allowed.ToString());
                 cuts = cuts + 1;
             }
-            total = total + section.body.LengthUtf8();
+            total = total + bodyText.LengthUtf8();
             i = i + 1;
         }
         return cuts;
@@ -247,12 +268,50 @@ class NimbyGreetText
         return file;
     }
 
+    // body is the text with "\n" line breaks; it is stored as lines (NIMBY-T-055).
     static NimbyGreetSection MakeSection(string id, string heading, string body)
     {
         NimbyGreetSection section = new NimbyGreetSection();
         section.id = id;
         section.heading = heading;
-        section.body = body;
+        SetBodyText(section, body);
         return section;
+    }
+
+    // The body's lines joined with "\n"; "" for a missing section or body.
+    static string BodyText(NimbyGreetSection section)
+    {
+        if (!section)
+        {
+            return "";
+        }
+        if (!section.body)
+        {
+            return "";
+        }
+        string text = "";
+        int i = 0;
+        while (i < section.body.Count())
+        {
+            if (i > 0)
+            {
+                text = text + "\n";
+            }
+            text = text + section.body.Get(i);
+            i = i + 1;
+        }
+        return text;
+    }
+
+    // Replaces the body with text split on "\n" (SplitLines keeps empty lines).
+    static void SetBodyText(NimbyGreetSection section, string text)
+    {
+        if (!section)
+        {
+            return;
+        }
+        array<string> lines;
+        NimbyGreetRules.SplitLines(text, lines);
+        section.body = lines;
     }
 }

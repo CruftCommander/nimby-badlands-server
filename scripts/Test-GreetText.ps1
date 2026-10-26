@@ -14,6 +14,9 @@
         not duplicated, and the default language is present;
       - the caps of plan G9 (title 60, tagline 80, 16 sections, heading 40, id 32, body 4,000,
         40,000 per language), which the client truncates and this script reports;
+      - every body is an array of lines and no line is over 1,023 bytes of UTF-8: the engine's
+        JSON reader keeps at most 1,023 bytes of a string and drops the rest without a word
+        (NIMBY-T-055), so a longer line is an error, not a cut;
       - section ids are [a-z0-9-] and unique within a language;
       - every markdown link is https:// and no section has more than 8;
       - every media reference ![alt](id) names an id in the addon's Media\manifest.json and no
@@ -69,6 +72,7 @@ $script:GreetCjkLanguages = @('chinese', 'japanese', 'chinesesimp')
 $script:GreetCaps = @{
     MaxSections = 16; MaxBodyChars = 4000; MaxLinksPerSection = 8; MaxMediaPerSection = 4; MaxTablesPerSection = 2
     MaxTotalChars = 40000; MaxTitleChars = 60; MaxTaglineChars = 80; MaxHeadingChars = 40; MaxIdChars = 32
+    EngineStringBytes = 1023
     MaxOpenDelaySeconds = 30; MaxOpenRetrySeconds = 300; MaxCooldownSeconds = 60; MaxRereadSeconds = 3600
 }
 
@@ -222,9 +226,23 @@ function Test-GreetDocument {
             if (Test-HasProperty $section 'heading') { $heading = [string]$section.heading }
             if (-not $heading) { Add-Finding 'ERROR' ("{0}: heading is missing or empty" -f $where) }
             elseif ($heading.Length -gt $script:GreetCaps.MaxHeadingChars) { Add-Finding 'WARN' ("{0}: heading is {1} characters, cut to {2}" -f $where, $heading.Length, $script:GreetCaps.MaxHeadingChars) }
-            $body = ''
-            if (Test-HasProperty $section 'body') { $body = [string]$section.body }
-            if (-not $body) { Add-Finding 'ERROR' ("{0}: body is missing or empty" -f $where); continue }
+            # NIMBY-T-055: the body is an array of lines, each one JSON string of at most 1,023 bytes.
+            $bodyValue = $null
+            if (Test-HasProperty $section 'body') { $bodyValue = $section.body }
+            if ($null -eq $bodyValue) { Add-Finding 'ERROR' ("{0}: body is missing or empty" -f $where); continue }
+            if ($bodyValue -is [string]) { Add-Finding 'ERROR' ("{0}: body must be an array of lines, not one string: the engine keeps at most {1} bytes of a string (NIMBY-T-055)" -f $where, $script:GreetCaps.EngineStringBytes); continue }
+            $bodyLines = @($bodyValue)
+            $lineNumber = 0
+            $badLine = $false
+            foreach ($bodyLine in $bodyLines) {
+                $lineNumber++
+                if ($bodyLine -isnot [string]) { Add-Finding 'ERROR' ("{0}: body line {1} is not a string" -f $where, $lineNumber); $badLine = $true; continue }
+                $lineBytes = [System.Text.Encoding]::UTF8.GetByteCount($bodyLine)
+                if ($lineBytes -gt $script:GreetCaps.EngineStringBytes) { Add-Finding 'ERROR' ("{0}: body line {1} is {2} bytes; the engine keeps at most {3} bytes of a string and drops the rest, so split the line" -f $where, $lineNumber, $lineBytes, $script:GreetCaps.EngineStringBytes) }
+            }
+            if ($badLine) { continue }
+            $body = $bodyLines -join "`n"
+            if (-not $body.Trim()) { Add-Finding 'ERROR' ("{0}: body is missing or empty" -f $where); continue }
             if ($body.Length -gt $script:GreetCaps.MaxBodyChars) { Add-Finding 'WARN' ("{0}: body is {1} characters, cut to {2}" -f $where, $body.Length, $script:GreetCaps.MaxBodyChars) }
             $total += [Math]::Min($body.Length, $script:GreetCaps.MaxBodyChars)
             foreach ($bad in @('url', 'links', 'media')) {

@@ -19,10 +19,16 @@
 //             power-of-two .edds frames flipped on a timer.
 // Inputs  : UAUIBack closes (NoteMenu.c:152-158 pattern). UAUITabLeft and UAUITabRight
 //           ([ ] and the shoulder buttons, preset_X1MouseKey.xml:631-637) move between
-//           sections; UAUINextUp and UAUINextDown (the triggers, :696-701) page the body; the
-//           wheel scrolls it natively; Tab and the stick move the engine's own button focus;
-//           UAUISelect activates. Buttons show the vanilla hover and focus state (black
-//           panel, red label, InGameMenu.c:365-380).
+//           sections; UAUINextUp and UAUINextDown (the triggers, :696-701) and Greet's own
+//           UANimbyGreetPageUp and UANimbyGreetPageDown (Page Up and Page Down, Data/Inputs.xml)
+//           page the body; the wheel scrolls it natively; the arrow keys, the D-pad and the stick
+//           move the engine's own button focus (Tab does nothing, G-P1-40); UAUISelect activates.
+//           Buttons show the vanilla hover and focus state (black panel, red label,
+//           InGameMenu.c:365-380).
+//           NIMBY-T-058: the "menu" exclude does not cover UAZeroingUp and UAZeroingDown (Page Up,
+//           Page Down, = and -, the D-pad; preset_X1MouseKey.xml:309-318), so a key read by this
+//           window also zeroed the weapon behind it (G-P1-40). OnShow force-disables both
+//           (UAInput.ForceDisable, UAInput.c:94); OnHide and the destructor release them.
 // Client  : UIScriptedMenu exists only on the client; the server never builds one.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
@@ -79,6 +85,7 @@ class NimbyGreetMenu extends UIScriptedMenu
     protected string m_CloseReason = "";
     protected bool m_NeverChecked;
     protected bool m_AddedExclude;
+    protected bool m_ZeroingDisabled;   // NIMBY-T-058
     protected int m_Selected = -1;
 
     protected TextWidget m_Title;
@@ -238,18 +245,41 @@ class NimbyGreetMenu extends UIScriptedMenu
             m_AddedExclude = true;
             NimbyGreetLog.Debug("input exclude added: menu");
         }
+        SetZeroingDisabled(true);
     }
 
     // NIMBY-T-052: the clip timer is queued on this menu; a menu destroyed without OnHide must not leave it queued.
+    // NIMBY-T-058: nor may it leave the weapon's zeroing disabled.
     void ~NimbyGreetMenu()
     {
         StopClips();
+        SetZeroingDisabled(false);
+    }
+
+    // NIMBY-T-058: zeroing off while the window is open, back on when it closes. Only this window's
+    // own disable is ever released; the flag keeps OnHide and the destructor from releasing twice.
+    protected void SetZeroingDisabled(bool disabled)
+    {
+        if (disabled == m_ZeroingDisabled)
+        {
+            return;
+        }
+        UAInputAPI api = GetUApi();
+        if (!api)
+        {
+            return;
+        }
+        api.GetInputByID(UAZeroingUp).ForceDisable(disabled);
+        api.GetInputByID(UAZeroingDown).ForceDisable(disabled);
+        m_ZeroingDisabled = disabled;
+        NimbyGreetLog.Debug("zeroing disabled=" + NimbyGreetLog.Bool(disabled));
     }
 
     override void OnHide()
     {
         super.OnHide();
         StopClips();
+        SetZeroingDisabled(false);
         if (m_AddedExclude)
         {
             Mission mission = g_Game.GetMission();
@@ -303,12 +333,12 @@ class NimbyGreetMenu extends UIScriptedMenu
             SelectSection(m_Selected + 1);
             return;
         }
-        if (api.GetInputByID(UAUINextUp).LocalPress())
+        if (api.GetInputByID(UAUINextUp).LocalPress() || Pressed(api, "UANimbyGreetPageUp"))
         {
             PageBody(-1);
             return;
         }
-        if (api.GetInputByID(UAUINextDown).LocalPress())
+        if (api.GetInputByID(UAUINextDown).LocalPress() || Pressed(api, "UANimbyGreetPageDown"))
         {
             PageBody(1);
             return;
@@ -576,7 +606,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         NimbyGreetConverted converted = m_ConvertedCache.Get(index);
         if (!converted)
         {
-            converted = NimbyGreetMarkdown.Convert(m_Language.sections.Get(index).body, m_MediaIds);
+            converted = NimbyGreetMarkdown.Convert(NimbyGreetText.BodyText(m_Language.sections.Get(index)), m_MediaIds);
             m_ConvertedCache.Set(index, converted);
             foreach (string note : converted.notes)
             {
@@ -1158,6 +1188,17 @@ class NimbyGreetMenu extends UIScriptedMenu
         // Table rows and the body re-measure on the next build; the cheap way to a correct layout is a rebuild.
         BuildBody(m_Selected);
         BuildLinks();
+    }
+
+    // A Greet input by name, the Ears and Legs precedent (GetInputByName, UAInput.c:218); false when unbound.
+    protected bool Pressed(UAInputAPI api, string name)
+    {
+        UAInput input = api.GetInputByName(name);
+        if (!input)
+        {
+            return false;
+        }
+        return input.LocalPress();
     }
 
     protected void PageBody(int direction)

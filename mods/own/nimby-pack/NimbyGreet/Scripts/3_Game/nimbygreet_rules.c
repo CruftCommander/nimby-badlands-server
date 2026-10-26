@@ -33,6 +33,13 @@ class NimbyGreetRules
     static const int MAX_HEADING_CHARS = 40;
     static const int MAX_ID_CHARS = 32;
 
+    // NIMBY-T-055 (G-P1-34, G-P1-35): JsonSerializer.ReadFromString keeps at most this many bytes of
+    // any one string value and drops the rest without an error (6,000 ASCII characters came back as
+    // 1,023; 1,840 bytes of Cyrillic as 1,022, the cut letter dropped whole). A section body is
+    // therefore an array of lines, each one string. A line this close to the limit may have been cut.
+    static const int ENGINE_STRING_BYTES = 1023;
+    static const int ENGINE_STRING_WARN_BYTES = 1021;
+
     // G5: bytes per chunk (NIMBY-T-037, measured cap in (1,000, 1,100]).
     static const int CHUNK_BYTES = 1000;
     // G5: the reassembled Language JSON may not exceed this many bytes: MAX_TOTAL_CHARS at four

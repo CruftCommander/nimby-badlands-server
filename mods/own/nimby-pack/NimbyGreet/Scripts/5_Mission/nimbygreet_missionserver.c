@@ -14,6 +14,10 @@
 // Note    : NIMBY-T-042: the engine prints its own "SCRIPT (E): JSON ERROR" on a malformed
 //           file no matter what this file does. scripts/Test-GreetText.ps1 is what keeps a
 //           malformed file off the host; this code keeps players served meanwhile.
+//           NIMBY-T-056: that error came once per re-read of the same bad file (G-P1-36, -37),
+//           so one per join. The file is read as text first (the JsonFileLoader.c:11-21 steps)
+//           and an unchanged copy of the last bad text is not parsed again: one engine error
+//           per distinct bad file.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
 
@@ -28,6 +32,8 @@ modded class MissionServer extends MissionBase
     protected string m_NimbyGreetSource = "none";                 // greet.json | greet.json.lkg | default | none
     protected string m_NimbyGreetLastError = "";                  // last parse error logged, so a re-read logs only a change
     protected string m_NimbyGreetLastFallback = "";               // last fallback reason logged
+    protected string m_NimbyGreetLastBadText = "";                // NIMBY-T-056: the text of the last file that did not parse
+    protected bool m_NimbyGreetHaveBadText;
 
     override void OnInit()
     {
@@ -84,11 +90,26 @@ modded class MissionServer extends MissionBase
             NimbyGreetLoadLkg("missing");
             return;
         }
+        string raw;
+        if (!NimbyGreetReadRaw(NimbyGreetRules.FILE_TEXT, raw))
+        {
+            NimbyGreetLog.Info("greet.json cannot be opened for reading");
+            NimbyGreetLoadLkg("unreadable");
+            return;
+        }
+        if (m_NimbyGreetHaveBadText && raw == m_NimbyGreetLastBadText)
+        {
+            NimbyGreetLoadLkg("invalid");
+            return;
+        }
         NimbyGreetFile data = new NimbyGreetFile();
         string error;
-        bool loaded = JsonFileLoader<NimbyGreetFile>.LoadFile(NimbyGreetRules.FILE_TEXT, data, error);
+        JsonSerializer serializer = new JsonSerializer();
+        bool loaded = serializer.ReadFromString(data, raw, error);
         if (!loaded)
         {
+            m_NimbyGreetLastBadText = raw;
+            m_NimbyGreetHaveBadText = true;
             if (error != m_NimbyGreetLastError)
             {
                 m_NimbyGreetLastError = error;
@@ -97,6 +118,8 @@ modded class MissionServer extends MissionBase
             NimbyGreetLoadLkg("invalid");
             return;
         }
+        m_NimbyGreetLastBadText = "";
+        m_NimbyGreetHaveBadText = false;
         m_NimbyGreetLastError = "";
         int previousVersion = -1;
         if (m_NimbyGreetFile)
@@ -113,6 +136,20 @@ modded class MissionServer extends MissionBase
         {
             CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
         }
+    }
+
+    // The whole file as text, the way JsonFileLoader.LoadFile reads it (JsonFileLoader.c:11-21).
+    protected bool NimbyGreetReadRaw(string path, out string raw)
+    {
+        raw = "";
+        FileHandle handle = OpenFile(path, FileMode.READ);
+        if (handle == 0)
+        {
+            return false;
+        }
+        ReadFile(handle, raw, 100000000);
+        CloseFile(handle);
+        return true;
     }
 
     protected void NimbyGreetLoadLkg(string because)
