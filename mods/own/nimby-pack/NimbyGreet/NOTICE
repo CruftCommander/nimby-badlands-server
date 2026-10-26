@@ -17,6 +17,12 @@ English text until a font with those glyphs is proven (plan v0.4, G14, NIMBY-T-0
 
 Changes, newest first:
 
+- October 26, 2026, Phase 1 runs 1 to 4 (docs/testing/2026-10-26-greet-phase1.md): a cooldown
+  refusal is a bare done with the time left and the client retries once (NIMBY-T-047); chrome
+  strings fall back to English when the string table does not resolve (NIMBY-T-048); table
+  cells wrap and rows grow; the link-row label is a button; footer and link buttons have a
+  visible panel; tables get air above and below; the open wait polls at 250 ms; the dropchunk
+  debug flag and a 20 s fetch give-up for G-21.
 - October 26, 2026, Phase 1 step (c), plan v0.4: the window. Added 5_Mission nimbygreet_menu.c
   (NimbyGreetMenu: section list, block body in a ScrollWidget, link rows, footer; the "menu"
   input exclude on show and hide per NIMBY-T-039; frame-flip media per G15), the layouts under

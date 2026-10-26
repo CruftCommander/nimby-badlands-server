@@ -45,6 +45,7 @@ modded class MissionGameplay extends MissionBase
     protected ref NimbyGreetMenu m_NimbyGreetMenu;
     protected ref NimbyGreetManifest m_NimbyGreetManifest;
     protected bool m_NimbyGreetRetryPending;
+    protected bool m_NimbyGreetDropArmed;   // G-21: $profile:NimbyGreet\dropchunk drops chunk index 1 of the next response once
 
     override void OnInit()
     {
@@ -62,6 +63,11 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Hit().Insert(NimbyGreetOnHit);
         NimbyGreetDetectLanguage();
         NimbyGreetLoadManifest();
+        m_NimbyGreetDropArmed = FileExist(NimbyGreetRules.FILE_DROPCHUNK);
+        if (m_NimbyGreetDropArmed)
+        {
+            NimbyGreetLog.Info("debug: dropchunk flag present; chunk index 1 of the next response will be dropped once (G-21)");
+        }
         string ready = "client ready; input bound=" + NimbyGreetLog.Bool(m_NimbyGreetInput != null) + " language detected=" + m_NimbyGreetDetectedLanguage + " prefLanguage=" + m_NimbyGreetPrefs.language;
         ready = ready + " neverShow=" + NimbyGreetLog.Bool(m_NimbyGreetSeen.neverShow) + " dismissedVersion=" + m_NimbyGreetSeen.dismissedVersion.ToString();
         ready = ready + " textScale=" + m_NimbyGreetPrefs.textScale.ToString() + " animations=" + NimbyGreetLog.Bool(m_NimbyGreetPrefs.playAnimations);
@@ -171,11 +177,35 @@ modded class MissionGameplay extends MissionBase
         string language = NimbyGreetRequestLanguage();
         m_NimbyGreetFetch.Begin(requestId, language, manual, GetGame().GetTickTime());
         player.NimbyGreetSendRequest(requestId, language, m_NimbyGreetSeen.dismissedVersion, m_NimbyGreetSeen.neverShow, manual);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetFetchTimeout, NimbyGreetRules.FETCH_TIMEOUT_MS, false, requestId);
         return requestId;
+    }
+
+    // G-21: a payload that never completes is given up once, with the counts; nothing partial ever opens.
+    protected void NimbyGreetFetchTimeout(int requestId)
+    {
+        if (m_NimbyGreetFetch.m_RequestId != requestId)
+        {
+            return;
+        }
+        if (m_NimbyGreetFetch.IsComplete() || m_NimbyGreetFetch.IsRefused())
+        {
+            return;
+        }
+        string gaveUp = "fetch gave up id=" + requestId.ToString() + " received=" + m_NimbyGreetFetch.m_Received.ToString() + " of " + m_NimbyGreetFetch.m_ChunkCount.ToString();
+        gaveUp = gaveUp + " doneSeen=" + NimbyGreetLog.Bool(m_NimbyGreetFetch.m_DoneSeen) + " source=" + m_NimbyGreetPendingSource + " (Insert sends a new request)";
+        NimbyGreetLog.Info(gaveUp);
+        m_NimbyGreetFetch.Begin(0, "", false, 0.0);
     }
 
     void NimbyGreetOnChunk(int requestId, int index, string text)
     {
+        if (m_NimbyGreetDropArmed && index == 1 && requestId == m_NimbyGreetFetch.m_RequestId)
+        {
+            m_NimbyGreetDropArmed = false;
+            NimbyGreetLog.Info("debug: dropchunk dropped index 1 of id=" + requestId.ToString() + " (G-21)");
+            return;
+        }
         string why;
         if (!m_NimbyGreetFetch.AcceptChunk(requestId, index, text, GetGame().GetTickTime(), why))
         {

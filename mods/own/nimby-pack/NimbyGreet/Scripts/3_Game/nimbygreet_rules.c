@@ -46,6 +46,7 @@ class NimbyGreetRules
     static const float DEFAULT_OPEN_RETRY_SECONDS = 30.0;
     static const float DEFAULT_COOLDOWN_SECONDS = 5.0;
     static const float DEFAULT_REREAD_SECONDS = 10.0;
+    static const int FETCH_TIMEOUT_MS = 20000;   // a request with no complete payload by then is given up with one log line (G-21)
     static const int OPEN_RETRY_MS = 250;   // Phase 1 run 1: 1,000 ms made the open feel late behind the respawn countdown
     static const float MIN_OPEN_DELAY_SECONDS = 0.0;
     static const float MAX_OPEN_DELAY_SECONDS = 30.0;
