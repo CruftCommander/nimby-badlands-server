@@ -1,54 +1,91 @@
 // -----------------------------------------------------------------------------
 // NimbyGreet - rules: the constants every other Greet file reads, and the engine-free
-// validators the self-test runs (shared rules 8). No engine call in this file.
-// Plan : docs/plans/2026-10-21-greet-plan.md v0.3, G1 (ids), G5 (chunking), G9 (caps),
-//        G17 (files). A cap change is a plan change first.
-// Phase 0 additions (October 2026): the UTF-8 safe chunk cut (ChunkEnd, SplitChunks) and
-// the byte-exact string builders the item 8 ceiling test uses on both machines (Repeat,
-// FillBytes). string.Length and Substring count bytes, LengthUtf8 and SubstringUtf8
-// count characters (1_Core/DayZ/proto/EnString.c:137,199,206,212); string.Get(index)
-// returns the byte at index as a one-byte string (EnString.c:448) and ToAscii (:86)
-// gives its value, so a UTF-8 continuation byte (10xxxxxx) can be recognized and a
-// chunk cut backed off to a character boundary.
+// decisions the self-test covers (shared rules 8). No engine call in this file.
+// Plan : docs/plans/2026-10-21-greet-plan.md v0.4: G1 (ids), G4 (dismissal), G5
+//        (chunking, delays), G9 (caps), G10 (links), G14 (languages), G17 (files).
+//        A cap or constant change is a plan change first.
+// Phase 0: CHUNK_BYTES is 1,000 because an RPC string arrives intact at 1,000 bytes and
+//        throws "String CORRUPTED" on Read at 1,100 and above (NIMBY-T-037); the UTF-8
+//        safe cut (ChunkEnd, SplitChunks) keeps every chunk on a character boundary.
+//        string.Length and Substring count bytes, LengthUtf8 and SubstringUtf8 count
+//        characters (1_Core/DayZ/proto/EnString.c:137,199,206,212); string.Get(index)
+//        returns the byte at index as a one-byte string (EnString.c:448) and ToAscii
+//        (:86) gives its value, so a continuation byte (10xxxxxx) can be recognized.
 // Style: one statement per line.
 // -----------------------------------------------------------------------------
 
 class NimbyGreetRules
 {
-    // G1, G5: the 65511xx block (shared rules 4.1, row pending the v1.4 amendment).
+    // G1, G5: the 65511xx block (shared rules v1.4, 4.1).
     static const int RPC_REQUEST = 6551101;   // client to server
     static const int RPC_CHUNK = 6551102;     // server to the owning client
     static const int RPC_DONE = 6551103;      // server to the owning client
 
-    // G9 caps, per language.
+    // G9 caps, per language. Characters, not bytes.
     static const int MAX_SECTIONS = 16;
     static const int MAX_BODY_CHARS = 4000;
     static const int MAX_LINKS_PER_SECTION = 8;
     static const int MAX_MEDIA_PER_SECTION = 4;
+    static const int MAX_TABLES_PER_SECTION = 2;
     static const int MAX_TOTAL_CHARS = 40000;
     static const int MAX_TITLE_CHARS = 60;
     static const int MAX_TAGLINE_CHARS = 80;
     static const int MAX_HEADING_CHARS = 40;
     static const int MAX_ID_CHARS = 32;
 
-    // G5: bytes per chunk. Phase 0 run 1 (October 25, 2026): a 1,000-byte RPC string arrives intact,
-    // a 1,500-byte one throws "String CORRUPTED" on Read; 1000 pending the run 2 narrowing.
+    // G5: bytes per chunk (NIMBY-T-037, measured cap in (1,000, 1,100]).
     static const int CHUNK_BYTES = 1000;
+    // G5: the reassembled Language JSON may not exceed this many bytes: MAX_TOTAL_CHARS at four
+    // bytes a character plus the keys, quotes and escapes of 16 sections. Anything larger is a
+    // forged or broken response and is dropped.
+    static const int MAX_PAYLOAD_BYTES = 164000;
+
+    // G5: client and server timing. The server values are defaults for greet.json fields.
+    static const int FETCH_DELAY_MS = 500;
+    static const float DEFAULT_OPEN_DELAY_SECONDS = 1.0;      // Jeff, G-P0-49
+    static const float DEFAULT_OPEN_RETRY_SECONDS = 30.0;
+    static const float DEFAULT_COOLDOWN_SECONDS = 5.0;
+    static const float DEFAULT_REREAD_SECONDS = 10.0;
+    static const int OPEN_RETRY_MS = 1000;
+    static const float MIN_OPEN_DELAY_SECONDS = 0.0;
+    static const float MAX_OPEN_DELAY_SECONDS = 30.0;
+    static const float MAX_OPEN_RETRY_SECONDS = 300.0;
 
     // G5, G6: UIScriptedMenu id; vanilla's highest is MENU_UNDERGROUND_TRIGGER_EDITOR = 48 (constants.c:223).
     static const int MENU_ID = 65511;
+
+    // G15: frames per clip (ImageWidget.LoadImageFile slots 0 to 7, EnWidgets.c:257).
+    static const int MAX_FRAMES = 8;
+    static const int MIN_FRAME_MS = 50;
+
+    // G16: text scale steps.
+    static const float TEXT_SCALE_NORMAL = 1.0;
+    static const float TEXT_SCALE_LARGE = 1.25;
+    static const float TEXT_SCALE_LARGER = 1.5;
 
     // G3, G4, G17: file names under $profile:NimbyGreet\.
     static const string DIR = "$profile:NimbyGreet";
     static const string FILE_TEXT = "$profile:NimbyGreet\\greet.json";
     static const string FILE_TEXT_LKG = "$profile:NimbyGreet\\greet.json.lkg";
+    static const string FILE_TEXT_TMP = "$profile:NimbyGreet\\greet.json.tmp";
     static const string FILE_SEEN = "$profile:NimbyGreet\\seen.json";
+    static const string FILE_SEEN_TMP = "$profile:NimbyGreet\\seen.json.tmp";
     static const string FILE_PREFS = "$profile:NimbyGreet\\prefs.json";
+    static const string FILE_PREFS_TMP = "$profile:NimbyGreet\\prefs.json.tmp";
     static const string FILE_DEBUG = "$profile:NimbyGreet\\debug";
     static const string FILE_SELFTEST = "$profile:NimbyGreet\\selftest";
+    static const string FILE_DROPCHUNK = "$profile:NimbyGreet\\dropchunk";
+    static const string MEDIA_PREFIX = "NimbyGreet/Media/";
+    static const string MANIFEST_PATH = "NimbyGreet/Media/manifest.json";
 
-    // Cuts text to at most cap characters (UTF-8 characters, not bytes: EnString.c:137,206).
-    // Returns the input when it fits.
+    // G14: the 14 vanilla stringtable columns (languagecore/stringtable.csv:1), the only language keys.
+    static ref array<string> LANGUAGES = {"original", "english", "czech", "german", "russian", "polish", "hungarian", "italian", "spanish", "french", "chinese", "japanese", "portuguese", "chinesesimp"};
+    // G14: columns whose glyphs sdf_MetronLight24 lacks (G-P0-27); refused until a font is proven.
+    static ref array<string> CJK_LANGUAGES = {"chinese", "japanese", "chinesesimp"};
+
+    // ---- text caps ---------------------------------------------------------------------------
+
+    // Cuts text to at most cap characters (UTF-8 characters, not bytes). Returns the input when it fits.
     static string CapText(string text, int cap)
     {
         if (cap < 0)
@@ -62,7 +99,9 @@ class NimbyGreetRules
         return text.SubstringUtf8(0, cap);
     }
 
-    // How many chunks of CHUNK_BYTES a serialized payload of the given byte length needs (G5). 0 for 0.
+    // ---- chunking (G5) -----------------------------------------------------------------------
+
+    // How many chunks of CHUNK_BYTES a serialized payload of the given byte length needs. 0 for 0.
     static int ChunkCount(int bytes)
     {
         if (bytes <= 0)
@@ -70,6 +109,12 @@ class NimbyGreetRules
             return 0;
         }
         return (bytes + CHUNK_BYTES - 1) / CHUNK_BYTES;
+    }
+
+    // The most chunks any legitimate response can carry.
+    static int MaxChunkCount()
+    {
+        return ChunkCount(MAX_PAYLOAD_BYTES);
     }
 
     // True when the byte at index is a UTF-8 continuation byte (0x80 to 0xBF). False outside the string.
@@ -157,9 +202,7 @@ class NimbyGreetRules
         return result;
     }
 
-    // unit repeated until the text holds bytes bytes, then cut on a character boundary at or below
-    // bytes. Exact when bytes is a multiple of the unit's byte length. Used by the item 8 ceiling
-    // test on both machines, so the client can rebuild what the server sent.
+    // unit repeated until the text holds bytes bytes, then cut on a character boundary at or below bytes.
     static string FillBytes(string unit, int bytes)
     {
         int unitBytes = unit.Length();
@@ -177,68 +220,203 @@ class NimbyGreetRules
         return text.Substring(0, end);
     }
 
-    // Returns the number of failures; the caller prints one PASS|FAIL line per case.
-    static int SelfTest(out array<string> results)
-    {
-        int failures = 0;
-        failures += SelfTestCase(results, "cap: short text unchanged", CapText("abc", 10) == "abc");
-        failures += SelfTestCase(results, "cap: long text cut to cap", CapText("abcdef", 3) == "abc");
-        failures += SelfTestCase(results, "cap: zero cap gives empty", CapText("abc", 0) == "");
-        failures += SelfTestCase(results, "chunks: 0 chars is 0 chunks", ChunkCount(0) == 0);
-        failures += SelfTestCase(results, "chunks: one char is 1 chunk", ChunkCount(1) == 1);
-        failures += SelfTestCase(results, "chunks: exact multiple", ChunkCount(CHUNK_BYTES * 2) == 2);
-        failures += SelfTestCase(results, "chunks: one over rounds up", ChunkCount(CHUNK_BYTES * 2 + 1) == 3);
-        failures += SelfTestCase(results, "chunks: 40000 bytes is 40 chunks", ChunkCount(40000) == 40);
-        failures += SelfTestCase(results, "cap: multibyte text cut by characters", CapText("дайз", 2).LengthUtf8() == 2);
-        failures += SelfTestCase(results, "utf8: ascii byte is not a continuation byte", IsContinuationByte("abc", 1) == false);
-        failures += SelfTestCase(results, "utf8: second byte of a cyrillic char is a continuation byte", IsContinuationByte("дайз", 1) == true);
-        failures += SelfTestCase(results, "utf8: lead byte of a cyrillic char is not a continuation byte", IsContinuationByte("дайз", 2) == false);
-        failures += SelfTestCase(results, "utf8: chunk end backs off a split 2-byte char", ChunkEnd("дайз", 0, 3) == 2);
-        failures += SelfTestCase(results, "utf8: chunk end keeps an exact boundary", ChunkEnd("дайз", 0, 4) == 4);
-        failures += SelfTestCase(results, "utf8: chunk end past the end is the length", ChunkEnd("abc", 0, 10) == 3);
-        failures += SelfTestCase(results, "fill: ascii gives exact bytes", FillBytes("a", 10).Length() == 10);
-        failures += SelfTestCase(results, "fill: cyrillic rounds down to a whole char", FillBytes("д", 5).Length() == 4);
-        failures += SelfTestCase(results, "fill: cjk exact multiple of 3 bytes", FillBytes("字", 9).Length() == 9);
-        array<string> parts;
-        int count = SplitChunks(FillBytes("a", 80), 32, parts);
-        failures += SelfTestCase(results, "split: 80 ascii bytes at 32 is 3 chunks", count == 3);
-        failures += SelfTestCase(results, "split: chunks rejoin to the input", Rejoin(parts) == FillBytes("a", 80));
-        count = SplitChunks(FillBytes("д", 20), 7, parts);
-        failures += SelfTestCase(results, "split: cyrillic at 7 bytes is 4 chunks of 6 bytes", count == 4 && parts.Get(0).Length() == 6);
-        failures += SelfTestCase(results, "split: cyrillic chunks never split a char", ChunksAreWholeChars(parts, 2));
-        return failures;
-    }
+    // ---- dismissal (G4) ----------------------------------------------------------------------
 
-    protected static string Rejoin(array<string> parts)
+    // Whether the window opens by itself for a client in this state. The server applies it to decide
+    // between chunks and a bare done; the client applies the same rule to the done record.
+    static bool ShouldAutoOpen(bool neverShow, int dismissedVersion, bool forceShow, int version)
     {
-        string result = "";
-        foreach (string part : parts)
+        if (!neverShow)
         {
-            result = result + part;
+            return true;
         }
-        return result;
+        if (!forceShow)
+        {
+            return false;
+        }
+        return version > dismissedVersion;
     }
 
-    protected static bool ChunksAreWholeChars(array<string> parts, int bytesPerChar)
+    // ---- languages (G14) ---------------------------------------------------------------------
+
+    static bool IsKnownLanguage(string name)
     {
-        foreach (string part : parts)
+        return LANGUAGES.Find(name) >= 0;
+    }
+
+    static bool IsCjkLanguage(string name)
+    {
+        return CJK_LANGUAGES.Find(name) >= 0;
+    }
+
+    // The language to serve: the requested one when the file has it, else the default.
+    static string PickLanguage(string requested, array<string> available, string defaultLanguage)
+    {
+        if (available.Find(requested) >= 0)
         {
-            if (part.Length() != part.LengthUtf8() * bytesPerChar)
-            {
-                return false;
-            }
+            return requested;
+        }
+        return defaultLanguage;
+    }
+
+    // ---- links (G10) -------------------------------------------------------------------------
+
+    // Only https:// links, with a host, and nothing that could break the row or the markup.
+    static bool IsAcceptedUrl(string url)
+    {
+        if (url.IndexOf("https://") != 0)
+        {
+            return false;
+        }
+        if (url.Length() <= 8)
+        {
+            return false;
+        }
+        if (url.Length() > 2048)
+        {
+            return false;
+        }
+        if (ContainsAny(url, " \t\r\n<>\"'"))
+        {
+            return false;
         }
         return true;
     }
 
-    protected static int SelfTestCase(out array<string> results, string name, bool passed)
+    // ---- ids (data format) -------------------------------------------------------------------
+
+    // [a-z0-9-], 1 to MAX_ID_CHARS, not starting or ending with -.
+    static bool IsValidId(string id)
     {
-        if (passed)
+        int length = id.Length();
+        if (length < 1)
         {
-            results.Insert("PASS " + name);
-            return 0;
+            return false;
         }
-        results.Insert("FAIL " + name);
-        return 1;
+        if (length > MAX_ID_CHARS)
+        {
+            return false;
+        }
+        int i = 0;
+        while (i < length)
+        {
+            int code = id.Get(i).ToAscii();
+            bool lower = code >= 97 && code <= 122;
+            bool digit = code >= 48 && code <= 57;
+            bool dash = code == 45;
+            if (!lower && !digit && !dash)
+            {
+                return false;
+            }
+            if (dash && (i == 0 || i == length - 1))
+            {
+                return false;
+            }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    // A clip id may not end in -<digit>, so <id>-0.edds of one clip can never be another still's name.
+    static bool IsValidMediaId(string id)
+    {
+        if (!IsValidId(id))
+        {
+            return false;
+        }
+        int length = id.Length();
+        if (length < 3)
+        {
+            return true;
+        }
+        if (id.Get(length - 2) != "-")
+        {
+            return true;
+        }
+        int code = id.Get(length - 1).ToAscii();
+        if (code >= 48 && code <= 57)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    // ---- small string helpers shared by the converter and the server -------------------------
+
+    static bool ContainsAny(string text, string chars)
+    {
+        int i = 0;
+        int length = chars.Length();
+        while (i < length)
+        {
+            if (text.IndexOf(chars.Get(i)) >= 0)
+            {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
+
+    // Splits on "\n" and keeps empty lines (string.Split drops them, EnString.c:396). A trailing "\r" is removed.
+    static void SplitLines(string text, out array<string> lines)
+    {
+        lines = new array<string>;
+        int length = text.Length();
+        int start = 0;
+        while (start <= length)
+        {
+            int next = text.IndexOfFrom(start, "\n");
+            if (next < 0)
+            {
+                next = length;
+            }
+            string line = text.Substring(start, next - start);
+            int lineLength = line.Length();
+            if (lineLength > 0)
+            {
+                if (line.Get(lineLength - 1) == "\r")
+                {
+                    line = line.Substring(0, lineLength - 1);
+                }
+            }
+            lines.Insert(line);
+            start = next + 1;
+        }
+    }
+
+    static bool StartsWith(string text, string prefix)
+    {
+        if (prefix.Length() > text.Length())
+        {
+            return false;
+        }
+        return text.IndexOf(prefix) == 0;
+    }
+
+    static float ClampFloat(float value, float low, float high)
+    {
+        if (value < low)
+        {
+            return low;
+        }
+        if (value > high)
+        {
+            return high;
+        }
+        return value;
+    }
+
+    static int ClampInt(int value, int low, int high)
+    {
+        if (value < low)
+        {
+            return low;
+        }
+        if (value > high)
+        {
+            return high;
+        }
+        return value;
     }
 }

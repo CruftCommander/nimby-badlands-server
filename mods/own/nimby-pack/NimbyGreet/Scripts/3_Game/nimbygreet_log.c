@@ -1,9 +1,8 @@
 // -----------------------------------------------------------------------------
 // NimbyGreet - logging (shared rules 4.2, 4.3).
 // Purpose : [NIMBY][Greet] lines. Info is unconditional; Debug prints only when
-//           $profile:NimbyGreet\debug exists (read once, at first use). Probe lines
-//           (Phase 0) print unconditionally under [NIMBY][Greet][Probe] so the test
-//           record needs no flag file on either machine; the probe is replaced in Phase 1.
+//           $profile:NimbyGreet\debug exists (read once, at first use). The Phase 0
+//           [Probe] level is gone with the probe.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
 
@@ -15,11 +14,6 @@ class NimbyGreetLog
     static void Info(string message)
     {
         Print("[NIMBY][Greet] " + message);
-    }
-
-    static void Probe(string message)
-    {
-        Print("[NIMBY][Greet][Probe] " + message);
     }
 
     static void Debug(string message)

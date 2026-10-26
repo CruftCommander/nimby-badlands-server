@@ -4,20 +4,25 @@ InGameMenu classes (Bohemia Interactive) to fetch and show the server welcome te
 third-party mod code. Media shipped under Media/ is listed here with its source and license at
 each release (plan G15).
 
-Media (Phase 0 probe only; removed before the release gate, plan G15):
-
-- Media/probe.mp4: generated October 26, 2026 with ffmpeg (lavfi color source plus drawtext,
-  DejaVu Sans), a dark 320x180 frame with the text NIMBY sliding across for 3 s, looped, silent,
-  H.264 yuv420p, 7 KB. No third-party content; no license applies beyond this repository's.
-- Media/probe-base.mp4, probe-base-aac.mp4, probe-high-aac.mp4, probe-mpeg4.mp4: the same clip
-  re-encoded for the run 2 decode probe (H.264 Constrained Baseline without and with a silent AAC
-  track, H.264 High with AAC, MPEG-4 Part 2 Simple Profile). Same source, same terms.
-- Media/probe.png, Media/probe.edds: generated the same way, a 512x256 still of the text NIMBY
-  (ImageToPAA refuses a 320x180 source: "Img is not of power of 2 size"), converted with DayZ
-  Tools ImageToPAA. Same terms.
+Media: none. Release 1 ships no media (plan G15; Jeff, October 25, 2026). The Phase 0 probe
+files (probe.mp4 and its four re-encodings, probe.png, probe.edds; all generated with ffmpeg
+and DayZ Tools ImageToPAA, no third-party content) were deleted on October 26, 2026 at Phase 1
+step (a). Their record is docs/testing/2026-10-25-greet-phase0.md.
 
 Changes, newest first:
 
+- October 26, 2026, Phase 1 step (a) and (b), plan v0.4: the Phase 0 probe is replaced.
+  Deleted nimbygreet_probepayload.c, nimbygreet_probemenu.c, GUI/nimbygreet_probe.layout,
+  Media/probe*, the [Probe] log level, and the probe title string. 3_Game is now
+  nimbygreet_rules.c (constants, caps, chunk math, dismissal, languages, links, ids),
+  nimbygreet_text.c (the JSON shapes and the G9 cap pass), nimbygreet_markdown.c (the G13
+  converter), nimbygreet_chunks.c (the done record and the validated fetch), nimbygreet_client.c
+  (the invokers), nimbygreet_clientfiles.c (seen.json and prefs.json), nimbygreet_selftest.c
+  (22 Phase 0 cases plus the converter, cap, rule and fetch cases). 4_World PlayerBase keeps the
+  RPC plumbing with the owner check; the server answer moved to 5_Mission MissionServer
+  (greet.json with .lkg and the default, re-read on request, per-identity cooldown, chunked
+  send). MissionGameplay fetches, validates, converts and schedules the open; the window itself
+  is step (c). The done record is one JSON string (Param3) instead of a Param6.
 - October 26, 2026, Phase 0 probe: config.cpp gains Data/Inputs.xml (UANimbyGreetOpen, default
   Insert), the World dependency and 4_World module. Added nimbygreet_log.c, nimbygreet_client.c
   (fetch state, 4_World to 5_Mission invokers), nimbygreet_probepayload.c, 4_World
@@ -27,7 +32,7 @@ Changes, newest first:
   GUI/nimbygreet_probe.layout (the probe window), stringtable.csv (language key and probe
   title in all 14 vanilla columns; the probe title is machine-written, not translated). Rules
   gained the UTF-8 safe chunk cut and byte-exact builders with 13 new self-test cases (22 total).
-  Probe code is replaced in Phase 1; see docs/testing/2026-10-26-greet-phase0.md.
+  Probe code is replaced in Phase 1; see docs/testing/2026-10-25-greet-phase0.md.
 - October 25, 2026, stub: config.cpp, the rules constants (caps from plan G9, RPC ids
   from G1 and G5, the file names), and nine self-test cases, so the pack.json row builds
   and the boot check's self-test gate sees Greet (shared rules 8). No window yet.
