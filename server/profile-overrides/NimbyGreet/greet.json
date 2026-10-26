@@ -20,7 +20,7 @@
         {
           "id": "rules",
           "heading": "The one rule",
-          "body": "# Don't be a dick.\n\nThat is the whole rulebook. There are no PvP or PvE zones, no safe zones, and no rules on how you play: choose your own adventure.\n\nGlitch bases (built through walls, floors, or terrain) are the one exception: they get removed."
+          "body": "# Don't be a dick.\n\nThat is the whole rulebook. There are no PvP or PvE zones, no safe zones, and no rules on how you play: choose your own adventure."
         },
         {
           "id": "discord",
@@ -45,7 +45,7 @@
         {
           "id": "enhanced-vanilla",
           "heading": "Enhanced Vanilla",
-          "body": "# Vanilla-plus, not easier\n\n- **Weight hits harder.** The stamina penalty starts at 5 kg carried (vanilla is 6 kg) and costs 2% per kg (vanilla is 1.75%). At 15 kg you have 80% stamina instead of 84%.\n- **No hit direction indicator.** The red hit flash stays; find the shooter by sound.\n- **More base building spots.** Placement angle and collision checks are relaxed. Glitch bases are still against the rules and get removed.\n\nLoot is stock Nasdara for now. Tuning comes once we see how the map plays."
+          "body": "# Vanilla-plus, not easier\n\n- **Weight hits harder.** The stamina penalty starts at 5 kg carried (vanilla is 6 kg) and costs 2% per kg (vanilla is 1.75%). At 15 kg you have 80% stamina instead of 84%.\n- **No hit direction indicator.** The red hit flash stays; find the shooter by sound.\n- **More base building spots.** Placement angle and collision checks are relaxed.\n\nLoot is stock Nasdara for now. Tuning comes once we see how the map plays."
         },
         {
           "id": "mods",

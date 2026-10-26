@@ -30,6 +30,7 @@ class NimbyGreetDone
     int totalBytes = 0;
     int hash = 0;
     string reason = "";   // why nothing was sent when chunkCount is 0: "dismissed", "no-text", "cooldown"
+    float retryAfterSeconds = 0;   // with reason "cooldown": how long until the server will answer again
 
     static string ToJson(NimbyGreetDone done)
     {

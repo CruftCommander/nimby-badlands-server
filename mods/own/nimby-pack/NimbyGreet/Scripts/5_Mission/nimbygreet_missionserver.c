@@ -232,6 +232,8 @@ modded class MissionServer extends MissionBase
         {
             if (now - last < cooldown)
             {
+                // Phase 1 run 1: a silent refusal left the language selector waiting on nothing. The refusal
+                // is now a bare done with the time left, and a manual request retries itself once after it.
                 float lastLog;
                 bool logged = m_NimbyGreetLastRefusedLog.Find(key, lastLog);
                 if (!logged || now - lastLog >= cooldown)
@@ -239,6 +241,10 @@ modded class MissionServer extends MissionBase
                     m_NimbyGreetLastRefusedLog.Set(key, now);
                     NimbyGreetLog.Info("request refused reason=cooldown id=" + requestId.ToString() + " " + who);
                 }
+                NimbyGreetDone refused = new NimbyGreetDone();
+                refused.reason = "cooldown";
+                refused.retryAfterSeconds = cooldown - (now - last);
+                player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(refused));
                 return;
             }
         }

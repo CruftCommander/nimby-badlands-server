@@ -44,6 +44,7 @@ modded class MissionGameplay extends MissionBase
     protected int m_NimbyGreetSpawnCount;
     protected ref NimbyGreetMenu m_NimbyGreetMenu;
     protected ref NimbyGreetManifest m_NimbyGreetManifest;
+    protected bool m_NimbyGreetRetryPending;
 
     override void OnInit()
     {
@@ -160,6 +161,7 @@ modded class MissionGameplay extends MissionBase
             return -1;
         }
         int requestId = NimbyGreetClient.NextRequestId();
+        m_NimbyGreetRetryPending = false;
         if (m_NimbyGreetFetch.IsActive() && !m_NimbyGreetFetch.IsComplete())
         {
             NimbyGreetLog.Debug("request id=" + requestId.ToString() + " replaces incomplete id=" + m_NimbyGreetFetch.m_RequestId.ToString() + " (received=" + m_NimbyGreetFetch.m_Received.ToString() + ")");
@@ -216,6 +218,11 @@ modded class MissionGameplay extends MissionBase
         bool manual = m_NimbyGreetFetch.m_Manual;
         if (m_NimbyGreetFetch.m_ChunkCount == 0)
         {
+            if (done.reason == "cooldown")
+            {
+                NimbyGreetScheduleRetry(done.retryAfterSeconds, manual);
+                return;
+            }
             NimbyGreetLog.Info("nothing to show id=" + m_NimbyGreetFetch.m_RequestId.ToString() + " reason=" + done.reason + " version=" + done.version.ToString() + " manual=" + NimbyGreetLog.Bool(manual));
             if (!manual)
             {
@@ -223,6 +230,7 @@ modded class MissionGameplay extends MissionBase
             }
             return;
         }
+        m_NimbyGreetRetryPending = false;
         string assembled = m_NimbyGreetFetch.Assemble();
         string verdict = m_NimbyGreetFetch.Verify(assembled);
         int elapsed = m_NimbyGreetFetch.ElapsedMs();
@@ -274,6 +282,34 @@ modded class MissionGameplay extends MissionBase
         int delayMs = (int)(delaySeconds * 1000.0);
         NimbyGreetLog.Debug("open scheduled in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource);
         g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, delayMs, false);
+    }
+
+    // A cooldown refusal (G5 rate limit) retries the same request once when the window is waiting on it.
+    protected void NimbyGreetScheduleRetry(float afterSeconds, bool manual)
+    {
+        if (m_NimbyGreetRetryPending)
+        {
+            NimbyGreetLog.Debug("cooldown refusal while a retry is already pending; dropped");
+            return;
+        }
+        int delayMs = (int)(afterSeconds * 1000.0) + 150;
+        if (delayMs < 150)
+        {
+            delayMs = 150;
+        }
+        m_NimbyGreetRetryPending = true;
+        NimbyGreetLog.Debug("request refused by cooldown; retry in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource + " manual=" + NimbyGreetLog.Bool(manual));
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetRetryRequest, delayMs, false, manual);
+    }
+
+    protected void NimbyGreetRetryRequest(bool manual)
+    {
+        if (!m_NimbyGreetRetryPending)
+        {
+            return;
+        }
+        m_NimbyGreetRetryPending = false;
+        NimbyGreetSendRequest(manual, m_NimbyGreetPendingSource);
     }
 
     // ---- open (G5) ---------------------------------------------------------------------------

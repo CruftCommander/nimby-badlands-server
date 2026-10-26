@@ -55,8 +55,12 @@ class NimbyGreetMenu extends UIScriptedMenu
     static const int TABLE_ROW_HEIGHT = 28;
     static const int MEDIA_ALT_HEIGHT = 20;
 
+    // Phase 1 run 1 (Jeff): buttons should look like buttons. Footer and link buttons sit on a visible
+    // dark panel in their normal state; the section list stays flat with a lit selected row; hover
+    // and focus are the vanilla pause-menu state (black panel, red label).
     static const int COLOR_PANEL_HIGHLIGHT = 0xFF000000;
     static const int COLOR_PANEL_NORMAL = 0x00000000;
+    static const int COLOR_PANEL_BUTTON = 0xD2333333;
     static const int COLOR_PANEL_SELECTED = 0xFF2A2A2A;
     static const int COLOR_LABEL_HIGHLIGHT = 0xFFFF0000;
     static const int COLOR_LABEL_NORMAL = 0xFFFFFFFF;
@@ -299,9 +303,14 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         if (m_Hint)
         {
-            m_Hint.SetText(Widget.TranslateString("#STR_NimbyGreet_Hint"));
+            m_Hint.SetText(Tr("#STR_NimbyGreet_Hint", "The Greet key (default Insert) opens this window again. Esc closes it."));
         }
-        SetButtonLabel(m_BtnClose, Widget.TranslateString("#STR_NimbyGreet_Close"));
+        SetButtonLabel(m_BtnClose, Tr("#STR_NimbyGreet_Close", "Close"));
+        PaintButtonNormal(m_BtnClose);
+        PaintButtonNormal(m_BtnNever);
+        PaintButtonNormal(m_BtnTextSize);
+        PaintButtonNormal(m_BtnAnimations);
+        PaintButtonNormal(m_BtnLanguage);
         RefreshNeverLabel();
         RefreshTextSizeLabel();
         RefreshAnimationsLabel();
@@ -316,7 +325,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             box = "[X] ";
         }
-        return box + Widget.TranslateString("#STR_NimbyGreet_NeverShow");
+        return box + Tr("#STR_NimbyGreet_NeverShow", "Don't show this again");
     }
 
     protected void RefreshNeverLabel()
@@ -327,28 +336,33 @@ class NimbyGreetMenu extends UIScriptedMenu
     protected void RefreshTextSizeLabel()
     {
         string key = "#STR_NimbyGreet_TextNormal";
+        string fallback = "Text: normal";
         if (m_Prefs.textScale >= NimbyGreetRules.TEXT_SCALE_LARGER)
         {
             key = "#STR_NimbyGreet_TextLarger";
+            fallback = "Text: larger";
         }
         else
         {
             if (m_Prefs.textScale >= NimbyGreetRules.TEXT_SCALE_LARGE)
             {
                 key = "#STR_NimbyGreet_TextLarge";
+                fallback = "Text: large";
             }
         }
-        SetButtonLabel(m_BtnTextSize, Widget.TranslateString(key));
+        SetButtonLabel(m_BtnTextSize, Tr(key, fallback));
     }
 
     protected void RefreshAnimationsLabel()
     {
         string key = "#STR_NimbyGreet_AnimationsOff";
+        string fallback = "Animations: off";
         if (m_Prefs.playAnimations)
         {
             key = "#STR_NimbyGreet_AnimationsOn";
+            fallback = "Animations: on";
         }
-        SetButtonLabel(m_BtnAnimations, Widget.TranslateString(key));
+        SetButtonLabel(m_BtnAnimations, Tr(key, fallback));
         bool anyMedia = m_MediaIds.Count() > 0;
         if (m_BtnAnimations)
         {
@@ -368,7 +382,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             return;
         }
-        SetButtonLabel(m_BtnLanguage, Widget.TranslateString("#STR_NimbyGreet_LanguageLabel") + ": " + NimbyGreetLanguageName(m_Language.language));
+        SetButtonLabel(m_BtnLanguage, Tr("#STR_NimbyGreet_LanguageLabel", "Language") + ": " + NimbyGreetLanguageName(m_Language.language));
     }
 
     static string NimbyGreetLanguageName(string code)
@@ -387,6 +401,23 @@ class NimbyGreetMenu extends UIScriptedMenu
         if (code == "portuguese") { return "Portuguese"; }
         if (code == "chinesesimp") { return "Chinese (Simplified)"; }
         return code;
+    }
+
+    // Widget.TranslateString returns the key without its # when the table has no entry for the
+    // client's language (NIMBY-T-044); Phase 1 run 1 showed raw keys after an in-session language
+    // change, before the client restart that reloads mod string tables. English is the fallback.
+    static string Tr(string key, string fallback)
+    {
+        string text = Widget.TranslateString(key);
+        if (text.Length() == 0)
+        {
+            return fallback;
+        }
+        if (NimbyGreetRules.StartsWith(text, "STR_NimbyGreet_"))
+        {
+            return fallback;
+        }
+        return text;
     }
 
     protected void SetButtonLabel(Widget button, string text)
@@ -632,12 +663,14 @@ class NimbyGreetMenu extends UIScriptedMenu
             {
                 rightMarkup = "<b>" + row.Get(1) + "</b>";
             }
+            float rowHeight = Scaled(TABLE_ROW_HEIGHT);
             if (left)
             {
                 left.SetTextExactSize(Scaled(TABLE_TEXT_SIZE));
                 left.SetText(leftMarkup);
                 m_ScaledBody.Insert(left);
                 m_ScaledBodyBase.Insert(TABLE_TEXT_SIZE);
+                rowHeight = GrowRow(rowHeight, left.GetContentHeight());
             }
             if (right)
             {
@@ -645,8 +678,10 @@ class NimbyGreetMenu extends UIScriptedMenu
                 right.SetText(rightMarkup);
                 m_ScaledBody.Insert(right);
                 m_ScaledBodyBase.Insert(TABLE_TEXT_SIZE);
+                rowHeight = GrowRow(rowHeight, right.GetContentHeight());
             }
-            root.SetSize(1.0, Scaled(TABLE_ROW_HEIGHT));
+            // Phase 1 run 1: long cells were cut off. Cells wrap and the row grows to the taller cell.
+            root.SetSize(1.0, rowHeight);
             Widget line = root.FindAnyWidget("TableRow_line");
             if (line)
             {
@@ -655,6 +690,22 @@ class NimbyGreetMenu extends UIScriptedMenu
             m_BlockWidgets.Insert(root);
             r = r + 1;
         }
+    }
+
+    // A table row is at least its base height and at most eight lines; the cell's measured content height wins between.
+    protected float GrowRow(float current, float contentHeight)
+    {
+        float wanted = contentHeight + 8;
+        float ceiling = Scaled(TABLE_ROW_HEIGHT) * 8;
+        if (wanted > ceiling)
+        {
+            wanted = ceiling;
+        }
+        if (wanted > current)
+        {
+            return wanted;
+        }
+        return current;
     }
 
     protected void AddMediaBlock(NimbyGreetBlock block)
@@ -815,23 +866,31 @@ class NimbyGreetMenu extends UIScriptedMenu
                 NimbyGreetLog.Info("link row layout failed to load");
                 return;
             }
-            TextWidget label = TextWidget.Cast(root.FindAnyWidget("LinkRow_label"));
-            if (label)
+            // The label is itself a button that opens the link (Phase 1 run 1: the first instinct is to click it).
+            Widget labelButton = root.FindAnyWidget("LinkRow_text");
+            if (labelButton)
             {
-                label.SetText("[" + link.index.ToString() + "] " + link.label + "   " + link.url);
-                label.SetTextExactSize(Scaled(LINK_TEXT_SIZE));
+                labelButton.SetUserID(ID_LINK_OPEN_BASE + i);
+                TextWidget label = TextWidget.Cast(root.FindAnyWidget("LinkRow_text_label"));
+                if (label)
+                {
+                    label.SetText("[" + link.index.ToString() + "] " + link.label + "   " + link.url);
+                    label.SetTextExactSize(Scaled(LINK_TEXT_SIZE));
+                }
             }
             Widget open = root.FindAnyWidget("LinkRow_open");
             Widget copy = root.FindAnyWidget("LinkRow_copy");
             if (open)
             {
                 open.SetUserID(ID_LINK_OPEN_BASE + i);
-                SetButtonLabel(open, Widget.TranslateString("#STR_NimbyGreet_Open"));
+                SetButtonLabel(open, Tr("#STR_NimbyGreet_Open", "Open"));
+                PaintButtonNormal(open);
             }
             if (copy)
             {
                 copy.SetUserID(ID_LINK_COPY_BASE + i);
-                SetButtonLabel(copy, Widget.TranslateString("#STR_NimbyGreet_Copy"));
+                SetButtonLabel(copy, Tr("#STR_NimbyGreet_Copy", "Copy"));
+                PaintButtonNormal(copy);
             }
             m_LinkWidgets.Insert(root);
             i = i + 1;
@@ -872,7 +931,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         foreach (Widget row : m_LinkWidgets)
         {
-            TextWidget rowLabel = TextWidget.Cast(row.FindAnyWidget("LinkRow_label"));
+            TextWidget rowLabel = TextWidget.Cast(row.FindAnyWidget("LinkRow_text_label"));
             if (rowLabel)
             {
                 rowLabel.SetTextExactSize(Scaled(LINK_TEXT_SIZE));
@@ -967,7 +1026,7 @@ class NimbyGreetMenu extends UIScriptedMenu
             if (copyIndex < m_Links.Count())
             {
                 GetGame().CopyToClipboard(m_Links.Get(copyIndex).url);
-                SetButtonLabel(w, Widget.TranslateString("#STR_NimbyGreet_Copied"));
+                SetButtonLabel(w, Tr("#STR_NimbyGreet_Copied", "Copied"));
                 NimbyGreetLog.Debug("copied url=" + m_Links.Get(copyIndex).url);
             }
             return true;
@@ -1058,8 +1117,12 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             return;
         }
-        int panelColor = COLOR_PANEL_NORMAL;
+        int panelColor = COLOR_PANEL_BUTTON;
         int labelColor = COLOR_LABEL_NORMAL;
+        if (w.GetName() == "LinkRow_text")
+        {
+            panelColor = COLOR_PANEL_NORMAL;
+        }
         if (on)
         {
             panelColor = COLOR_PANEL_HIGHLIGHT;
@@ -1073,5 +1136,10 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             label.SetColor(labelColor);
         }
+    }
+
+    protected void PaintButtonNormal(Widget button)
+    {
+        Highlight(button, false);
     }
 }

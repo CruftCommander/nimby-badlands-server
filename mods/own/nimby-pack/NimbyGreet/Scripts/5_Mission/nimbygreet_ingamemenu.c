@@ -32,6 +32,12 @@ modded class InGameMenu extends UIScriptedMenu
         if (!m_NimbyGreetButton)
         {
             NimbyGreetLog.Info("pause menu: nimbygreet_pause_button.layout failed to load");
+            return root;
+        }
+        TextWidget label = TextWidget.Cast(m_NimbyGreetButton.FindAnyWidget("nimbygreetbtn_label"));
+        if (label)
+        {
+            label.SetText(NimbyGreetMenu.Tr("#STR_NimbyGreet_PauseButton", "Server welcome"));
         }
         return root;
     }
