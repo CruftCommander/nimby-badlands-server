@@ -9,8 +9,9 @@ Media (Phase 0 probe only; removed before the release gate, plan G15):
 - Media/probe.mp4: generated October 26, 2026 with ffmpeg (lavfi color source plus drawtext,
   DejaVu Sans), a dark 320x180 frame with the text NIMBY sliding across for 3 s, looped, silent,
   H.264 yuv420p, 7 KB. No third-party content; no license applies beyond this repository's.
-- Media/probe.png, Media/probe.edds (or .paa): generated the same way, a 320x180 still of the
-  text NIMBY, converted with DayZ Tools ImageToPAA. Same terms.
+- Media/probe.png, Media/probe.edds: generated the same way, a 512x256 still of the text NIMBY
+  (ImageToPAA refuses a 320x180 source: "Img is not of power of 2 size"), converted with DayZ
+  Tools ImageToPAA. Same terms.
 
 Changes, newest first:
 
