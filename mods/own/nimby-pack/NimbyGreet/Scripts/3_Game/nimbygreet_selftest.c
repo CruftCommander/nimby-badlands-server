@@ -229,6 +229,9 @@ class NimbyGreetSelfTest
         failures += Case(results, "dismiss: dismissed stays closed", NimbyGreetRules.ShouldAutoOpen(true, 1, false, 2) == false);
         failures += Case(results, "dismiss: forced newer version opens", NimbyGreetRules.ShouldAutoOpen(true, 1, true, 2) == true);
         failures += Case(results, "dismiss: forced same version stays closed", NimbyGreetRules.ShouldAutoOpen(true, 2, true, 2) == false);
+        failures += Case(results, "open wait: pause menu not counted", NimbyGreetRules.OpenWaitCounts(true, true, false) == false);
+        failures += Case(results, "open wait: other menu counted", NimbyGreetRules.OpenWaitCounts(false, true, false) == true);
+        failures += Case(results, "open wait: unconscious behind pause counted", NimbyGreetRules.OpenWaitCounts(true, true, true) == true);
 
         array<string> available = {"english", "german"};
         failures += Case(results, "language: requested present is served", NimbyGreetRules.PickLanguage("german", available, "english") == "german");

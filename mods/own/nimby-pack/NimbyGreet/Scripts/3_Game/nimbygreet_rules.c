@@ -238,6 +238,21 @@ class NimbyGreetRules
         return version > dismissedVersion;
     }
 
+    // ---- open wait (G5) ----------------------------------------------------------------------
+
+    // Whether one deferred open check counts toward openRetrySeconds. Time behind vanilla's pause
+    // menu does not (Jeff, October 26, 2026, Phase 1 run 5): a client that loads with the game in the
+    // background gets the pause menu at spawn (missionGameplay.c:296-310, IsAppActive), and the window
+    // waits for the player to come back however long that takes. Dead or unconscious always counts.
+    static bool OpenWaitCounts(bool paused, bool alive, bool unconscious)
+    {
+        if (!alive || unconscious)
+        {
+            return true;
+        }
+        return !paused;
+    }
+
     // ---- languages (G14) ---------------------------------------------------------------------
 
     static bool IsKnownLanguage(string name)

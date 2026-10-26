@@ -6,7 +6,8 @@
 //           client's language, dismissedVersion and neverShow, assembles the chunks, and
 //           schedules the window openDelaySeconds after the payload is complete, only when
 //           no scripted menu is open and the player is alive and conscious; otherwise it
-//           re-checks every second for openRetrySeconds and gives up with one log line.
+//           re-checks every 250 ms for openRetrySeconds and gives up with one log line. Time
+//           behind vanilla's pause menu is not counted (NimbyGreetRules.OpenWaitCounts).
 //           The window opens by itself at most once per connection (G4); MissionGameplay
 //           is created on connect and destroyed on disconnect, so the flag lives here.
 //           Reads UANimbyGreetOpen in OnUpdate and nowhere else (NIMBY-T-046): with the
@@ -37,6 +38,7 @@ modded class MissionGameplay extends MissionBase
     protected bool m_NimbyGreetOpenPending;
     protected int m_NimbyGreetOpenRetries;
     protected int m_NimbyGreetOpenRetryMax = 30;
+    protected bool m_NimbyGreetPauseWaitLogged;    // G5: the pause-menu wait is logged once per stretch, not per poll
     protected string m_NimbyGreetPendingSource = "spawn";
     protected bool m_NimbyGreetPendingForced;
     protected ref NimbyGreetLanguage m_NimbyGreetPendingLanguage;
@@ -81,6 +83,7 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Done().Remove(NimbyGreetOnDone);
         NimbyGreetClient.Hit().Remove(NimbyGreetOnHit);
         m_NimbyGreetOpenPending = false;
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetTryOpen);
         NimbyGreetLog.Debug("mission finished; spawns this connection=" + m_NimbyGreetSpawnCount.ToString() + " autoOpened=" + NimbyGreetLog.Bool(m_NimbyGreetAutoOpened));
         super.OnMissionFinish();
     }
@@ -311,6 +314,7 @@ modded class MissionGameplay extends MissionBase
             m_NimbyGreetOpenRetryMax = 1;
         }
         m_NimbyGreetOpenRetries = 0;
+        m_NimbyGreetPauseWaitLogged = false;
         m_NimbyGreetOpenPending = true;
         int delayMs = (int)(delaySeconds * 1000.0);
         NimbyGreetLog.Debug("open scheduled in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource);
@@ -364,6 +368,23 @@ modded class MissionGameplay extends MissionBase
         int menuId = NimbyGreetCurrentMenuId();
         if (menuId != -1 || !alive || unconscious)
         {
+            bool paused = GetGame().GetUIManager().IsMenuOpen(MENU_INGAME);
+            if (!NimbyGreetRules.OpenWaitCounts(paused, alive, unconscious))
+            {
+                // Phase 1 run 5: a client loaded in the background starts in the pause menu; wait it out uncounted.
+                if (!m_NimbyGreetPauseWaitLogged)
+                {
+                    m_NimbyGreetPauseWaitLogged = true;
+                    NimbyGreetLog.Debug("open waiting behind the pause menu, not counted: menu=" + menuId.ToString() + " retries so far=" + m_NimbyGreetOpenRetries.ToString());
+                }
+                g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, NimbyGreetRules.OPEN_RETRY_MS, false);
+                return;
+            }
+            if (m_NimbyGreetPauseWaitLogged)
+            {
+                m_NimbyGreetPauseWaitLogged = false;
+                NimbyGreetLog.Debug("pause menu closed; open wait counting again: menu=" + menuId.ToString());
+            }
             m_NimbyGreetOpenRetries = m_NimbyGreetOpenRetries + 1;
             NimbyGreetLog.Debug("open deferred #" + m_NimbyGreetOpenRetries.ToString() + ": menu=" + menuId.ToString() + " alive=" + NimbyGreetLog.Bool(alive) + " unconscious=" + NimbyGreetLog.Bool(unconscious));
             if (m_NimbyGreetOpenRetries >= m_NimbyGreetOpenRetryMax)
