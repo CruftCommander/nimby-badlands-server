@@ -83,7 +83,15 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Done().Remove(NimbyGreetOnDone);
         NimbyGreetClient.Hit().Remove(NimbyGreetOnHit);
         m_NimbyGreetOpenPending = false;
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetTryOpen);
+        m_NimbyGreetRetryPending = false;
+        // NIMBY-T-052: MissionGameplay is destroyed on disconnect, and a queued call on it that fires
+        // afterwards is an access violation in DayZGame.OnUpdate (dayzgame.c:3044, the GUI call queue
+        // tick). Every CallLater this class queues on itself is removed here; keep this list complete.
+        ScriptCallQueue queue = g_Game.GetCallQueue(CALL_CATEGORY_GUI);
+        queue.Remove(NimbyGreetAutoRequest);
+        queue.Remove(NimbyGreetFetchTimeout);
+        queue.Remove(NimbyGreetRetryRequest);
+        queue.Remove(NimbyGreetTryOpen);
         NimbyGreetLog.Debug("mission finished; spawns this connection=" + m_NimbyGreetSpawnCount.ToString() + " autoOpened=" + NimbyGreetLog.Bool(m_NimbyGreetAutoOpened));
         super.OnMissionFinish();
     }
@@ -152,6 +160,7 @@ modded class MissionGameplay extends MissionBase
             return;
         }
         NimbyGreetLog.Debug("spawn #" + m_NimbyGreetSpawnCount.ToString() + ": request in " + NimbyGreetRules.FETCH_DELAY_MS.ToString() + " ms");
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetAutoRequest);   // NIMBY-T-052: one queued at a time
         g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetAutoRequest, NimbyGreetRules.FETCH_DELAY_MS, false);
     }
 
@@ -180,6 +189,9 @@ modded class MissionGameplay extends MissionBase
         string language = NimbyGreetRequestLanguage();
         m_NimbyGreetFetch.Begin(requestId, language, manual, GetGame().GetTickTime());
         player.NimbyGreetSendRequest(requestId, language, m_NimbyGreetSeen.dismissedVersion, m_NimbyGreetSeen.neverShow, manual);
+        // NIMBY-T-052: one timeout queued at a time (the handler only acts on the newest id anyway), so the
+        // Remove in OnMissionFinish clears it whatever the native Remove does with duplicates.
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetFetchTimeout);
         g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetFetchTimeout, NimbyGreetRules.FETCH_TIMEOUT_MS, false, requestId);
         return requestId;
     }
@@ -318,6 +330,7 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetOpenPending = true;
         int delayMs = (int)(delaySeconds * 1000.0);
         NimbyGreetLog.Debug("open scheduled in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetTryOpen);   // NIMBY-T-052: one open chain at a time
         g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, delayMs, false);
     }
 

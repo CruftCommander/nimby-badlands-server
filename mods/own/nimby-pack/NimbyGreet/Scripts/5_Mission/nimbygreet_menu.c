@@ -228,6 +228,12 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
     }
 
+    // NIMBY-T-052: the clip timer is queued on this menu; a menu destroyed without OnHide must not leave it queued.
+    void ~NimbyGreetMenu()
+    {
+        StopClips();
+    }
+
     override void OnHide()
     {
         super.OnHide();
@@ -868,7 +874,10 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(FlipClip);
         }
-        m_Clips.Clear();
+        if (m_Clips)
+        {
+            m_Clips.Clear();
+        }
     }
 
     // ---- link rows (G10) ---------------------------------------------------------------------
