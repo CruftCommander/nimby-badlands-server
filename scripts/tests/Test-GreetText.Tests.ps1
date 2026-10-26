@@ -178,7 +178,8 @@ Describe 'Get-GreetManifestIds' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'bad.json') -Value '{ nope' -Encoding UTF8
         Get-GreetManifestIds -ManifestFile (Join-Path $TestDrive 'bad.json') | Should -BeNullOrEmpty
         Set-Content -LiteralPath (Join-Path $TestDrive 'ok.json') -Value '{ "media": [ { "id": "map", "kind": "still" }, { "id": "clip", "kind": "clip" } ] }' -Encoding UTF8
-        Get-GreetManifestIds -ManifestFile (Join-Path $TestDrive 'ok.json') | Should -Be @('map', 'clip')
+        # The function returns the array as one object (comma operator), so it is joined before the comparison.
+        ((Get-GreetManifestIds -ManifestFile (Join-Path $TestDrive 'ok.json')) -join ',') | Should -Be 'map,clip'
     }
     It 'reads the addon manifest in the repository (empty list, not null)' {
         $ids = Get-GreetManifestIds -ManifestFile (Join-Path $repo 'mods\own\nimby-pack\NimbyGreet\Media\manifest.json')
