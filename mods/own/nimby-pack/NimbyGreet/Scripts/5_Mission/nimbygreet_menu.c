@@ -53,6 +53,7 @@ class NimbyGreetMenu extends UIScriptedMenu
     static const int SECTION_TEXT_SIZE = 17;
     static const int LINK_TEXT_SIZE = 15;
     static const int TABLE_ROW_HEIGHT = 28;
+    static const int BLOCK_GAP = 10;   // extra air around tables and rules (Phase 1 run 2, Jeff)
     static const int MEDIA_ALT_HEIGHT = 20;
 
     // Phase 1 run 1 (Jeff): buttons should look like buttons. Footer and link buttons sit on a visible
@@ -604,7 +605,9 @@ class NimbyGreetMenu extends UIScriptedMenu
             }
             if (block.kind == NimbyGreetBlockKind.TABLE)
             {
+                AddGap(BLOCK_GAP);
                 AddTableBlock(block);
+                AddGap(BLOCK_GAP);
                 continue;
             }
             if (block.kind == NimbyGreetBlockKind.MEDIA)
@@ -690,6 +693,23 @@ class NimbyGreetMenu extends UIScriptedMenu
             m_BlockWidgets.Insert(root);
             r = r + 1;
         }
+    }
+
+    // An invisible spacer block: the rule layout with its line hidden, so a table or a rule gets air.
+    protected void AddGap(int pixels)
+    {
+        Widget gap = g_Game.GetWorkspace().CreateWidgets("NimbyGreet/GUI/nimbygreet_block_rule.layout", m_BodyContent);
+        if (!gap)
+        {
+            return;
+        }
+        Widget line = gap.FindAnyWidget("BlockRule_line");
+        if (line)
+        {
+            line.Show(false);
+        }
+        gap.SetSize(1.0, Scaled(pixels));
+        m_BlockWidgets.Insert(gap);
     }
 
     // A table row is at least its base height and at most eight lines; the cell's measured content height wins between.
