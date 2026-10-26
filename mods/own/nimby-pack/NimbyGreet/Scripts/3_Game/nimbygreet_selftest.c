@@ -282,7 +282,9 @@ class NimbyGreetSelfTest
             roundTrip = roundTrip && back.languages.Count() == 2 && back.totalBytes == payload.Length() && back.hash == payload.Hash();
         }
         failures += Case(results, "done: json round trip", roundTrip);
-        failures += Case(results, "done: malformed json is null with an error", NimbyGreetDone.FromJson("{ nope", error) == null && error.Length() > 0);
+        // No malformed-JSON case: the engine prints its own "SCRIPT (E): JSON ERROR" for any parse
+        // failure, including ReadFromString (NIMBY-T-042), and the boot check fails on it
+        // (build 20261025-231313). FromJson's null return is covered by the client's live path.
 
         NimbyGreetFetch fetch = new NimbyGreetFetch();
         fetch.Begin(7, "russian", false, 0.0);

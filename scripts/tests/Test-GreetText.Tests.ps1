@@ -132,7 +132,7 @@ Describe 'Test-GreetDocument' {
         ($errors -join "`n") | Should -Match 'id must be'
         ($errors -join "`n") | Should -Match 'heading is missing or empty'
         ($errors -join "`n") | Should -Match 'body is missing or empty'
-        (Get-Errors (Test-GreetDocument -Document $second -MediaIds @()) -join "`n") | Should -Match 'duplicate id'
+((Get-Errors (Test-GreetDocument -Document $second -MediaIds @())) -join "`n") | Should -Match 'duplicate id'
     }
     It 'warns on every cap the client truncates' {
         $doc = New-GreetDoc {
@@ -160,15 +160,15 @@ Describe 'Test-GreetDocument' {
             $d.languages[0].sections[0] | Add-Member -NotePropertyName url -NotePropertyValue 'https://a.b'
         }
         $findings = Test-GreetDocument -Document $doc -MediaIds @('map')
-        (Get-Errors $findings -join "`n") | Should -Match 'link rejected'
-        (Get-Errors $findings -join "`n") | Should -Match 'media id not in the manifest: nope'
-        (Get-Warnings $findings -join "`n") | Should -Match "field 'url'"
+        ((Get-Errors $findings) -join "`n") | Should -Match 'link rejected'
+        ((Get-Errors $findings) -join "`n") | Should -Match 'media id not in the manifest: nope'
+        ((Get-Warnings $findings) -join "`n") | Should -Match "field 'url'"
     }
     It 'warns on an out-of-range timing value and rejects a non-numeric one' {
         $doc = New-GreetDoc { param($d) $d.openDelaySeconds = 99; $d | Add-Member -NotePropertyName rereadSeconds -NotePropertyValue 'soon' }
         $findings = Test-GreetDocument -Document $doc -MediaIds @()
-        (Get-Warnings $findings -join "`n") | Should -Match 'openDelaySeconds=99 is outside'
-        (Get-Errors $findings -join "`n") | Should -Match 'rereadSeconds must be a number'
+        ((Get-Warnings $findings) -join "`n") | Should -Match 'openDelaySeconds=99 is outside'
+        ((Get-Errors $findings) -join "`n") | Should -Match 'rereadSeconds must be a number'
     }
 }
 
@@ -180,9 +180,14 @@ Describe 'Get-GreetManifestIds' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'ok.json') -Value '{ "media": [ { "id": "map", "kind": "still" }, { "id": "clip", "kind": "clip" } ] }' -Encoding UTF8
         Get-GreetManifestIds -ManifestFile (Join-Path $TestDrive 'ok.json') | Should -Be @('map', 'clip')
     }
-    It 'reads the addon manifest in the repository' {
+    It 'reads the addon manifest in the repository (empty list, not null)' {
         $ids = Get-GreetManifestIds -ManifestFile (Join-Path $repo 'mods\own\nimby-pack\NimbyGreet\Media\manifest.json')
         $null -eq $ids | Should -BeFalse
+        @($ids).Count | Should -Be 0
+    }
+    It 'accepts forceShow written as 0 or 1 by the engine' {
+        $doc = New-GreetDoc { param($d) $d.forceShow = 0 }
+        Get-Errors (Test-GreetDocument -Document $doc -MediaIds @()) | Should -BeNullOrEmpty
     }
 }
 
@@ -190,7 +195,8 @@ Describe 'Test-GreetText.ps1 end to end' {
     It 'passes the repository draft with no error' {
         $logRoot = Join-Path $TestDrive 'repo'
         New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-        $output = & $greetScript -Path (Join-Path $repo 'server\profile-overrides\NimbyGreet\greet.json') -ManifestPath (Join-Path $repo 'mods\own\nimby-pack\NimbyGreet\Media\manifest.json') -RepoRoot $logRoot 2>&1 | Out-String
+        # Write-Host goes to the information stream, so every stream is merged (*>&1) for the capture.
+        $output = & $greetScript -Path (Join-Path $repo 'server\profile-overrides\NimbyGreet\greet.json') -ManifestPath (Join-Path $repo 'mods\own\nimby-pack\NimbyGreet\Media\manifest.json') -RepoRoot $logRoot *>&1 | Out-String
         $LASTEXITCODE | Should -Be 0
         $output | Should -Match 'PASS: 0 errors'
         Get-ChildItem -Path (Join-Path $logRoot 'logs') -Recurse -Filter 'greettext.log' | Should -Not -BeNullOrEmpty
@@ -200,11 +206,11 @@ Describe 'Test-GreetText.ps1 end to end' {
         New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
         $broken = Join-Path $TestDrive 'broken.json'
         Set-Content -LiteralPath $broken -Value '{ "version": 1, "text": "unterminated' -Encoding UTF8
-        & $greetScript -Path $broken -RepoRoot $logRoot 2>&1 | Out-Null
+        & $greetScript -Path $broken -RepoRoot $logRoot *>&1 | Out-Null
         $LASTEXITCODE | Should -Be 2
         $bad = Join-Path $TestDrive 'bad.json'
         (New-GreetDoc { param($d) $d.languages[0].sections[0].id = 'Bad Id' }) | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $bad -Encoding UTF8
-        & $greetScript -Path $bad -RepoRoot $logRoot 2>&1 | Out-Null
+        & $greetScript -Path $bad -RepoRoot $logRoot *>&1 | Out-Null
         $LASTEXITCODE | Should -Be 1
     }
 }

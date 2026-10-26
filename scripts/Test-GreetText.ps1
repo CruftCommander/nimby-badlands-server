@@ -150,7 +150,12 @@ function Test-GreetDocument {
         if (($version -isnot [int]) -and ($version -isnot [long])) { Add-Finding 'ERROR' ("version must be an integer, got {0}" -f $version) }
         elseif ($version -lt 1) { Add-Finding 'ERROR' ("version must be 1 or higher, got {0}" -f $version) }
     }
-    if ((Test-HasProperty $Document 'forceShow') -and ($Document.forceShow -isnot [bool])) { Add-Finding 'ERROR' 'forceShow must be true or false' }
+    if (Test-HasProperty $Document 'forceShow') {
+        # The engine writes booleans as 0 and 1 (the default file has "forceShow": 0) and reads true and false; both pass.
+        $force = $Document.forceShow
+        $forceOk = ($force -is [bool]) -or ((($force -is [int]) -or ($force -is [long])) -and ($force -eq 0 -or $force -eq 1))
+        if (-not $forceOk) { Add-Finding 'ERROR' 'forceShow must be true or false (or 0 or 1)' }
+    }
     foreach ($timing in @(
             @{ Name = 'openDelaySeconds'; Max = $script:GreetCaps.MaxOpenDelaySeconds },
             @{ Name = 'openRetrySeconds'; Max = $script:GreetCaps.MaxOpenRetrySeconds },
@@ -247,8 +252,11 @@ function Get-GreetManifestIds {
         $manifest = Get-Content -LiteralPath $ManifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
     }
     catch { return $null }
-    if ($null -eq $manifest -or -not ($manifest.PSObject.Properties.Name -contains 'media')) { return @() }
-    return @(@($manifest.media) | Where-Object { $null -ne $_ -and ($_.PSObject.Properties.Name -contains 'id') } | ForEach-Object { [string]$_.id })
+    # An empty array must come back as an empty array, not as $null (which means "no manifest"),
+    # so the result is wrapped with the comma operator.
+    if ($null -eq $manifest -or -not ($manifest.PSObject.Properties.Name -contains 'media')) { return , [string[]]@() }
+    $ids = [string[]]@(@($manifest.media) | Where-Object { $null -ne $_ -and ($_.PSObject.Properties.Name -contains 'id') } | ForEach-Object { [string]$_.id })
+    return , $ids
 }
 
 # ---- main --------------------------------------------------------------------------------------
