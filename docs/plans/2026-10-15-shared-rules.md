@@ -1,6 +1,6 @@
 # NIMBY pack shared rules
 
-Version 1.3. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
+Version 1.4. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
 
 These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), and Ears (`NimbyEarplugs`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
 
@@ -37,6 +37,9 @@ Each mod works on its own branch in its own git worktree under `D:\GitHub\nimby-
 | Scrawl | `feat/scrawl` | `D:\GitHub\nimby-badlands-server-wt\feat-scrawl` |
 | Tack | `feat/tack` | `D:\GitHub\nimby-badlands-server-wt\feat-tack` |
 | Ears | `feat/ears` | `D:\GitHub\nimby-badlands-server-wt\feat-ears` |
+| Greet | `feat/greet` | `D:\GitHub\nimby-badlands-server-wt\greet` |
+
+The fleet convention is `...-wt\feat-<name>`; the Greet worktree was created as `...-wt\greet` on October 25, 2026, matching the newer `ears-r1`, `scrawl-r1`, and `tack-placement` folders rather than the table, so the row records the folder that exists.
 
 ### 2.2. Commit and push policy
 
@@ -59,7 +62,7 @@ Only the orchestrator edits these files. A session that needs a change there ask
 | `scripts/Start-NimbyTestServer.ps1` | The interactive test server every plan's tests run on |
 | `docs/plans/2026-10-15-shared-rules.md` | This file |
 
-Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `testServer` before any worktree branches; the `NimbyAdmin` rows at Central Scrutinizer Phase 0; the Hands rename at Hands Phase 2; one row each for `NimbySmoke`, `NimbySmokeFx`, `NimbyGrow`, `NimbyNotes`, `NimbyTack`, and `NimbyEarplugs` at that addon's Phase 1.
+Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `testServer` before any worktree branches; the `NimbyAdmin` rows at Central Scrutinizer Phase 0; the Hands rename at Hands Phase 2; one row each for `NimbySmoke`, `NimbySmokeFx`, `NimbyGrow`, `NimbyNotes`, `NimbyTack`, and `NimbyEarplugs` at that addon's Phase 1; the `NimbyGreet` row and the three media include patterns (`*.mp4`, `*.edds`, `*.paa`) at Greet Phase 0.
 
 ## 4. Identifiers
 
@@ -76,6 +79,7 @@ Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `te
 | Scrawl | Scrawl | `NimbyNotes` | `[NIMBY][Notes]` | `65506xx` (reserved) |
 | Tack | Tack | `NimbyTack` | `[NIMBY][Tack]` | `65509xx` (reserved; action framework) |
 | Ears | Ears (Hush until October 16, 2026) | `NimbyEarplugs` | `[NIMBY][Earplugs]` | `65507xx` (reserved; client only) |
+| Greet | Greet | `NimbyGreet` | `[NIMBY][Greet]` | `65511xx` (`6551101` request, client to server; `6551102` chunk and `6551103` done, server to the owning client; plan G5) |
 | Menu | Menu | `NimbyMenu` | `[NIMBY][Menu]` | `65510xx` (reserved; not planned yet, see section 5) |
 
 A display name changes only `mod.cpp`, Workshop text, string tables, and menu titles. Code prefixes, log prefixes, and RPC ids MUST NOT change for a display-name decision.
@@ -98,6 +102,7 @@ Enforce Script has no runtime log level. Each addon MUST read one flag file at m
 | Central Scrutinizer menu | Home, then F10; first verified-free wins; otherwise unbound. End left the list on October 15, 2026 for Ears; Ears moved to N on October 16, so End is free again but stays off the list. Home is free in `bin/preset_X1MouseKey.xml`; F10 is bound (`UAGestureSlot10`, `EmoteThroat`, `UABuldRunScript` at `:446,480,824`), so Home is expected | Decided (N2), revised October 15, 2026 |
 | Ears toggle | N (`kN`); `bin/constants.xml:507`; in `bin/preset_X1MouseKey.xml` only as the modifier of the developer brush inputs (`kN` plus wheel, `:881-890`), so a plain press is free | Decided by Jeff (E2), October 16, 2026; was End on October 15 |
 | Puff, Buzz, Sprout, Scrawl, Tack | None; action-menu entries only | Decided |
+| Greet open window | Insert (`kInsert`); `bin/constants.xml:586`; 0 uses in `bin/preset_X1MouseKey.xml`, so a plain press is free. `kF12` is free in game but is Steam's screenshot key and is excluded | Decided by Jeff (G7, Q2), October 25, 2026 |
 
 Every NIMBY key binding is player-configurable in game (decided by Jeff, October 16, 2026). Now: every binding is declared in the addon's `Data/Inputs.xml` with a NIMBY group name so it appears in the vanilla Options > Controls page and the player rebinds it there; no script reads a hardcoded key, and every plan's test table has a rebind case (Ears EP-005 is the first proof). Later: a shared `NimbyMenu` addon (display name Menu, RPC block `65510xx`) hosts one NIMBY options page for bindings and other player preferences; addons register their settings with it, and nothing depends on it until it exists.
 
@@ -110,7 +115,7 @@ No two mods share a default binding, and none shadows a vanilla 1.30 default. A 
 - Per-addon state lives in `$profile:<Prefix>\` as JSON or flag files and MUST be written atomically (temp file, validate, rename) with a `.lkg` copy where the file controls access or admission.
 - Adding, updating, or removing any addon MUST NOT change what loads from `storage_1`. The release gate in section 9 proves it.
 
-The rules above apply to utility addons: Legs, Hands, Central Scrutinizer, Buzz, and Ears. Content addons are governed by 6.1. Addons are split by what a Bohemia update is likely to break (decided by Jeff, October 15, 2026): config-heavy content and script-API-heavy behavior ship as separate PBOs, so a broken API disables one PBO and the content stays playable.
+The rules above apply to utility addons: Legs, Hands, Central Scrutinizer, Buzz, Ears, and Greet. Content addons are governed by 6.1. Addons are split by what a Bohemia update is likely to break (decided by Jeff, October 15, 2026): config-heavy content and script-API-heavy behavior ship as separate PBOs, so a broken API disables one PBO and the content stays playable.
 
 ### 6.1. Content addons
 
@@ -157,7 +162,7 @@ Decided by Jeff, October 15, 2026, for Central Scrutinizer. Server-only code (pe
 - `Build-NimbyPack.ps1` writes it to `build/@NIMBY-Server-<timestamp>/`, and the boot check loads both outputs.
 - HostHavoc support for `-servermod=` is verified in Central Scrutinizer Phase 0 before any server-only code is written.
 
-Legs, Hands, Puff, Buzz, Sprout, Scrawl, Tack, and Ears stay single-PBO unless their plan records otherwise. Between client PBOs the same reference rule applies: no Puff script MAY reference a Buzz class, so Buzz can be removed without touching Puff.
+Legs, Hands, Puff, Buzz, Sprout, Scrawl, Tack, Ears, and Greet stay single-PBO unless their plan records otherwise. Between client PBOs the same reference rule applies: no Puff script MAY reference a Buzz class, so Buzz can be removed without touching Puff.
 
 ### 8.2. Tooling as built (October 15, 2026)
 
