@@ -763,47 +763,43 @@ class NimbyGreetMenu extends UIScriptedMenu
     protected void RelayoutTables(bool last)
     {
         int tall = 0;
-        string sample = "";
         int i = 0;
+        if (last)
+        {
+            int screenW;
+            int screenH;
+            GetScreenSize(screenW, screenH);
+            NimbyGreetLog.Debug("table measure screen=" + screenW.ToString() + "x" + screenH.ToString() + " textScale=" + m_Prefs.textScale.ToString() + " baseRow=" + Scaled(TABLE_ROW_HEIGHT).ToString());
+        }
         while (i < m_TableRows.Count())
         {
             Widget row = m_TableRows.Get(i);
-            if (!row)
-            {
-                i = i + 1;
-                continue;
-            }
-            // Run 5 at 2560x1440 with larger text: GetContentHeight and SetSize disagree on units above
-            // 1080p and rows came up a third of a line short. The cells size themselves to their text
-            // (size to text v, as body paragraphs do); their on-screen height converts to the row's
-            // units through the row's own size and screen size, so the units never have to be known.
-            float rowW;
-            float rowUnits;
-            row.GetSize(rowW, rowUnits);
-            float rowScreenW;
-            float rowScreenH;
-            row.GetScreenSize(rowScreenW, rowScreenH);
-            float cellScreenH = TableCellScreenHeight(m_TableLeft.Get(i));
-            float rightScreenH = TableCellScreenHeight(m_TableRight.Get(i));
-            if (rightScreenH > cellScreenH)
-            {
-                cellScreenH = rightScreenH;
-            }
+            RichTextWidget left = m_TableLeft.Get(i);
+            RichTextWidget right = m_TableRight.Get(i);
             float rowHeight = Scaled(TABLE_ROW_HEIGHT);
-            if (rowScreenH > 0 && rowUnits > 0)
+            float contentLeft = 0;
+            float contentRight = 0;
+            if (left)
             {
-                float unitsPerPixel = rowUnits / rowScreenH;
-                rowHeight = GrowRow(rowHeight, cellScreenH * unitsPerPixel);
+                contentLeft = left.GetContentHeight();
+                rowHeight = GrowRow(rowHeight, contentLeft);
             }
-            row.SetSize(1.0, rowHeight);
+            if (right)
+            {
+                contentRight = right.GetContentHeight();
+                rowHeight = GrowRow(rowHeight, contentRight);
+            }
+            if (row)
+            {
+                row.SetSize(1.0, rowHeight);
+            }
             if (rowHeight > Scaled(TABLE_ROW_HEIGHT))
             {
                 tall = tall + 1;
             }
-            if (last && i == m_TableRows.Count() - 1)
+            if (last && row)
             {
-                sample = " last row: cell px=" + cellScreenH.ToString() + " row px=" + rowScreenH.ToString();
-                sample = sample + " row units " + rowUnits.ToString() + " to " + rowHeight.ToString();
+                LogTableRowMeasure(i, row, right, contentLeft, contentRight, rowHeight);
             }
             i = i + 1;
         }
@@ -817,20 +813,30 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         if (last)
         {
-            NimbyGreetLog.Debug("table relayout rows=" + m_TableRows.Count().ToString() + " taller than one line=" + tall.ToString() + sample);
+            NimbyGreetLog.Debug("table relayout rows=" + m_TableRows.Count().ToString() + " taller than one line=" + tall.ToString());
         }
     }
 
-    protected float TableCellScreenHeight(RichTextWidget cell)
+    // NIMBY-T-053 measurement (Phase 1 run 5): the numbers that decide how a row's units relate to its
+    // cells' content height at resolutions above 1080p. Debug only; one line per row, last frame only.
+    protected void LogTableRowMeasure(int index, Widget row, RichTextWidget right, float contentLeft, float contentRight, float rowHeight)
     {
-        if (!cell)
+        float rowW;
+        float rowUnits;
+        row.GetSize(rowW, rowUnits);
+        float rowScreenW;
+        float rowScreenH;
+        row.GetScreenSize(rowScreenW, rowScreenH);
+        float cellScreenW = 0;
+        float cellScreenH = 0;
+        if (right)
         {
-            return 0;
+            right.GetScreenSize(cellScreenW, cellScreenH);
         }
-        float w;
-        float h;
-        cell.GetScreenSize(w, h);
-        return h;
+        string line = "table row " + index.ToString() + ": content L=" + contentLeft.ToString() + " R=" + contentRight.ToString();
+        line = line + " set=" + rowHeight.ToString() + " rowUnits=" + rowUnits.ToString() + " rowPx=" + rowScreenH.ToString();
+        line = line + " cellRpx=" + cellScreenW.ToString() + "x" + cellScreenH.ToString();
+        NimbyGreetLog.Debug(line);
     }
 
     // A table row is at least its base height and at most eight lines; the cell's measured content height wins between.

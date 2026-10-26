@@ -22,13 +22,11 @@ FrameWidgetClass TableRow {
    ignorepointer 1
    color 1 1 1 1
    position 0.01 4
-   size 0.37 20
+   size 0.37 1
    hexactpos 0
    vexactpos 1
    hexactsize 0
-   vexactsize 1
-   "size to text h" 0
-   "size to text v" 1
+   vexactsize 0
    text ""
    font "gui/fonts/sdf_MetronLight24"
    "exact text" 1
@@ -40,13 +38,11 @@ FrameWidgetClass TableRow {
    ignorepointer 1
    color 1 1 1 1
    position 0.40 4
-   size 0.59 20
+   size 0.59 1
    hexactpos 0
    vexactpos 1
    hexactsize 0
-   vexactsize 1
-   "size to text h" 0
-   "size to text v" 1
+   vexactsize 0
    text ""
    font "gui/fonts/sdf_MetronLight24"
    "exact text" 1
