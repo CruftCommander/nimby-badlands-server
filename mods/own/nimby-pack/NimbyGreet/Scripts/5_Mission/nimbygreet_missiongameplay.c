@@ -86,7 +86,7 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetOpenPending = false;
         m_NimbyGreetRetryPending = false;
         // NIMBY-T-052: calls still queued for this connection fire later through NimbyGreetDeferred.Fire
-        // (3_Game) and are dropped by the connection check in NimbyGreetDeferredCall.
+        // (4_World) and are dropped by the connection check in NimbyGreetDeferredCall.
         NimbyGreetDeferred.s_Connection = NimbyGreetDeferred.s_Connection + 1;
         NimbyGreetLog.Debug("mission finished; spawns this connection=" + m_NimbyGreetSpawnCount.ToString() + " autoOpened=" + NimbyGreetLog.Bool(m_NimbyGreetAutoOpened));
         super.OnMissionFinish();
@@ -600,7 +600,7 @@ modded class MissionGameplay extends MissionBase
         return menu.GetID();
     }
 
-    // NIMBY-T-052: the one entry point for Greet's deferred calls (NimbyGreetDeferred.Fire, 3_Game).
+    // NIMBY-T-052: the one entry point for Greet's deferred calls (NimbyGreetDeferred.Fire, 4_World/nimbygreet_deferred.c).
     override void NimbyGreetDeferredCall(int kind, int connection, int param)
     {
         if (connection != NimbyGreetDeferred.s_Connection)
