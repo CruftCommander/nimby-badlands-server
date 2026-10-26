@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Greet key binding (shared rules 5, Greet plan G7, decided by Jeff October 25, 2026, Q2).
+  Default Insert: bin/constants.xml:586 declares kInsert; bin/preset_X1MouseKey.xml has 0 uses,
+  so a plain press is free in play. kF12 is free in game but is Steam's screenshot key.
+  Nesting follows the Ears precedent (NimbyEarplugs/Data/Inputs.xml): the <sorting> block sits
+  INSIDE <inputs>, beside <actions>; group "nimby" is declared in every NIMBY addon with the same
+  name and label.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyGreetOpen" loc="Greet: open server welcome" />
+        </actions>
+        <sorting name="nimby" loc="NIMBY">
+            <input name="UANimbyGreetOpen" />
+        </sorting>
+    </inputs>
+    <preset>
+        <input name="UANimbyGreetOpen">
+            <btn name="kInsert" />
+        </input>
+    </preset>
+</modded_inputs>
