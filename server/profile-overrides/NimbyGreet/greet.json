@@ -40,7 +40,7 @@
           "body": [
             "# Discord",
             "",
-            "Our Discord is the place for questions, reports, and the mod roadmap. Ask in #faq-and-help or ping an admin.",
+            "Our Discord is the place for questions, reports, and the mod roadmap. Ask in the faq-and-help channel or ping an admin.",
             "",
             "[Join the NIMBY Discord](https://discord.gg/kH3eJ5mdEv)",
             "",
@@ -126,7 +126,7 @@
             "| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |",
             "| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |",
             "",
-            "Coming later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
+            "Coming later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord mod-roadmap channel has the current list."
           ]
         },
         {
@@ -139,7 +139,7 @@
             "",
             "[NIMBY Discord invite](https://discord.gg/kH3eJ5mdEv)",
             "",
-            "Anything else: ask in the #faq-and-help channel or ping an admin."
+            "Anything else: ask in the faq-and-help channel or ping an admin."
           ]
         }
       ]

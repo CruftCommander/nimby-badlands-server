@@ -174,8 +174,20 @@ Describe 'Test-GreetDocument' {
         ((Get-Errors (Test-GreetDocument -Document $cyrillic -MediaIds @())) -join "`n") | Should -Match 'body line 1 is 1024 bytes'
         $fits = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 511) }
         Get-Errors (Test-GreetDocument -Document $fits -MediaIds @()) | Should -BeNullOrEmpty
+        ((Get-Warnings (Test-GreetDocument -Document $fits -MediaIds @())) -join "`n") | Should -Match 'body line 1 is 1022 bytes, at the engine'
+        $short = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 510) }
+        ((Get-Warnings (Test-GreetDocument -Document $short -MediaIds @())) -join "`n") | Should -Not -Match 'at the engine'
         $number = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('ok', 5) }
         ((Get-Errors (Test-GreetDocument -Document $number -MediaIds @())) -join "`n") | Should -Match 'body line 2 is not a string'
+    }
+    It 'counts a # the engine drops but not a heading marker (NIMBY-T-054)' {
+        (Get-GreetBodyReport -Body "# Heading`n## Sub`nAsk in #faq-and-help`n| a | #1 |" -MediaIds @()).HashSigns | Should -Be 2
+        (Get-GreetBodyReport -Body "# Heading`ntext" -MediaIds @()).HashSigns | Should -Be 0
+        $doc = New-GreetDoc { param($d) $d.languages[0].sections[1].body = @('Ask in #faq-and-help.'); $d.languages[0].sections[1].heading = '#rules'; $d.languages[0].tagline = 'Badlands #1' }
+        $warnings = (Get-Warnings (Test-GreetDocument -Document $doc -MediaIds @())) -join "`n"
+        $warnings | Should -Match '1 # character\(s\) the window drops'
+        $warnings | Should -Match 'heading has a #'
+        $warnings | Should -Match 'tagline has a #'
     }
     It 'accepts forceShow written as 0 or 1 by the engine' {
         $doc = New-GreetDoc { param($d) $d.forceShow = 0 }

@@ -23,6 +23,8 @@
         section has more than 4;
       - raw < and > (the client prints them as angle quotes), tables wider than two columns, and
         unknown or unterminated constructs, as warnings;
+      - any # that is not a heading marker, in a body, title, tagline or heading, as a warning:
+        the engine removes every # from displayed text and translates #STR_ keys (NIMBY-T-054);
       - the timing fields are numbers inside the ranges the server clamps to.
     Errors fail the run; warnings do not. Every finding is one line, the way the server logs it.
 
@@ -72,7 +74,7 @@ $script:GreetCjkLanguages = @('chinese', 'japanese', 'chinesesimp')
 $script:GreetCaps = @{
     MaxSections = 16; MaxBodyChars = 4000; MaxLinksPerSection = 8; MaxMediaPerSection = 4; MaxTablesPerSection = 2
     MaxTotalChars = 40000; MaxTitleChars = 60; MaxTaglineChars = 80; MaxHeadingChars = 40; MaxIdChars = 32
-    EngineStringBytes = 1023
+    EngineStringBytes = 1023; EngineStringWarnBytes = 1021
     MaxOpenDelaySeconds = 30; MaxOpenRetrySeconds = 300; MaxCooldownSeconds = 60; MaxRereadSeconds = 3600
 }
 
@@ -103,12 +105,15 @@ function Get-GreetBodyReport {
     # references and tables, and flags the constructs the client degrades.
     param([Parameter(Mandatory)][AllowEmptyString()][string]$Body, [AllowNull()][string[]]$MediaIds)
 
-    $report = [pscustomobject]@{ Links = 0; RejectedLinks = @(); Media = 0; UnknownMedia = @(); Tables = 0; WideRows = 0; RawBrackets = 0; Unterminated = 0 }
+    $report = [pscustomobject]@{ Links = 0; RejectedLinks = @(); Media = 0; UnknownMedia = @(); Tables = 0; WideRows = 0; RawBrackets = 0; Unterminated = 0; HashSigns = 0 }
     $report.RawBrackets = ([regex]::Matches($Body, '[<>]')).Count
     $lines = $Body -split "`n"
     $inTable = $false
     foreach ($rawLine in $lines) {
         $line = $rawLine.TrimEnd("`r").Trim()
+        # NIMBY-T-054: the engine drops every # it is asked to display; only a "# " or "## " heading
+        # marker at the start of a line is consumed by the converter first.
+        $report.HashSigns += ([regex]::Matches(($line -replace '^#{1,2} ', ''), '#')).Count
         if ($line.StartsWith('|')) {
             if (-not $inTable) { $report.Tables++; $inTable = $true }
             $inner = $line.Substring(1)
@@ -201,9 +206,11 @@ function Test-GreetDocument {
         if (Test-HasProperty $language 'title') { $title = [string]$language.title }
         if (-not $title) { Add-Finding 'ERROR' ("{0}: title is missing or empty" -f $label) }
         elseif ($title.Length -gt $script:GreetCaps.MaxTitleChars) { Add-Finding 'WARN' ("{0}: title is {1} characters, cut to {2}" -f $label, $title.Length, $script:GreetCaps.MaxTitleChars) }
+        if ($title.Contains('#')) { Add-Finding 'WARN' ("{0}: title has a # the window drops" -f $label) }
         if (Test-HasProperty $language 'tagline') {
             $tagline = [string]$language.tagline
             if ($tagline.Length -gt $script:GreetCaps.MaxTaglineChars) { Add-Finding 'WARN' ("{0}: tagline is {1} characters, cut to {2}" -f $label, $tagline.Length, $script:GreetCaps.MaxTaglineChars) }
+            if ($tagline.Contains('#')) { Add-Finding 'WARN' ("{0}: tagline has a # the window drops" -f $label) }
         }
         if (-not (Test-HasProperty $language 'sections')) { Add-Finding 'ERROR' ("{0}: sections is missing" -f $label); continue }
         $sections = @($language.sections)
@@ -226,6 +233,7 @@ function Test-GreetDocument {
             if (Test-HasProperty $section 'heading') { $heading = [string]$section.heading }
             if (-not $heading) { Add-Finding 'ERROR' ("{0}: heading is missing or empty" -f $where) }
             elseif ($heading.Length -gt $script:GreetCaps.MaxHeadingChars) { Add-Finding 'WARN' ("{0}: heading is {1} characters, cut to {2}" -f $where, $heading.Length, $script:GreetCaps.MaxHeadingChars) }
+            if ($heading.Contains('#')) { Add-Finding 'WARN' ("{0}: heading has a # the window drops" -f $where) }
             # NIMBY-T-055: the body is an array of lines, each one JSON string of at most 1,023 bytes.
             $bodyValue = $null
             if (Test-HasProperty $section 'body') { $bodyValue = $section.body }
@@ -239,6 +247,7 @@ function Test-GreetDocument {
                 if ($bodyLine -isnot [string]) { Add-Finding 'ERROR' ("{0}: body line {1} is not a string" -f $where, $lineNumber); $badLine = $true; continue }
                 $lineBytes = [System.Text.Encoding]::UTF8.GetByteCount($bodyLine)
                 if ($lineBytes -gt $script:GreetCaps.EngineStringBytes) { Add-Finding 'ERROR' ("{0}: body line {1} is {2} bytes; the engine keeps at most {3} bytes of a string and drops the rest, so split the line" -f $where, $lineNumber, $lineBytes, $script:GreetCaps.EngineStringBytes) }
+                elseif ($lineBytes -ge $script:GreetCaps.EngineStringWarnBytes) { Add-Finding 'WARN' ("{0}: body line {1} is {2} bytes, at the engine's {3}-byte limit; the server logs it as possibly cut, so split the line" -f $where, $lineNumber, $lineBytes, $script:GreetCaps.EngineStringBytes) }
             }
             if ($badLine) { continue }
             $body = $bodyLines -join "`n"
@@ -256,6 +265,7 @@ function Test-GreetDocument {
             if ($report.Tables -gt $script:GreetCaps.MaxTablesPerSection) { Add-Finding 'WARN' ("{0}: {1} tables, the client renders the first {2}" -f $where, $report.Tables, $script:GreetCaps.MaxTablesPerSection) }
             if ($report.WideRows -gt 0) { Add-Finding 'WARN' ("{0}: {1} table row(s) not two cells wide print as written" -f $where, $report.WideRows) }
             if ($report.RawBrackets -gt 0) { Add-Finding 'WARN' ("{0}: {1} raw < or > character(s) render as angle quotes" -f $where, $report.RawBrackets) }
+            if ($report.HashSigns -gt 0) { Add-Finding 'WARN' ("{0}: {1} # character(s) the window drops (the engine removes every # from displayed text); reword, for example 'the faq-and-help channel'" -f $where, $report.HashSigns) }
             if ($report.Unterminated -gt 0) { Add-Finding 'WARN' ("{0}: {1} line(s) with unterminated * or ** emphasis (closed at the line end)" -f $where, $report.Unterminated) }
         }
         if ($total -gt $script:GreetCaps.MaxTotalChars) { Add-Finding 'WARN' ("{0}: {1} body characters in total, cut to {2}" -f $label, $total, $script:GreetCaps.MaxTotalChars) }
