@@ -78,3 +78,43 @@ class NimbyGreetClient
         return id;
     }
 }
+
+// NIMBY-T-052: Greet's deferred calls. The 5_Mission script module is compiled afresh for every
+// mission (the "Module: Mission; loaded ..." line at each mission start), so a call queued from
+// 5_Mission code, instance or static, that fires after the player leaves points into a discarded
+// module: an access violation in DayZGame.OnUpdate (dayzgame.c:3044, the GUI call queue tick), in
+// Phase 1 run 5 three times, about 20 s after a request (the fetch give-up). ScriptCallQueue.Remove
+// did not prevent it. Every Greet CallLater therefore queues Fire, which lives in 3_Game (never
+// reloaded), and reaches the mission through the vanilla Mission class (3_Game, gameplay.c:685);
+// MissionGameplay overrides NimbyGreetDeferredCall and drops calls for an earlier connection.
+class NimbyGreetDeferred
+{
+    static const int AUTO_REQUEST = 1;
+    static const int FETCH_TIMEOUT = 2;
+    static const int RETRY_REQUEST = 3;
+    static const int TRY_OPEN = 4;
+
+    // Bumped by MissionGameplay in OnInit and OnMissionFinish; kept here so it survives the reload.
+    static int s_Connection;
+
+    static void Fire(int kind, int connection, int param)
+    {
+        if (!g_Game)
+        {
+            return;
+        }
+        Mission mission = g_Game.GetMission();
+        if (mission)
+        {
+            mission.NimbyGreetDeferredCall(kind, connection, param);
+        }
+    }
+}
+
+modded class Mission
+{
+    // Overridden by Greet's MissionGameplay; every other mission (the main menu included) ignores it.
+    void NimbyGreetDeferredCall(int kind, int connection, int param)
+    {
+    }
+}
