@@ -12,6 +12,9 @@
         "*.csv",
         "*.json",
         "*.layout",
+        "*.mp4",
+        "*.edds",
+        "*.paa",
         "*.txt",
         "LICENSE",
         "NOTICE"
@@ -46,6 +49,12 @@
             "pboName": "NimbyTack",
             "prefix": "NimbyTack",
             "logPrefix": "Tack"
+        },
+        {
+            "folder": "NimbyGreet",
+            "pboName": "NimbyGreet",
+            "prefix": "NimbyGreet",
+            "logPrefix": "Greet"
         }
     ],
     "dev": {
