@@ -52,6 +52,7 @@ modded class MissionGameplay extends MissionBase
     override void OnInit()
     {
         super.OnInit();
+        NimbyGreetDeferred.s_Connection = NimbyGreetDeferred.s_Connection + 1;   // NIMBY-T-052
         m_NimbyGreetFetch = new NimbyGreetFetch();
         m_NimbyGreetSeen = NimbyGreetClientFiles.LoadSeen();
         m_NimbyGreetPrefs = NimbyGreetClientFiles.LoadPrefs();
@@ -84,14 +85,17 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Hit().Remove(NimbyGreetOnHit);
         m_NimbyGreetOpenPending = false;
         m_NimbyGreetRetryPending = false;
-        // NIMBY-T-052: MissionGameplay is destroyed on disconnect, and a queued call on it that fires
-        // afterwards is an access violation in DayZGame.OnUpdate (dayzgame.c:3044, the GUI call queue
-        // tick). Every CallLater this class queues on itself is removed here; keep this list complete.
+        // NIMBY-T-052: MissionGameplay is destroyed on disconnect, and a queued call on the instance that
+        // fires afterwards is an access violation in DayZGame.OnUpdate (dayzgame.c:3044, the GUI call
+        // queue tick). Removing the instance calls here did not stop it (run 5, 09:02), so nothing is
+        // queued on the instance: NimbyGreetDeferred queues static functions that find the live mission
+        // and drop a call queued for an earlier connection. The removes below are tidiness, not safety.
+        NimbyGreetDeferred.s_Connection = NimbyGreetDeferred.s_Connection + 1;
         ScriptCallQueue queue = g_Game.GetCallQueue(CALL_CATEGORY_GUI);
-        queue.Remove(NimbyGreetAutoRequest);
-        queue.Remove(NimbyGreetFetchTimeout);
-        queue.Remove(NimbyGreetRetryRequest);
-        queue.Remove(NimbyGreetTryOpen);
+        queue.Remove(NimbyGreetDeferred.AutoRequest);
+        queue.Remove(NimbyGreetDeferred.FetchTimeout);
+        queue.Remove(NimbyGreetDeferred.RetryRequest);
+        queue.Remove(NimbyGreetDeferred.TryOpen);
         NimbyGreetLog.Debug("mission finished; spawns this connection=" + m_NimbyGreetSpawnCount.ToString() + " autoOpened=" + NimbyGreetLog.Bool(m_NimbyGreetAutoOpened));
         super.OnMissionFinish();
     }
@@ -160,11 +164,11 @@ modded class MissionGameplay extends MissionBase
             return;
         }
         NimbyGreetLog.Debug("spawn #" + m_NimbyGreetSpawnCount.ToString() + ": request in " + NimbyGreetRules.FETCH_DELAY_MS.ToString() + " ms");
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetAutoRequest);   // NIMBY-T-052: one queued at a time
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetAutoRequest, NimbyGreetRules.FETCH_DELAY_MS, false);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetDeferred.AutoRequest);   // NIMBY-T-052: one queued at a time
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.AutoRequest, NimbyGreetRules.FETCH_DELAY_MS, false, NimbyGreetDeferred.s_Connection);
     }
 
-    protected void NimbyGreetAutoRequest()
+    void NimbyGreetAutoRequest()
     {
         NimbyGreetSendRequest(false, "spawn");
     }
@@ -191,13 +195,13 @@ modded class MissionGameplay extends MissionBase
         player.NimbyGreetSendRequest(requestId, language, m_NimbyGreetSeen.dismissedVersion, m_NimbyGreetSeen.neverShow, manual);
         // NIMBY-T-052: one timeout queued at a time (the handler only acts on the newest id anyway), so the
         // Remove in OnMissionFinish clears it whatever the native Remove does with duplicates.
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetFetchTimeout);
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetFetchTimeout, NimbyGreetRules.FETCH_TIMEOUT_MS, false, requestId);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetDeferred.FetchTimeout);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.FetchTimeout, NimbyGreetRules.FETCH_TIMEOUT_MS, false, NimbyGreetDeferred.s_Connection, requestId);
         return requestId;
     }
 
     // G-21: a payload that never completes is given up once, with the counts; nothing partial ever opens.
-    protected void NimbyGreetFetchTimeout(int requestId)
+    void NimbyGreetFetchTimeout(int requestId)
     {
         if (m_NimbyGreetFetch.m_RequestId != requestId)
         {
@@ -330,8 +334,8 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetOpenPending = true;
         int delayMs = (int)(delaySeconds * 1000.0);
         NimbyGreetLog.Debug("open scheduled in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource);
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetTryOpen);   // NIMBY-T-052: one open chain at a time
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, delayMs, false);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).Remove(NimbyGreetDeferred.TryOpen);   // NIMBY-T-052: one open chain at a time
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.TryOpen, delayMs, false, NimbyGreetDeferred.s_Connection);
     }
 
     // A cooldown refusal (G5 rate limit) retries the same request once when the window is waiting on it.
@@ -349,10 +353,10 @@ modded class MissionGameplay extends MissionBase
         }
         m_NimbyGreetRetryPending = true;
         NimbyGreetLog.Debug("request refused by cooldown; retry in " + delayMs.ToString() + " ms source=" + m_NimbyGreetPendingSource + " manual=" + NimbyGreetLog.Bool(manual));
-        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetRetryRequest, delayMs, false, manual);
+        g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.RetryRequest, delayMs, false, NimbyGreetDeferred.s_Connection, manual);
     }
 
-    protected void NimbyGreetRetryRequest(bool manual)
+    void NimbyGreetRetryRequest(bool manual)
     {
         if (!m_NimbyGreetRetryPending)
         {
@@ -364,7 +368,7 @@ modded class MissionGameplay extends MissionBase
 
     // ---- open (G5) ---------------------------------------------------------------------------
 
-    protected void NimbyGreetTryOpen()
+    void NimbyGreetTryOpen()
     {
         if (!m_NimbyGreetOpenPending)
         {
@@ -390,7 +394,7 @@ modded class MissionGameplay extends MissionBase
                     m_NimbyGreetPauseWaitLogged = true;
                     NimbyGreetLog.Debug("open waiting behind the pause menu, not counted: menu=" + menuId.ToString() + " retries so far=" + m_NimbyGreetOpenRetries.ToString());
                 }
-                g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, NimbyGreetRules.OPEN_RETRY_MS, false);
+                g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.TryOpen, NimbyGreetRules.OPEN_RETRY_MS, false, NimbyGreetDeferred.s_Connection);
                 return;
             }
             if (m_NimbyGreetPauseWaitLogged)
@@ -406,7 +410,7 @@ modded class MissionGameplay extends MissionBase
                 NimbyGreetLog.Info("open gave up after " + m_NimbyGreetOpenRetryMax.ToString() + " retries source=" + m_NimbyGreetPendingSource + " menu=" + menuId.ToString() + " alive=" + NimbyGreetLog.Bool(alive) + " unconscious=" + NimbyGreetLog.Bool(unconscious));
                 return;
             }
-            g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetTryOpen, NimbyGreetRules.OPEN_RETRY_MS, false);
+            g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.TryOpen, NimbyGreetRules.OPEN_RETRY_MS, false, NimbyGreetDeferred.s_Connection);
             return;
         }
         m_NimbyGreetOpenPending = false;
@@ -601,5 +605,59 @@ modded class MissionGameplay extends MissionBase
             return -1;
         }
         return menu.GetID();
+    }
+}
+
+// NIMBY-T-052: every deferred Greet call is a static function, never a method on the mission
+// instance, so a call that fires after a disconnect has no dangling object to run on. Each call
+// carries the connection number it was queued for; MissionGameplay bumps it in OnInit and
+// OnMissionFinish, so a call for a finished connection is dropped even if the next one has begun.
+class NimbyGreetDeferred
+{
+    static int s_Connection;
+
+    static MissionGameplay Live(int connection)
+    {
+        if (connection != s_Connection || !g_Game)
+        {
+            return null;
+        }
+        return MissionGameplay.Cast(g_Game.GetMission());
+    }
+
+    static void AutoRequest(int connection)
+    {
+        MissionGameplay mission = Live(connection);
+        if (mission)
+        {
+            mission.NimbyGreetAutoRequest();
+        }
+    }
+
+    static void FetchTimeout(int connection, int requestId)
+    {
+        MissionGameplay mission = Live(connection);
+        if (mission)
+        {
+            mission.NimbyGreetFetchTimeout(requestId);
+        }
+    }
+
+    static void RetryRequest(int connection, bool manual)
+    {
+        MissionGameplay mission = Live(connection);
+        if (mission)
+        {
+            mission.NimbyGreetRetryRequest(manual);
+        }
+    }
+
+    static void TryOpen(int connection)
+    {
+        MissionGameplay mission = Live(connection);
+        if (mission)
+        {
+            mission.NimbyGreetTryOpen();
+        }
     }
 }
