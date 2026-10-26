@@ -5,7 +5,8 @@
 //           file gets the G3 default (temp-validate-copy-delete, Current state "File
 //           writes"); a malformed file logs one "greet.json invalid: <error>" line and the
 //           last good copy (.lkg) is served instead; with neither there is no text and every
-//           request gets a bare done. Every successful parse refreshes the .lkg copy.
+//           request gets a bare done. Every adopted parse refreshes the .lkg copy, written
+//           from the text just parsed (not copied from disk, which may have changed again).
 //           A request re-reads the file when the copy is older than rereadSeconds, so an
 //           edit reaches the next joiner without a restart and a burst of joins costs one read.
 //           Each request is rate-limited per identity (requestCooldownSeconds), answered
@@ -17,7 +18,10 @@
 //           NIMBY-T-056: that error came once per re-read of the same bad file (G-P1-36, -37),
 //           so one per join. The file is read as text first (the JsonFileLoader.c:11-21 steps)
 //           and an unchanged copy of the last bad text is not parsed again: one engine error
-//           per distinct bad file.
+//           per distinct bad file. The fix build before release 1 (plan Phase 2, Jeff, October
+//           26, 2026) extends that: an unchanged bad .lkg is not parsed again either, a
+//           greet.json problem is logged when it changes rather than on every re-read, and an
+//           unchanged good text is not parsed, capped and logged again.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
 
@@ -30,10 +34,14 @@ modded class MissionServer extends MissionBase
     protected ref map<string, float> m_NimbyGreetLastRefusedLog;  // identity id to tick time
     protected float m_NimbyGreetLoadedAt = -1.0;
     protected string m_NimbyGreetSource = "none";                 // greet.json | greet.json.lkg | default | none
-    protected string m_NimbyGreetLastError = "";                  // last parse error logged, so a re-read logs only a change
-    protected string m_NimbyGreetLastFallback = "";               // last fallback reason logged
-    protected string m_NimbyGreetLastBadText = "";                // NIMBY-T-056: the text of the last file that did not parse
+    protected string m_NimbyGreetLastError = "";                  // last greet.json problem logged ("invalid: <error>" or "cannot be opened for reading"); "" once a read parses again
+    protected string m_NimbyGreetLastFallback = "";               // last fallback line logged, so a re-read logs only a change
+    protected string m_NimbyGreetLastBadText = "";                // NIMBY-T-056: the text of the last greet.json that did not parse or was not servable
+    protected string m_NimbyGreetLastBadReason = "";              // "invalid" or "unservable" for that text
     protected bool m_NimbyGreetHaveBadText;
+    protected string m_NimbyGreetLastGoodText = "";               // the greet.json text adopted last, so an unchanged file is not parsed again
+    protected string m_NimbyGreetLastBadLkgText = "";             // the text of the last greet.json.lkg that did not parse or was not servable
+    protected bool m_NimbyGreetHaveBadLkgText;
 
     override void OnInit()
     {
@@ -66,7 +74,10 @@ modded class MissionServer extends MissionBase
 
     // Reads greet.json. firstBoot writes the default when the file is missing; a later re-read never does.
     // A file that parses but has no servable language (self-review) keeps the copy already served and
-    // never overwrites the .lkg; "invalid" is logged when the error text changes, not on every re-read.
+    // never overwrites the .lkg. A problem ("invalid: <error>", "cannot be opened for reading") is logged
+    // when it changes, not on every re-read; the text of a bad file is kept so an unchanged bad file is
+    // not parsed again (NIMBY-T-056); the text of the adopted file is kept so an unchanged good file is
+    // not parsed, capped and logged again.
     protected void NimbyGreetLoadText(bool firstBoot)
     {
         m_NimbyGreetLoadedAt = GetGame().GetTickTime();
@@ -80,9 +91,11 @@ modded class MissionServer extends MissionBase
                 NimbyGreetLog.Info("greet.json missing; default written=" + NimbyGreetLog.Bool(written) + " error=" + writeError);
                 if (written)
                 {
-                    if (NimbyGreetAdopt(created, "default"))
+                    string createdRaw;
+                    bool createdRead = NimbyGreetReadRaw(NimbyGreetRules.FILE_TEXT, createdRaw);
+                    if (NimbyGreetAdopt(created, "default") && createdRead)
                     {
-                        CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
+                        NimbyGreetRememberGood(createdRaw);
                     }
                     return;
                 }
@@ -93,13 +106,25 @@ modded class MissionServer extends MissionBase
         string raw;
         if (!NimbyGreetReadRaw(NimbyGreetRules.FILE_TEXT, raw))
         {
-            NimbyGreetLog.Info("greet.json cannot be opened for reading");
+            NimbyGreetLogProblem("cannot be opened for reading");
             NimbyGreetLoadLkg("unreadable");
             return;
         }
         if (m_NimbyGreetHaveBadText && raw == m_NimbyGreetLastBadText)
         {
-            NimbyGreetLoadLkg("invalid");
+            NimbyGreetLoadLkg(m_NimbyGreetLastBadReason);
+            return;
+        }
+        bool servingFile = m_NimbyGreetSource == "greet.json" || m_NimbyGreetSource == "default";
+        if (servingFile && raw == m_NimbyGreetLastGoodText)
+        {
+            // The text being served, unchanged: nothing to parse, cap or log. A problem logged since
+            // the last adoption (a bad edit since reverted, a read that failed) is closed with one line.
+            if (m_NimbyGreetHaveBadText || m_NimbyGreetLastError != "")
+            {
+                NimbyGreetLog.Info("greet.json readable again and unchanged; serving version=" + m_NimbyGreetFile.version.ToString());
+            }
+            NimbyGreetForgetBad();
             return;
         }
         NimbyGreetFile data = new NimbyGreetFile();
@@ -108,34 +133,95 @@ modded class MissionServer extends MissionBase
         bool loaded = serializer.ReadFromString(data, raw, error);
         if (!loaded)
         {
-            m_NimbyGreetLastBadText = raw;
-            m_NimbyGreetHaveBadText = true;
-            if (error != m_NimbyGreetLastError)
-            {
-                m_NimbyGreetLastError = error;
-                NimbyGreetLog.Info("greet.json invalid: " + error);
-            }
+            NimbyGreetRememberBad(raw, "invalid");
+            NimbyGreetLogProblem("invalid: " + error);
             NimbyGreetLoadLkg("invalid");
             return;
         }
-        m_NimbyGreetLastBadText = "";
-        m_NimbyGreetHaveBadText = false;
-        m_NimbyGreetLastError = "";
-        int previousVersion = -1;
-        if (m_NimbyGreetFile)
-        {
-            previousVersion = m_NimbyGreetFile.version;
-        }
-        bool wasServing = m_NimbyGreetSource == "greet.json";
         if (!NimbyGreetAdopt(data, "greet.json"))
         {
+            NimbyGreetRememberBad(raw, "unservable");
             NimbyGreetLoadLkg("unservable");
             return;
         }
-        if (!wasServing || data.version != previousVersion)
+        NimbyGreetForgetBad();
+        NimbyGreetRememberGood(raw);
+    }
+
+    // A greet.json problem is logged once per change; a read that parses clears it (NimbyGreetForgetBad).
+    protected void NimbyGreetLogProblem(string problem)
+    {
+        if (problem == m_NimbyGreetLastError)
         {
-            CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
+            return;
         }
+        m_NimbyGreetLastError = problem;
+        NimbyGreetLog.Info("greet.json " + problem);
+    }
+
+    // A fallback outcome is logged once per change; an adoption clears it (NimbyGreetAdopt).
+    protected void NimbyGreetLogFallback(string line)
+    {
+        if (line == m_NimbyGreetLastFallback)
+        {
+            return;
+        }
+        m_NimbyGreetLastFallback = line;
+        NimbyGreetLog.Info(line);
+    }
+
+    protected void NimbyGreetRememberBad(string raw, string reason)
+    {
+        m_NimbyGreetLastBadText = raw;
+        m_NimbyGreetLastBadReason = reason;
+        m_NimbyGreetHaveBadText = true;
+    }
+
+    protected void NimbyGreetForgetBad()
+    {
+        m_NimbyGreetLastBadText = "";
+        m_NimbyGreetLastBadReason = "";
+        m_NimbyGreetHaveBadText = false;
+        m_NimbyGreetLastError = "";
+    }
+
+    // Keeps the adopted text and refreshes the .lkg from it.
+    protected void NimbyGreetRememberGood(string raw)
+    {
+        m_NimbyGreetLastGoodText = raw;
+        NimbyGreetWriteLkg(raw);
+    }
+
+    // The .lkg is written from the text that was just parsed and adopted, not copied from greet.json,
+    // which may have been edited again between the read and the copy. Temp, read back, copy, delete,
+    // the NimbyGreetWriteAtomic steps (there is no rename, EnSystem.c:525-531).
+    protected void NimbyGreetWriteLkg(string raw)
+    {
+        FileHandle handle = OpenFile(NimbyGreetRules.FILE_TEXT_LKG_TMP, FileMode.WRITE);
+        if (handle == 0)
+        {
+            NimbyGreetLog.Info("greet.json.lkg not refreshed: cannot open " + NimbyGreetRules.FILE_TEXT_LKG_TMP + " for writing");
+            return;
+        }
+        FPrint(handle, raw);
+        CloseFile(handle);
+        string check;
+        bool readBack = NimbyGreetReadRaw(NimbyGreetRules.FILE_TEXT_LKG_TMP, check);
+        if (!readBack || check != raw)
+        {
+            NimbyGreetLog.Info("greet.json.lkg not refreshed: the temp file did not read back as written");
+            DeleteFile(NimbyGreetRules.FILE_TEXT_LKG_TMP);
+            return;
+        }
+        if (!CopyFile(NimbyGreetRules.FILE_TEXT_LKG_TMP, NimbyGreetRules.FILE_TEXT_LKG))
+        {
+            NimbyGreetLog.Info("greet.json.lkg not refreshed: CopyFile failed");
+            DeleteFile(NimbyGreetRules.FILE_TEXT_LKG_TMP);
+            return;
+        }
+        DeleteFile(NimbyGreetRules.FILE_TEXT_LKG_TMP);
+        m_NimbyGreetLastBadLkgText = "";
+        m_NimbyGreetHaveBadLkgText = false;
     }
 
     // The whole file as text, the way JsonFileLoader.LoadFile reads it (JsonFileLoader.c:11-21).
@@ -152,32 +238,46 @@ modded class MissionServer extends MissionBase
         return true;
     }
 
+    // Serves the copy already in memory, else the .lkg. The .lkg is read as text first and an unchanged
+    // copy of the last bad .lkg is not parsed again (one engine JSON ERROR per distinct bad file, the
+    // NIMBY-T-056 rule for greet.json); every outcome is logged once per change.
     protected void NimbyGreetLoadLkg(string because)
     {
         if (m_NimbyGreetFile && m_NimbyGreetSource != "none")
         {
-            if (because != m_NimbyGreetLastFallback)
-            {
-                m_NimbyGreetLastFallback = because;
-                NimbyGreetLog.Info("greet.json " + because + "; serving the copy loaded earlier this boot (source=" + m_NimbyGreetSource + " version=" + m_NimbyGreetFile.version.ToString() + ")");
-            }
+            NimbyGreetLogFallback("greet.json " + because + "; serving the copy loaded earlier this boot (source=" + m_NimbyGreetSource + " version=" + m_NimbyGreetFile.version.ToString() + ")");
             return;
         }
         if (!FileExist(NimbyGreetRules.FILE_TEXT_LKG))
         {
-            NimbyGreetLog.Info("greet.json " + because + " and no greet.json.lkg; no text until the file is fixed");
+            NimbyGreetLogFallback("greet.json " + because + " and no greet.json.lkg; no text until the file is fixed");
+            return;
+        }
+        string raw;
+        if (!NimbyGreetReadRaw(NimbyGreetRules.FILE_TEXT_LKG, raw))
+        {
+            NimbyGreetLogFallback("greet.json " + because + " and greet.json.lkg cannot be opened for reading; no text until the file is fixed");
+            return;
+        }
+        if (m_NimbyGreetHaveBadLkgText && raw == m_NimbyGreetLastBadLkgText)
+        {
             return;
         }
         NimbyGreetFile data = new NimbyGreetFile();
         string error;
-        if (!JsonFileLoader<NimbyGreetFile>.LoadFile(NimbyGreetRules.FILE_TEXT_LKG, data, error))
+        JsonSerializer serializer = new JsonSerializer();
+        if (!serializer.ReadFromString(data, raw, error))
         {
-            NimbyGreetLog.Info("greet.json " + because + " and greet.json.lkg invalid: " + error + "; no text until the file is fixed");
+            m_NimbyGreetLastBadLkgText = raw;
+            m_NimbyGreetHaveBadLkgText = true;
+            NimbyGreetLogFallback("greet.json " + because + " and greet.json.lkg invalid: " + error + "; no text until the file is fixed");
             return;
         }
         if (!NimbyGreetAdopt(data, "greet.json.lkg"))
         {
-            NimbyGreetLog.Info("greet.json " + because + " and greet.json.lkg has no servable language; no text until the file is fixed");
+            m_NimbyGreetLastBadLkgText = raw;
+            m_NimbyGreetHaveBadLkgText = true;
+            NimbyGreetLogFallback("greet.json " + because + " and greet.json.lkg has no servable language; no text until the file is fixed");
         }
     }
 

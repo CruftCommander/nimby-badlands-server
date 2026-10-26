@@ -175,7 +175,9 @@ Describe 'Test-GreetDocument' {
         $fits = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 511) }
         Get-Errors (Test-GreetDocument -Document $fits -MediaIds @()) | Should -BeNullOrEmpty
         ((Get-Warnings (Test-GreetDocument -Document $fits -MediaIds @())) -join "`n") | Should -Match 'body line 1 is 1022 bytes, at the engine'
-        $short = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(([string][char]0x0436) * 510) }
+        $atWarn = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('a' * 1020) }
+        ((Get-Warnings (Test-GreetDocument -Document $atWarn -MediaIds @())) -join "`n") | Should -Match 'body line 1 is 1020 bytes, at the engine'
+        $short = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('a' * 1019) }
         ((Get-Warnings (Test-GreetDocument -Document $short -MediaIds @())) -join "`n") | Should -Not -Match 'at the engine'
         $number = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @('ok', 5) }
         ((Get-Errors (Test-GreetDocument -Document $number -MediaIds @())) -join "`n") | Should -Match 'body line 2 is not a string'

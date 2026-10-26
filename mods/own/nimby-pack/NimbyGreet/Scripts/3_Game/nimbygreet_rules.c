@@ -36,9 +36,11 @@ class NimbyGreetRules
     // NIMBY-T-055 (G-P1-34, G-P1-35): JsonSerializer.ReadFromString keeps at most this many bytes of
     // any one string value and drops the rest without an error (6,000 ASCII characters came back as
     // 1,023; 1,840 bytes of Cyrillic as 1,022, the cut letter dropped whole). A section body is
-    // therefore an array of lines, each one string. A line this close to the limit may have been cut.
+    // therefore an array of lines, each one string. A line this close to the limit may have been cut:
+    // a cut that drops a whole four-byte character leaves 1,020 bytes, so 1,020 is the warning
+    // threshold (Jeff, October 26, 2026; the validator's EngineStringWarnBytes is the same number).
     static const int ENGINE_STRING_BYTES = 1023;
-    static const int ENGINE_STRING_WARN_BYTES = 1021;
+    static const int ENGINE_STRING_WARN_BYTES = 1020;
 
     // G5: bytes per chunk (NIMBY-T-037, measured cap in (1,000, 1,100]).
     static const int CHUNK_BYTES = 1000;
@@ -76,6 +78,7 @@ class NimbyGreetRules
     static const string FILE_TEXT = "$profile:NimbyGreet\\greet.json";
     static const string FILE_TEXT_LKG = "$profile:NimbyGreet\\greet.json.lkg";
     static const string FILE_TEXT_TMP = "$profile:NimbyGreet\\greet.json.tmp";
+    static const string FILE_TEXT_LKG_TMP = "$profile:NimbyGreet\\greet.json.lkg.tmp";
     static const string FILE_SEEN = "$profile:NimbyGreet\\seen.json";
     static const string FILE_SEEN_TMP = "$profile:NimbyGreet\\seen.json.tmp";
     static const string FILE_PREFS = "$profile:NimbyGreet\\prefs.json";

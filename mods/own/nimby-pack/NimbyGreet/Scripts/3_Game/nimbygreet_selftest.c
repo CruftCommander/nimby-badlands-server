@@ -371,10 +371,11 @@ class NimbyGreetSelfTest
         NimbyGreetSection near = NimbyGreetText.MakeSection("near", "Near", NimbyGreetRules.Repeat("z", NimbyGreetRules.ENGINE_STRING_WARN_BYTES));
         limit.sections.Insert(near);
         cuts = NimbyGreetText.ApplyCaps(limit, notes);
-        failures += Case(results, "caps: a line at the engine string limit is noted", cuts == 1 && notes.Count() == 1 && notes.Get(0).IndexOf("engine") >= 0);
+        failures += Case(results, "caps: a line of 1020 bytes (the warning threshold) is noted", cuts == 1 && notes.Count() == 1 && notes.Get(0).IndexOf("engine") >= 0);
         NimbyGreetLanguage under = new NimbyGreetLanguage();
         under.sections.Insert(NimbyGreetText.MakeSection("under", "Under", NimbyGreetRules.Repeat("z", NimbyGreetRules.ENGINE_STRING_WARN_BYTES - 1)));
-        failures += Case(results, "caps: a line below the engine limit is not noted", NimbyGreetText.ApplyCaps(under, notes) == 0);
+        failures += Case(results, "caps: a line of 1019 bytes is not noted", NimbyGreetText.ApplyCaps(under, notes) == 0);
+        failures += Case(results, "caps: the warning threshold is the limit less one four-byte character", NimbyGreetRules.ENGINE_STRING_WARN_BYTES == 1020 && NimbyGreetRules.ENGINE_STRING_BYTES - 3 == NimbyGreetRules.ENGINE_STRING_WARN_BYTES);
 
         // The engine behavior itself (G-P1-34, G-P1-35): a guard for a future DayZ that changes it.
         NimbyGreetLanguage wire = new NimbyGreetLanguage();

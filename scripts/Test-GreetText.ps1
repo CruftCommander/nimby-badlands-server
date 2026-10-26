@@ -74,7 +74,7 @@ $script:GreetCjkLanguages = @('chinese', 'japanese', 'chinesesimp')
 $script:GreetCaps = @{
     MaxSections = 16; MaxBodyChars = 4000; MaxLinksPerSection = 8; MaxMediaPerSection = 4; MaxTablesPerSection = 2
     MaxTotalChars = 40000; MaxTitleChars = 60; MaxTaglineChars = 80; MaxHeadingChars = 40; MaxIdChars = 32
-    EngineStringBytes = 1023; EngineStringWarnBytes = 1021
+    EngineStringBytes = 1023; EngineStringWarnBytes = 1020
     MaxOpenDelaySeconds = 30; MaxOpenRetrySeconds = 300; MaxCooldownSeconds = 60; MaxRereadSeconds = 3600
 }
 
