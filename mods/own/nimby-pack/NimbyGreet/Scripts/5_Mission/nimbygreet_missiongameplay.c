@@ -34,7 +34,7 @@ modded class MissionGameplay extends MissionBase
 
     protected ref NimbyGreetFetch m_NimbyGreetFetch;
     protected UAInput m_NimbyGreetInput;
-    protected NimbyGreetProbeMenu m_NimbyGreetMenu;
+    protected ref NimbyGreetProbeMenu m_NimbyGreetMenu;
     protected int m_NimbyGreetLastMenuId = -2;
     protected int m_NimbyGreetSpawnCount;
     protected int m_NimbyGreetOpenRetries;
