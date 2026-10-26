@@ -54,6 +54,7 @@ class NimbyGreetMenu extends UIScriptedMenu
     static const int LINK_TEXT_SIZE = 15;
     static const int TABLE_ROW_HEIGHT = 28;
     static const int TABLE_RELAYOUT_FRAMES = 3;
+    static const float TABLE_ONE_LINE_MAX = 26.8;   // largest one-line GetContentHeight measured, G-P1-31
     static const int BLOCK_GAP = 10;   // extra air around tables and rules (Phase 1 run 2, Jeff)
     static const int MEDIA_ALT_HEIGHT = 20;
 
@@ -762,44 +763,74 @@ class NimbyGreetMenu extends UIScriptedMenu
     // TABLE_RELAYOUT_FRAMES frames after each build, the text-size rebuild included.
     protected void RelayoutTables(bool last)
     {
-        int tall = 0;
+        // NIMBY-T-053, measured in G-P1-31 (1920x1080 and 2560x1440, text 1, 1.25, 1.5):
+        // GetContentHeight adds one true line height per wrapped line but counts the last line as a
+        // fixed 25 to 27 px whatever the font size; rows and the screen agree 1:1. So a cell's line
+        // count is taken from its content height against the table's one-line value (the smallest
+        // cell, the header row being one line), and the row is sized from the real line height:
+        // the text size times screenHeight / 1080 (the engine scales exact text sizes from 1080p;
+        // measured 17 to 22.67 and 25 to 33.33 at 1440p).
+        int screenW;
+        int screenH;
+        GetScreenSize(screenW, screenH);
+        float linePx = Scaled(TABLE_TEXT_SIZE);
+        if (screenH > 0)
+        {
+            linePx = Scaled(TABLE_TEXT_SIZE) * screenH / 1080.0;
+        }
+        float oneLine = -1;
         int i = 0;
+        while (i < m_TableRows.Count())
+        {
+            oneLine = SmallerPositive(oneLine, TableCellContent(m_TableLeft.Get(i)));
+            oneLine = SmallerPositive(oneLine, TableCellContent(m_TableRight.Get(i)));
+            i = i + 1;
+        }
+        // A table whose every cell wraps (a headerless continuation) has no one-line cell: the one-line
+        // value never measured above 26.8 in G-P1-31, so anything larger is capped there.
+        if (oneLine < 0 || oneLine > TABLE_ONE_LINE_MAX)
+        {
+            oneLine = TABLE_ONE_LINE_MAX;
+        }
         if (last)
         {
-            int screenW;
-            int screenH;
-            GetScreenSize(screenW, screenH);
-            NimbyGreetLog.Debug("table measure screen=" + screenW.ToString() + "x" + screenH.ToString() + " textScale=" + m_Prefs.textScale.ToString() + " baseRow=" + Scaled(TABLE_ROW_HEIGHT).ToString());
+            NimbyGreetLog.Debug("table measure screen=" + screenW.ToString() + "x" + screenH.ToString() + " textScale=" + m_Prefs.textScale.ToString() + " linePx=" + linePx.ToString() + " oneLine=" + oneLine.ToString());
         }
+        int tall = 0;
+        i = 0;
         while (i < m_TableRows.Count())
         {
             Widget row = m_TableRows.Get(i);
-            RichTextWidget left = m_TableLeft.Get(i);
-            RichTextWidget right = m_TableRight.Get(i);
-            float rowHeight = Scaled(TABLE_ROW_HEIGHT);
-            float contentLeft = 0;
-            float contentRight = 0;
-            if (left)
+            float contentLeft = TableCellContent(m_TableLeft.Get(i));
+            float contentRight = TableCellContent(m_TableRight.Get(i));
+            int lines = TableCellLines(contentLeft, oneLine, linePx);
+            int rightLines = TableCellLines(contentRight, oneLine, linePx);
+            if (rightLines > lines)
             {
-                contentLeft = left.GetContentHeight();
-                rowHeight = GrowRow(rowHeight, contentLeft);
+                lines = rightLines;
             }
-            if (right)
+            // Lines plus half a line of air and the cells' 4 px top offset; never below the base row.
+            float rowHeight = lines * linePx + linePx * 0.5 + 4;
+            float ceiling = Scaled(TABLE_ROW_HEIGHT) * 8 * screenH / 1080.0;
+            if (rowHeight > ceiling && ceiling > 0)
             {
-                contentRight = right.GetContentHeight();
-                rowHeight = GrowRow(rowHeight, contentRight);
+                rowHeight = ceiling;
+            }
+            if (rowHeight < Scaled(TABLE_ROW_HEIGHT))
+            {
+                rowHeight = Scaled(TABLE_ROW_HEIGHT);
             }
             if (row)
             {
                 row.SetSize(1.0, rowHeight);
             }
-            if (rowHeight > Scaled(TABLE_ROW_HEIGHT))
+            if (lines > 1)
             {
                 tall = tall + 1;
             }
             if (last && row)
             {
-                LogTableRowMeasure(i, row, right, contentLeft, contentRight, rowHeight);
+                LogTableRowMeasure(i, row, m_TableRight.Get(i), contentLeft, contentRight, rowHeight);
             }
             i = i + 1;
         }
@@ -813,8 +844,45 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         if (last)
         {
-            NimbyGreetLog.Debug("table relayout rows=" + m_TableRows.Count().ToString() + " taller than one line=" + tall.ToString());
+            NimbyGreetLog.Debug("table relayout rows=" + m_TableRows.Count().ToString() + " wrapped=" + tall.ToString());
         }
+    }
+
+    protected float TableCellContent(RichTextWidget cell)
+    {
+        if (!cell)
+        {
+            return 0;
+        }
+        return cell.GetContentHeight();
+    }
+
+    protected float SmallerPositive(float current, float value)
+    {
+        if (value <= 0)
+        {
+            return current;
+        }
+        if (current < 0 || value < current)
+        {
+            return value;
+        }
+        return current;
+    }
+
+    // One line plus one per full line height the content measures above the table's one-line value.
+    protected int TableCellLines(float content, float oneLine, float linePx)
+    {
+        if (content <= 0 || oneLine <= 0 || linePx <= 0)
+        {
+            return 1;
+        }
+        int extra = (int)Math.Round((content - oneLine) / linePx);
+        if (extra < 0)
+        {
+            extra = 0;
+        }
+        return extra + 1;
     }
 
     // NIMBY-T-053 measurement (Phase 1 run 5): the numbers that decide how a row's units relate to its
