@@ -182,7 +182,9 @@ class NimbyGreetSelfTest
             language.sections.Insert(NimbyGreetText.MakeSection("s" + s.ToString(), "Heading", NimbyGreetRules.Repeat("b", 100)));
             s = s + 1;
         }
-        NimbyGreetText.SetBodyText(language.sections.Get(0), NimbyGreetRules.Repeat("x", 4500));
+        // Five lines of 900: over the 4,000 cap but every line under the engine's string limit (NIMBY-T-055).
+        string longLine = NimbyGreetRules.Repeat("x", 900);
+        NimbyGreetText.SetBodyText(language.sections.Get(0), longLine + "\n" + longLine + "\n" + longLine + "\n" + longLine + "\n" + longLine);
         language.sections.Get(1).id = "Bad Id!";
         language.sections.Get(2).heading = NimbyGreetRules.Repeat("h", 50);
         array<string> notes;
