@@ -152,6 +152,9 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         BuildChrome();
         BuildSections();
+        m_Selected = -1;
+        BuildBody(-1);
+        BuildLinks();
         SelectSection(0);
     }
 
@@ -316,7 +319,6 @@ class NimbyGreetMenu extends UIScriptedMenu
         RefreshTextSizeLabel();
         RefreshAnimationsLabel();
         RefreshLanguageLabel();
-        SetButtonLabel(m_BtnNever, NeverLabel());
     }
 
     protected string NeverLabel()
@@ -540,6 +542,10 @@ class NimbyGreetMenu extends UIScriptedMenu
 
     protected NimbyGreetConverted ConvertedFor(int index)
     {
+        if (index < 0 || index >= m_Language.sections.Count())
+        {
+            return new NimbyGreetConverted();
+        }
         while (m_ConvertedCache.Count() <= index)
         {
             m_ConvertedCache.Insert(null);
@@ -575,6 +581,11 @@ class NimbyGreetMenu extends UIScriptedMenu
         m_Links.Clear();
         if (!m_BodyContent)
         {
+            return;
+        }
+        if (index < 0 || index >= m_Language.sections.Count())
+        {
+            // A language with no section (the server never serves one, but a stale cache could): an empty body.
             return;
         }
         NimbyGreetConverted converted = ConvertedFor(index);
@@ -662,7 +673,7 @@ class NimbyGreetMenu extends UIScriptedMenu
             RichTextWidget right = RichTextWidget.Cast(root.FindAnyWidget("TableRow_right"));
             string leftMarkup = "<b>" + row.Get(0) + "</b>";
             string rightMarkup = row.Get(1);
-            if (r == 0)
+            if (r == 0 && !block.headerless)
             {
                 rightMarkup = "<b>" + row.Get(1) + "</b>";
             }

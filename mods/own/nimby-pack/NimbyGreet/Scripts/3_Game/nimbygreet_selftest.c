@@ -42,6 +42,7 @@ class NimbyGreetSelfTest
         failures += Case(results, "utf8: chunk end backs off a split 2-byte char", NimbyGreetRules.ChunkEnd("дайз", 0, 3) == 2);
         failures += Case(results, "utf8: chunk end keeps an exact boundary", NimbyGreetRules.ChunkEnd("дайз", 0, 4) == 4);
         failures += Case(results, "utf8: chunk end past the end is the length", NimbyGreetRules.ChunkEnd("abc", 0, 10) == 3);
+        failures += Case(results, "utf8: chunk end backs off a split 3-byte char", NimbyGreetRules.ChunkEnd("字字", 0, 4) == 3);
         failures += Case(results, "fill: ascii gives exact bytes", NimbyGreetRules.FillBytes("a", 10).Length() == 10);
         failures += Case(results, "fill: cyrillic rounds down to a whole char", NimbyGreetRules.FillBytes("д", 5).Length() == 4);
         failures += Case(results, "fill: cjk exact multiple of 3 bytes", NimbyGreetRules.FillBytes("字", 9).Length() == 9);
@@ -82,7 +83,15 @@ class NimbyGreetSelfTest
         failures += Case(results, "md: interleaved emphasis stays nested", c.blocks.Get(0).markup == "<b>a <i>b</i></b><i> c</i>");
 
         c = NimbyGreetMarkdown.Convert("**open to the end\n\nnext", media);
-        failures += Case(results, "md: unterminated bold closes at its paragraph", c.blocks.Get(0).markup == "<b>open to the end</b>" && c.blocks.Get(1).markup == "next");
+        failures += Case(results, "md: unterminated bold closes at its line", c.blocks.Get(0).markup == "<b>open to the end</b>" && c.blocks.Get(1).markup == "next");
+
+        c = NimbyGreetMarkdown.Convert("**a\nb**", media);
+        failures += Case(results, "md: emphasis never crosses a line break", c.blocks.Get(0).markup == "<b>a</b><br/>b<b></b>");
+
+        c = NimbyGreetMarkdown.Convert("10. ten\n#x\n2026. year", media);
+        failures += Case(results, "md: two-digit list number kept, no-space hash and four-digit number are text", c.blocks.Get(0).markup == "10. ten<br/>#x<br/>2026. year");
+
+        failures += Case(results, "md: rule needs three dashes", NimbyGreetMarkdown.IsRule("----") && !NimbyGreetMarkdown.IsRule("--") && !NimbyGreetMarkdown.IsRule("- - -"));
 
         c = NimbyGreetMarkdown.Convert("2 * 3 * 4", media);
         failures += Case(results, "md: a spaced star is not italic", c.blocks.Get(0).markup == "2 * 3 * 4");
@@ -137,7 +146,8 @@ class NimbyGreetSelfTest
         bool wideOk = c.blocks.Count() == 3 && c.blocks.Get(0).kind == NimbyGreetBlockKind.TABLE;
         wideOk = wideOk && c.blocks.Get(1).kind == NimbyGreetBlockKind.TEXT && c.blocks.Get(1).markup == "| 1 | 2 | 3 |";
         wideOk = wideOk && c.blocks.Get(2).kind == NimbyGreetBlockKind.TABLE;
-        failures += Case(results, "md: three-cell row prints as written between table parts", wideOk);
+        wideOk = wideOk && c.blocks.Get(2).headerless && !c.blocks.Get(0).headerless && c.tables == 1;
+        failures += Case(results, "md: three-cell row prints as written between table parts, one table, no second header", wideOk);
 
         c = NimbyGreetMarkdown.Convert("![The map](map)", media);
         failures += Case(results, "md: known media id is a media block", c.blocks.Count() == 1 && c.blocks.Get(0).kind == NimbyGreetBlockKind.MEDIA && c.blocks.Get(0).mediaId == "map" && c.blocks.Get(0).alt == "The map");
@@ -291,6 +301,7 @@ class NimbyGreetSelfTest
         failures += Case(results, "fetch: chunk for another request dropped", !fetch.AcceptChunk(6, 0, chunks.Get(0), 0.1, why) && why == "other request");
         failures += Case(results, "fetch: oversize chunk dropped", !fetch.AcceptChunk(7, 0, NimbyGreetRules.FillBytes("a", NimbyGreetRules.CHUNK_BYTES + 1), 0.1, why) && why == "chunk above CHUNK_BYTES");
         failures += Case(results, "fetch: negative index dropped", !fetch.AcceptChunk(7, -1, chunks.Get(0), 0.1, why));
+        failures += Case(results, "fetch: index at the payload cap dropped before done", !fetch.AcceptChunk(7, NimbyGreetRules.MaxChunkCount(), "x", 0.1, why) && why == "index beyond the payload cap");
         failures += Case(results, "fetch: chunk 2 accepted before done", fetch.AcceptChunk(7, 2, chunks.Get(2), 0.2, why));
         failures += Case(results, "fetch: duplicate index dropped", !fetch.AcceptChunk(7, 2, chunks.Get(2), 0.2, why) && why == "duplicate index");
         failures += Case(results, "fetch: stray chunk 9 accepted before done", fetch.AcceptChunk(7, 9, "stray", 0.2, why));
@@ -317,6 +328,9 @@ class NimbyGreetSelfTest
         failures += Case(results, "fetch: done with zero chunks is complete and empty", empty.AcceptDone(9, 0, none, 0.1, why) && empty.IsComplete() && empty.Assemble() == "");
 
         failures += Case(results, "fetch: payload cap is 164 chunks", NimbyGreetRules.MaxChunkCount() == 164);
+        NimbyGreetDone blank = NimbyGreetDone.FromJson("{}", error);
+        failures += Case(results, "done: empty object parses to defaults", blank != null && blank.version == 0 && blank.languages != null && blank.languages.Count() == 0 && blank.reason == "");
+        failures += Case(results, "fetch: duplicate done dropped without refusing", !fetch.AcceptDone(7, 3, back, 0.6, why) && why == "duplicate done" && !fetch.IsRefused());
         return failures;
     }
 

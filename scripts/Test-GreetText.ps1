@@ -107,22 +107,26 @@ function Get-GreetBodyReport {
         $line = $rawLine.TrimEnd("`r").Trim()
         if ($line.StartsWith('|')) {
             if (-not $inTable) { $report.Tables++; $inTable = $true }
-            $inner = $line.TrimStart('|').TrimEnd('|')
+            $inner = $line.Substring(1)
+            if ($inner.EndsWith('|')) { $inner = $inner.Substring(0, $inner.Length - 1) }
             $cells = @($inner -split '\|' | ForEach-Object { $_.Trim() })
             $isSeparator = ($cells.Count -gt 0) -and (@($cells | Where-Object { $_ -notmatch '^:?-+:?$' }).Count -eq 0)
             if (-not $isSeparator -and $cells.Count -ne 2) { $report.WideRows++ }
             continue
         }
         $inTable = $false
-        if ($line -match '^!\[(.*)\]\((.+)\)$') {
+        if ($line -match '^!\[(.*)\]\((.*)\)$') {
             $report.Media++
             $id = $Matches[2]
             if ($null -eq $MediaIds -or ($MediaIds -notcontains $id)) { $report.UnknownMedia += $id }
             continue
         }
         # Unescaped single-star and double-star counts per paragraph line: an odd count is unterminated
-        # emphasis, which the client closes at the paragraph end.
+        # emphasis, which the client closes at the end of the line.
         $stripped = [regex]::Replace($line, '\\[\\*\[\]()!#|_-]', '')
+        # A "* " bullet marker and a star with a space on both sides ("5 * 3") are literal on the client.
+        if ($stripped.StartsWith('* ')) { $stripped = $stripped.Substring(2) }
+        $stripped = [regex]::Replace($stripped, '(?<=\s)\*(?=\s)', '')
         $doubles = ([regex]::Matches($stripped, '\*\*')).Count
         $singles = ([regex]::Matches($stripped, '(?<!\*)\*(?!\*)')).Count
         if (($doubles % 2) -ne 0 -or ($singles % 2) -ne 0) { $report.Unterminated++ }
@@ -234,7 +238,7 @@ function Test-GreetDocument {
             if ($report.Tables -gt $script:GreetCaps.MaxTablesPerSection) { Add-Finding 'WARN' ("{0}: {1} tables, the client renders the first {2}" -f $where, $report.Tables, $script:GreetCaps.MaxTablesPerSection) }
             if ($report.WideRows -gt 0) { Add-Finding 'WARN' ("{0}: {1} table row(s) not two cells wide print as written" -f $where, $report.WideRows) }
             if ($report.RawBrackets -gt 0) { Add-Finding 'WARN' ("{0}: {1} raw < or > character(s) render as angle quotes" -f $where, $report.RawBrackets) }
-            if ($report.Unterminated -gt 0) { Add-Finding 'WARN' ("{0}: {1} line(s) with unterminated * or ** emphasis (closed at the paragraph end)" -f $where, $report.Unterminated) }
+            if ($report.Unterminated -gt 0) { Add-Finding 'WARN' ("{0}: {1} line(s) with unterminated * or ** emphasis (closed at the line end)" -f $where, $report.Unterminated) }
         }
         if ($total -gt $script:GreetCaps.MaxTotalChars) { Add-Finding 'WARN' ("{0}: {1} body characters in total, cut to {2}" -f $label, $total, $script:GreetCaps.MaxTotalChars) }
         Add-Finding 'INFO' ("{0}: {1} section(s), {2} body characters" -f $label, $sections.Count, $total)
@@ -270,13 +274,19 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     Write-Line ("Test-GreetText {0} file={1} manifest={2}" -f $stamp, $Path, $ManifestPath)
     if (-not (Test-Path -LiteralPath $Path)) { Write-Line ("ERROR file not found: {0}" -f $Path); exit 2 }
-    $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    $raw = [string](Get-Content -LiteralPath $Path -Raw -Encoding UTF8)
+    if ([string]::IsNullOrWhiteSpace($raw)) { Write-Line ("ERROR file is empty: {0}" -f $Path); Write-Line ("FAIL: 1 error. Log: {0}" -f $logFile); exit 2 }
     if ($raw.Length -gt 0 -and [int][char]$raw[0] -eq 0xFEFF) { Write-Line 'WARN the file starts with a UTF-8 byte order mark; the engine may refuse it. Save without BOM'; $raw = $raw.Substring(1) }
     try {
         $document = $raw | ConvertFrom-Json
     }
     catch {
         Write-Line ("ERROR JSON does not parse: {0}" -f $_.Exception.Message)
+        Write-Line ("FAIL: 1 error. Log: {0}" -f $logFile)
+        exit 2
+    }
+    if ($null -eq $document -or $document -isnot [System.Management.Automation.PSCustomObject]) {
+        Write-Line 'ERROR JSON is not an object'
         Write-Line ("FAIL: 1 error. Log: {0}" -f $logFile)
         exit 2
     }

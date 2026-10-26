@@ -15,7 +15,7 @@
         {
           "id": "welcome",
           "heading": "Welcome",
-          "body": "# Welcome to NIMBY\n\nHardcore survival on Nasdara, the Badlands map. Fresh world as of October 15, 2026.\n\nRestarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).\n\nThis window shows again only when the text changes. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**. Tick **Don't show this again** before you close it and it stays out of your way until the rules change."
+          "body": "# Welcome to NIMBY\n\nHardcore survival on Nasdara, the Badlands map. Fresh world as of October 15, 2026.\n\nRestarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).\n\nThis window opens each time you join. Tick **Don't show this again** before you close it and it stays closed; if the rules change in a way everyone must see, it comes back once. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**."
         },
         {
           "id": "rules",
@@ -50,7 +50,7 @@
         {
           "id": "mods",
           "heading": "Mods",
-          "body": "# Mods\n\nEverything comes in one Workshop item, **@NIMBY**. Every key below is rebindable in Options > Controls under the NIMBY tab.\n\n| Mod | What it does |\n| --- | --- |\n| Legs | Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back |\n| Ears | Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected |\n| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |\n| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |\n\nComing later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
+          "body": "# Mods\n\nEverything comes in one Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls under the NIMBY tab.\n\n| Mod | What it does |\n| --- | --- |\n| Legs | Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back |\n| Ears | Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected |\n| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |\n| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |\n\nComing later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord #mod-roadmap channel has the current list."
         },
         {
           "id": "questions",

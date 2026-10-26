@@ -34,6 +34,7 @@ class NimbyGreetBlock
     string mediaId = "";                // MEDIA
     string alt = "";                    // MEDIA
     ref array<ref array<string>> rows;  // TABLE: two cells per row, first row is the header
+    bool headerless;                    // TABLE: the continuation after a row printed as written; no header, not a new table
 
     void NimbyGreetBlock(int blockKind)
     {
@@ -330,13 +331,17 @@ class NimbyGreetMarkdown
                 i = i + 1;
                 continue;
             }
-            // Printed as written: flush any table rows so far, then the line as text.
+            // Printed as written: flush any table rows so far, then the line as text. The rows after it
+            // continue the same table (headerless, same count) so a stray wide row costs no second header.
             if (table.rows.Count() > 0)
             {
                 result.blocks.Insert(table);
-                result.tables = result.tables + 1;
+                if (!table.headerless)
+                {
+                    result.tables = result.tables + 1;
+                }
                 table = new NimbyGreetBlock(NimbyGreetBlockKind.TABLE);
-                allowed = result.tables < NimbyGreetRules.MAX_TABLES_PER_SECTION;
+                table.headerless = true;
             }
             paragraph.Insert(Inline(result, trimmed));
             FlushParagraph(result, paragraph);
@@ -345,7 +350,10 @@ class NimbyGreetMarkdown
         if (table.rows.Count() > 0)
         {
             result.blocks.Insert(table);
-            result.tables = result.tables + 1;
+            if (!table.headerless)
+            {
+                result.tables = result.tables + 1;
+            }
         }
         else
         {

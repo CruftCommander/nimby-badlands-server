@@ -167,6 +167,11 @@ class NimbyGreetFetch
             why = "response refused";
             return false;
         }
+        if (m_DoneSeen)
+        {
+            why = "duplicate done";
+            return false;
+        }
         if (!done)
         {
             why = "done record unreadable";
@@ -183,11 +188,6 @@ class NimbyGreetFetch
         {
             why = "totalBytes out of range";
             Refuse(why);
-            return false;
-        }
-        if (m_DoneSeen)
-        {
-            why = "duplicate done";
             return false;
         }
         m_ChunkCount = chunkCount;

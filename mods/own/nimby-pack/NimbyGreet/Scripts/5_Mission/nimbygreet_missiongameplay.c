@@ -294,15 +294,18 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetPendingForced = false;
         if (!manual)
         {
-            m_NimbyGreetAutoOpened = true;
+            // G4: the connection's one automatic open is spent in NimbyGreetOpenWindow, when the window
+            // shows; an open that gives up (G5) leaves the next spawn free to try again.
             m_NimbyGreetPendingForced = done.forceShow && m_NimbyGreetSeen.neverShow && done.version > m_NimbyGreetSeen.dismissedVersion;
         }
-        float delaySeconds = done.openDelaySeconds;
+        // The server clamps its file; the client clamps what it receives too (G5: validate every message).
+        float delaySeconds = NimbyGreetRules.ClampFloat(done.openDelaySeconds, NimbyGreetRules.MIN_OPEN_DELAY_SECONDS, NimbyGreetRules.MAX_OPEN_DELAY_SECONDS);
+        float retrySeconds = NimbyGreetRules.ClampFloat(done.openRetrySeconds, 0.0, NimbyGreetRules.MAX_OPEN_RETRY_SECONDS);
         if (manual)
         {
             delaySeconds = 0.0;
         }
-        m_NimbyGreetOpenRetryMax = (int)(done.openRetrySeconds * 1000.0 / NimbyGreetRules.OPEN_RETRY_MS);
+        m_NimbyGreetOpenRetryMax = (int)(retrySeconds * 1000.0 / NimbyGreetRules.OPEN_RETRY_MS);
         if (m_NimbyGreetOpenRetryMax < 1)
         {
             m_NimbyGreetOpenRetryMax = 1;
@@ -387,6 +390,10 @@ modded class MissionGameplay extends MissionBase
             m_NimbyGreetMenu.SetContent(m_NimbyGreetPendingLanguage, m_NimbyGreetPendingDone);
             return;
         }
+        if (source == "spawn")
+        {
+            m_NimbyGreetAutoOpened = true;
+        }
         if (m_NimbyGreetPendingForced)
         {
             // G4: a forced version is recorded at open, not at close, so it is seen exactly once.
@@ -406,6 +413,7 @@ modded class MissionGameplay extends MissionBase
     // Asks the window to close with a reason; OnMenuClosed does the bookkeeping.
     protected void NimbyGreetCloseWindow(string reason)
     {
+        m_NimbyGreetRetryPending = false;
         if (!m_NimbyGreetMenu)
         {
             return;
@@ -421,6 +429,9 @@ modded class MissionGameplay extends MissionBase
         {
             return;
         }
+        // Self-review: a cooldown retry armed from inside the window must die with the window, or the
+        // window would open by itself a few seconds after the player closed it (G4: never a nag).
+        m_NimbyGreetRetryPending = false;
         string reason = menu.GetCloseReason();
         if (reason == "")
         {
@@ -535,6 +546,13 @@ modded class MissionGameplay extends MissionBase
         if (unconscious)
         {
             NimbyGreetLog.Debug("hotkey ignored: player unconscious");
+            return;
+        }
+        if (m_NimbyGreetRetryPending)
+        {
+            // Toggle semantics (G-29): a press while an open is pending on a cooldown retry cancels it.
+            m_NimbyGreetRetryPending = false;
+            NimbyGreetLog.Debug("hotkey: pending cooldown retry cancelled");
             return;
         }
         NimbyGreetLog.Debug("hotkey: manual request vehicle=" + NimbyGreetLog.Bool(vehicle));

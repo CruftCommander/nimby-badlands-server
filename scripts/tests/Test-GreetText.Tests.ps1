@@ -77,6 +77,7 @@ Describe 'Get-GreetBodyReport' {
     It 'reports an unknown media id, and every id when there is no manifest' {
         (Get-GreetBodyReport -Body '![x](missing)' -MediaIds @('map')).UnknownMedia | Should -Be @('missing')
         (Get-GreetBodyReport -Body '![x](map)' -MediaIds $null).UnknownMedia | Should -Be @('map')
+        (Get-GreetBodyReport -Body '![x]()' -MediaIds @('map')).UnknownMedia | Should -Be @('')
     }
     It 'counts tables and rows that are not two cells wide' {
         $body = "| a | b |`n| --- | --- |`n| 1 | 2 |`n| 3 | 4 | 5 |`n`ntext`n`n| c | d |`n| --- | --- |"
@@ -85,7 +86,7 @@ Describe 'Get-GreetBodyReport' {
         $report.WideRows | Should -Be 1
     }
     It 'counts raw brackets and unterminated emphasis' {
-        $report = Get-GreetBodyReport -Body "a < b`n**open`n*fine* and \*escaped" -MediaIds @()
+        $report = Get-GreetBodyReport -Body "a < b`n**open`n*fine* and \*escaped`n* bullet with 5 * 3 inside" -MediaIds @()
         $report.RawBrackets | Should -Be 1
         $report.Unterminated | Should -Be 1
     }
@@ -132,7 +133,7 @@ Describe 'Test-GreetDocument' {
         ($errors -join "`n") | Should -Match 'id must be'
         ($errors -join "`n") | Should -Match 'heading is missing or empty'
         ($errors -join "`n") | Should -Match 'body is missing or empty'
-((Get-Errors (Test-GreetDocument -Document $second -MediaIds @())) -join "`n") | Should -Match 'duplicate id'
+        ((Get-Errors (Test-GreetDocument -Document $second -MediaIds @())) -join "`n") | Should -Match 'duplicate id'
     }
     It 'warns on every cap the client truncates' {
         $doc = New-GreetDoc {
@@ -164,6 +165,10 @@ Describe 'Test-GreetDocument' {
         ((Get-Errors $findings) -join "`n") | Should -Match 'media id not in the manifest: nope'
         ((Get-Warnings $findings) -join "`n") | Should -Match "field 'url'"
     }
+    It 'accepts forceShow written as 0 or 1 by the engine' {
+        $doc = New-GreetDoc { param($d) $d.forceShow = 0 }
+        Get-Errors (Test-GreetDocument -Document $doc -MediaIds @()) | Should -BeNullOrEmpty
+    }
     It 'warns on an out-of-range timing value and rejects a non-numeric one' {
         $doc = New-GreetDoc { param($d) $d.openDelaySeconds = 99; $d | Add-Member -NotePropertyName rereadSeconds -NotePropertyValue 'soon' }
         $findings = Test-GreetDocument -Document $doc -MediaIds @()
@@ -185,10 +190,6 @@ Describe 'Get-GreetManifestIds' {
         $ids = Get-GreetManifestIds -ManifestFile (Join-Path $repo 'mods\own\nimby-pack\NimbyGreet\Media\manifest.json')
         $null -eq $ids | Should -BeFalse
         @($ids).Count | Should -Be 0
-    }
-    It 'accepts forceShow written as 0 or 1 by the engine' {
-        $doc = New-GreetDoc { param($d) $d.forceShow = 0 }
-        Get-Errors (Test-GreetDocument -Document $doc -MediaIds @()) | Should -BeNullOrEmpty
     }
 }
 

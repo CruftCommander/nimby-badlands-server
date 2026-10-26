@@ -26,6 +26,8 @@ modded class MissionServer extends MissionBase
     protected ref map<string, float> m_NimbyGreetLastRefusedLog;  // identity id to tick time
     protected float m_NimbyGreetLoadedAt = -1.0;
     protected string m_NimbyGreetSource = "none";                 // greet.json | greet.json.lkg | default | none
+    protected string m_NimbyGreetLastError = "";                  // last parse error logged, so a re-read logs only a change
+    protected string m_NimbyGreetLastFallback = "";               // last fallback reason logged
 
     override void OnInit()
     {
@@ -57,6 +59,8 @@ modded class MissionServer extends MissionBase
     // ---- file ------------------------------------------------------------------------------
 
     // Reads greet.json. firstBoot writes the default when the file is missing; a later re-read never does.
+    // A file that parses but has no servable language (self-review) keeps the copy already served and
+    // never overwrites the .lkg; "invalid" is logged when the error text changes, not on every re-read.
     protected void NimbyGreetLoadText(bool firstBoot)
     {
         m_NimbyGreetLoadedAt = GetGame().GetTickTime();
@@ -70,8 +74,10 @@ modded class MissionServer extends MissionBase
                 NimbyGreetLog.Info("greet.json missing; default written=" + NimbyGreetLog.Bool(written) + " error=" + writeError);
                 if (written)
                 {
-                    CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
-                    NimbyGreetAdopt(created, "default");
+                    if (NimbyGreetAdopt(created, "default"))
+                    {
+                        CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
+                    }
                     return;
                 }
             }
@@ -83,28 +89,46 @@ modded class MissionServer extends MissionBase
         bool loaded = JsonFileLoader<NimbyGreetFile>.LoadFile(NimbyGreetRules.FILE_TEXT, data, error);
         if (!loaded)
         {
-            NimbyGreetLog.Info("greet.json invalid: " + error);
+            if (error != m_NimbyGreetLastError)
+            {
+                m_NimbyGreetLastError = error;
+                NimbyGreetLog.Info("greet.json invalid: " + error);
+            }
             NimbyGreetLoadLkg("invalid");
             return;
         }
-        CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
-        NimbyGreetAdopt(data, "greet.json");
+        m_NimbyGreetLastError = "";
+        int previousVersion = -1;
+        if (m_NimbyGreetFile)
+        {
+            previousVersion = m_NimbyGreetFile.version;
+        }
+        bool wasServing = m_NimbyGreetSource == "greet.json";
+        if (!NimbyGreetAdopt(data, "greet.json"))
+        {
+            NimbyGreetLoadLkg("unservable");
+            return;
+        }
+        if (!wasServing || data.version != previousVersion)
+        {
+            CopyFile(NimbyGreetRules.FILE_TEXT, NimbyGreetRules.FILE_TEXT_LKG);
+        }
     }
 
     protected void NimbyGreetLoadLkg(string because)
     {
         if (m_NimbyGreetFile && m_NimbyGreetSource != "none")
         {
-            NimbyGreetLog.Info("greet.json " + because + "; serving the copy loaded earlier this boot (source=" + m_NimbyGreetSource + " version=" + m_NimbyGreetFile.version.ToString() + ")");
+            if (because != m_NimbyGreetLastFallback)
+            {
+                m_NimbyGreetLastFallback = because;
+                NimbyGreetLog.Info("greet.json " + because + "; serving the copy loaded earlier this boot (source=" + m_NimbyGreetSource + " version=" + m_NimbyGreetFile.version.ToString() + ")");
+            }
             return;
         }
         if (!FileExist(NimbyGreetRules.FILE_TEXT_LKG))
         {
             NimbyGreetLog.Info("greet.json " + because + " and no greet.json.lkg; no text until the file is fixed");
-            m_NimbyGreetFile = null;
-            m_NimbyGreetSource = "none";
-            m_NimbyGreetCodes.Clear();
-            m_NimbyGreetSerialized.Clear();
             return;
         }
         NimbyGreetFile data = new NimbyGreetFile();
@@ -112,17 +136,17 @@ modded class MissionServer extends MissionBase
         if (!JsonFileLoader<NimbyGreetFile>.LoadFile(NimbyGreetRules.FILE_TEXT_LKG, data, error))
         {
             NimbyGreetLog.Info("greet.json " + because + " and greet.json.lkg invalid: " + error + "; no text until the file is fixed");
-            m_NimbyGreetFile = null;
-            m_NimbyGreetSource = "none";
-            m_NimbyGreetCodes.Clear();
-            m_NimbyGreetSerialized.Clear();
             return;
         }
-        NimbyGreetAdopt(data, "greet.json.lkg");
+        if (!NimbyGreetAdopt(data, "greet.json.lkg"))
+        {
+            NimbyGreetLog.Info("greet.json " + because + " and greet.json.lkg has no servable language; no text until the file is fixed");
+        }
     }
 
-    // Applies the caps and the language rules, then makes the file the one being served.
-    protected void NimbyGreetAdopt(NimbyGreetFile data, string source)
+    // Applies the caps and the language rules. True when at least one language is servable; the file
+    // then replaces the one being served. False leaves the served state untouched.
+    protected bool NimbyGreetAdopt(NimbyGreetFile data, string source)
     {
         NimbyGreetText.ClampTiming(data);
         array<string> codes;
@@ -134,7 +158,8 @@ modded class MissionServer extends MissionBase
         }
         int totalCuts = 0;
         int totalBytes = 0;
-        m_NimbyGreetSerialized.Clear();
+        map<string, string> serialized = new map<string, string>;
+        array<string> servable = new array<string>;
         foreach (string code : codes)
         {
             NimbyGreetLanguage language = NimbyGreetText.FindLanguage(data, code);
@@ -145,6 +170,11 @@ modded class MissionServer extends MissionBase
                 NimbyGreetLog.Info("greet.json truncated " + code + ": " + capNote);
             }
             totalCuts = totalCuts + cuts;
+            if (language.sections.Count() == 0)
+            {
+                NimbyGreetLog.Info("greet.json language " + code + " has no section; not served");
+                continue;
+            }
             string json;
             JsonSerializer serializer = new JsonSerializer();
             serializer.WriteToString(language, false, json);
@@ -153,36 +183,31 @@ modded class MissionServer extends MissionBase
                 NimbyGreetLog.Info("greet.json language " + code + " serializes to " + json.Length().ToString() + " bytes, above the payload cap; not served");
                 continue;
             }
-            m_NimbyGreetSerialized.Insert(code, json);
+            serialized.Insert(code, json);
+            servable.Insert(code);
             totalBytes = totalBytes + json.Length();
         }
-        m_NimbyGreetCodes.Clear();
-        foreach (string served : codes)
+        if (servable.Count() == 0)
         {
-            if (m_NimbyGreetSerialized.Contains(served))
-            {
-                m_NimbyGreetCodes.Insert(served);
-            }
+            NimbyGreetLog.Info("greet.json has no servable language (source=" + source + "); the file is not adopted");
+            return false;
         }
-        if (m_NimbyGreetCodes.Count() == 0)
+        if (servable.Find(data.defaultLanguage) < 0)
         {
-            NimbyGreetLog.Info("greet.json has no servable language (source=" + source + "); no text until the file is fixed");
-            m_NimbyGreetFile = null;
-            m_NimbyGreetSource = "none";
-            return;
+            NimbyGreetLog.Info("greet.json defaultLanguage " + data.defaultLanguage + " is not served; using " + servable.Get(0));
+            data.defaultLanguage = servable.Get(0);
         }
-        if (m_NimbyGreetCodes.Find(data.defaultLanguage) < 0)
-        {
-            NimbyGreetLog.Info("greet.json defaultLanguage " + data.defaultLanguage + " is not served; using " + m_NimbyGreetCodes.Get(0));
-            data.defaultLanguage = m_NimbyGreetCodes.Get(0);
-        }
+        m_NimbyGreetSerialized = serialized;
+        m_NimbyGreetCodes = servable;
         m_NimbyGreetFile = data;
         m_NimbyGreetSource = source;
+        m_NimbyGreetLastFallback = "";
         string line = "greet.json loaded source=" + source + " version=" + data.version.ToString() + " forceShow=" + NimbyGreetLog.Bool(data.forceShow);
         line = line + " languages=" + string.Join(",", m_NimbyGreetCodes) + " default=" + data.defaultLanguage;
         line = line + " bytes=" + totalBytes.ToString() + " truncations=" + totalCuts.ToString();
         line = line + " openDelay=" + data.openDelaySeconds.ToString() + " cooldown=" + data.requestCooldownSeconds.ToString() + " reread=" + data.rereadSeconds.ToString();
         NimbyGreetLog.Info(line);
+        return true;
     }
 
     // Write the temp file, read it back, copy over the target, delete the temp (there is no rename, EnSystem.c:525-531).
@@ -219,6 +244,12 @@ modded class MissionServer extends MissionBase
         }
         float now = GetGame().GetTickTime();
         string who = NimbyGreetLog.Who(sender);
+        // The language string comes from the client; only a known column name reaches the log (no forged lines).
+        string asked = language;
+        if (!NimbyGreetRules.IsKnownLanguage(language))
+        {
+            asked = "<unknown:" + language.Length().ToString() + "b>";
+        }
         string key = sender.GetId();
         float cooldown = NimbyGreetRules.DEFAULT_COOLDOWN_SECONDS;
         float reread = NimbyGreetRules.DEFAULT_REREAD_SECONDS;
@@ -258,7 +289,7 @@ modded class MissionServer extends MissionBase
         {
             done.reason = "no-text";
             player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
-            NimbyGreetLog.Info("serve id=" + requestId.ToString() + " chunks=0 reason=no-text asked=" + language + " manual=" + NimbyGreetLog.Bool(manual) + " " + who);
+            NimbyGreetLog.Info("serve id=" + requestId.ToString() + " chunks=0 reason=no-text asked=" + asked + " manual=" + NimbyGreetLog.Bool(manual) + " " + who);
             return;
         }
         done.version = m_NimbyGreetFile.version;
@@ -277,7 +308,7 @@ modded class MissionServer extends MissionBase
             done.reason = "dismissed";
             player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
             string dismissedLine = "serve id=" + requestId.ToString() + " chunks=0 reason=dismissed version=" + m_NimbyGreetFile.version.ToString();
-            dismissedLine = dismissedLine + " dismissedVersion=" + dismissedVersion.ToString() + " asked=" + language + " " + who;
+            dismissedLine = dismissedLine + " dismissedVersion=" + dismissedVersion.ToString() + " asked=" + asked + " " + who;
             NimbyGreetLog.Info(dismissedLine);
             return;
         }
@@ -305,7 +336,7 @@ modded class MissionServer extends MissionBase
             NimbyGreetLog.Info("done record is " + doneJson.Length().ToString() + " bytes, above CHUNK_BYTES; the client will drop it");
         }
         player.NimbyGreetSendDone(sender, requestId, count, doneJson);
-        string serveLine = "serve id=" + requestId.ToString() + " asked=" + language + " served=" + served + " version=" + m_NimbyGreetFile.version.ToString();
+        string serveLine = "serve id=" + requestId.ToString() + " asked=" + asked + " served=" + served + " version=" + m_NimbyGreetFile.version.ToString();
         serveLine = serveLine + " chunks=" + count.ToString() + " bytes=" + payload.Length().ToString() + " manual=" + NimbyGreetLog.Bool(manual) + " " + who;
         NimbyGreetLog.Info(serveLine);
     }
