@@ -53,6 +53,7 @@ class NimbyGreetMenu extends UIScriptedMenu
     static const int SECTION_TEXT_SIZE = 17;
     static const int LINK_TEXT_SIZE = 15;
     static const int TABLE_ROW_HEIGHT = 28;
+    static const int TABLE_RELAYOUT_FRAMES = 3;
     static const int BLOCK_GAP = 10;   // extra air around tables and rules (Phase 1 run 2, Jeff)
     static const int MEDIA_ALT_HEIGHT = 20;
 
@@ -96,6 +97,13 @@ class NimbyGreetMenu extends UIScriptedMenu
 
     protected ref array<Widget> m_SectionButtons;
     protected ref array<Widget> m_BlockWidgets;
+    // Table rows and their cells, re-measured for a few frames after each build (Phase 1 run 5): a
+    // RichTextWidget measured right after SetText has not been laid out at its width yet, so a cell
+    // that wraps reported one line and the row kept the base height (cut off at 1920x1080).
+    protected ref array<Widget> m_TableRows;
+    protected ref array<RichTextWidget> m_TableLeft;
+    protected ref array<RichTextWidget> m_TableRight;
+    protected int m_TableRelayoutFrames;
     protected ref array<Widget> m_LinkWidgets;
     protected ref array<ref NimbyGreetLink> m_Links;
     protected ref array<ref NimbyGreetClip> m_Clips;
@@ -108,6 +116,9 @@ class NimbyGreetMenu extends UIScriptedMenu
         SetID(NimbyGreetRules.MENU_ID);
         m_SectionButtons = new array<Widget>;
         m_BlockWidgets = new array<Widget>;
+        m_TableRows = new array<Widget>;
+        m_TableLeft = new array<RichTextWidget>;
+        m_TableRight = new array<RichTextWidget>;
         m_LinkWidgets = new array<Widget>;
         m_Links = new array<ref NimbyGreetLink>;
         m_Clips = new array<ref NimbyGreetClip>;
@@ -261,6 +272,11 @@ class NimbyGreetMenu extends UIScriptedMenu
         if (!g_Game)
         {
             return;
+        }
+        if (m_TableRelayoutFrames > 0)
+        {
+            m_TableRelayoutFrames = m_TableRelayoutFrames - 1;
+            RelayoutTables(m_TableRelayoutFrames == 0);
         }
         UAInputAPI api = GetUApi();
         if (!api)
@@ -582,6 +598,10 @@ class NimbyGreetMenu extends UIScriptedMenu
             }
         }
         m_BlockWidgets.Clear();
+        m_TableRows.Clear();
+        m_TableLeft.Clear();
+        m_TableRight.Clear();
+        m_TableRelayoutFrames = 0;
         m_ScaledBody.Clear();
         m_ScaledBodyBase.Clear();
         m_Links.Clear();
@@ -637,6 +657,10 @@ class NimbyGreetMenu extends UIScriptedMenu
         if (m_BodyScroll)
         {
             m_BodyScroll.Update();
+        }
+        if (m_TableRows.Count() > 0)
+        {
+            m_TableRelayoutFrames = TABLE_RELAYOUT_FRAMES;
         }
     }
 
@@ -700,8 +724,12 @@ class NimbyGreetMenu extends UIScriptedMenu
                 m_ScaledBodyBase.Insert(TABLE_TEXT_SIZE);
                 rowHeight = GrowRow(rowHeight, right.GetContentHeight());
             }
-            // Phase 1 run 1: long cells were cut off. Cells wrap and the row grows to the taller cell.
+            // Phase 1 run 1: long cells were cut off. Cells wrap and the row grows to the taller cell;
+            // the measure here is a first guess, RelayoutTables corrects it once the cells are laid out.
             root.SetSize(1.0, rowHeight);
+            m_TableRows.Insert(root);
+            m_TableLeft.Insert(left);
+            m_TableRight.Insert(right);
             Widget line = root.FindAnyWidget("TableRow_line");
             if (line)
             {
@@ -727,6 +755,51 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
         gap.SetSize(1.0, Scaled(pixels));
         m_BlockWidgets.Insert(gap);
+    }
+
+    // Phase 1 run 5: re-measure every table row after the body has been laid out, from Update (no
+    // CallLater: a queued 5_Mission function outlives its module, NIMBY-T-052). Runs for
+    // TABLE_RELAYOUT_FRAMES frames after each build, the text-size rebuild included.
+    protected void RelayoutTables(bool last)
+    {
+        int tall = 0;
+        int i = 0;
+        while (i < m_TableRows.Count())
+        {
+            Widget row = m_TableRows.Get(i);
+            float rowHeight = Scaled(TABLE_ROW_HEIGHT);
+            RichTextWidget left = m_TableLeft.Get(i);
+            RichTextWidget right = m_TableRight.Get(i);
+            if (left)
+            {
+                rowHeight = GrowRow(rowHeight, left.GetContentHeight());
+            }
+            if (right)
+            {
+                rowHeight = GrowRow(rowHeight, right.GetContentHeight());
+            }
+            if (row)
+            {
+                row.SetSize(1.0, rowHeight);
+            }
+            if (rowHeight > Scaled(TABLE_ROW_HEIGHT))
+            {
+                tall = tall + 1;
+            }
+            i = i + 1;
+        }
+        if (m_BodyContent)
+        {
+            m_BodyContent.Update();
+        }
+        if (m_BodyScroll)
+        {
+            m_BodyScroll.Update();
+        }
+        if (last)
+        {
+            NimbyGreetLog.Debug("table relayout rows=" + m_TableRows.Count().ToString() + " taller than one line=" + tall.ToString());
+        }
     }
 
     // A table row is at least its base height and at most eight lines; the cell's measured content height wins between.
