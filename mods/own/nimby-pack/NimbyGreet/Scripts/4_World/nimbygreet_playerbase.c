@@ -37,6 +37,34 @@ modded class PlayerBase extends ManBase
         NimbyGreetClient.Spawned().Invoke(this);
     }
 
+    // G5: a hit on the controlled player closes the window (OnReceivedHit, PlayerBase.c:1413, client only;
+    // EEHitByRemote, :1382, on every machine). A health value drifting down fires neither.
+    override void OnReceivedHit(ImpactEffectsData hitData)
+    {
+        super.OnReceivedHit(hitData);
+        NimbyGreetReportHit("OnReceivedHit");
+    }
+
+    override void EEHitByRemote(int damageType, EntityAI source, int component, string dmgZone, string ammo, vector modelPos)
+    {
+        super.EEHitByRemote(damageType, source, component, dmgZone, ammo, modelPos);
+        NimbyGreetReportHit("EEHitByRemote");
+    }
+
+    protected void NimbyGreetReportHit(string hook)
+    {
+        if (!GetGame().IsClient())
+        {
+            return;
+        }
+        if (!IsControlledPlayer())
+        {
+            return;
+        }
+        NimbyGreetLog.Debug("hit on the controlled player via " + hook);
+        NimbyGreetClient.Hit().Invoke();
+    }
+
     override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
     {
         if (rpc_type == NimbyGreetRules.RPC_REQUEST)

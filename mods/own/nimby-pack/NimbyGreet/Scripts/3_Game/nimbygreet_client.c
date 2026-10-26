@@ -4,7 +4,7 @@
 //           the once-per-connection state and the server's text live in 5_Mission, which
 //           4_World cannot name. These ScriptInvokers (2_GameLib/DayZ/tools.c:115) carry
 //           the events upward on both machines:
-//             client: Spawned, Chunk, Done
+//             client: Spawned, Chunk, Done, Hit
 //             server: Request
 //           The request-id counter lives here too so every request in one client session
 //           gets a fresh id (G5).
@@ -18,6 +18,7 @@ class NimbyGreetClient
     protected static ref ScriptInvoker s_Chunk;
     protected static ref ScriptInvoker s_Done;
     protected static ref ScriptInvoker s_Request;
+    protected static ref ScriptInvoker s_Hit;
     protected static int s_NextRequestId = 1;
 
     // Client. Invoke(PlayerBase player): the controlled player finished OnPlayerLoaded.
@@ -48,6 +49,16 @@ class NimbyGreetClient
             s_Done = new ScriptInvoker();
         }
         return s_Done;
+    }
+
+    // Client. Invoke(): the controlled player took a hit (G5 close rule).
+    static ScriptInvoker Hit()
+    {
+        if (!s_Hit)
+        {
+            s_Hit = new ScriptInvoker();
+        }
+        return s_Hit;
     }
 
     // Server. Invoke(PlayerBase player, PlayerIdentity sender, int requestId, string language, int dismissedVersion, bool neverShow, bool manual).

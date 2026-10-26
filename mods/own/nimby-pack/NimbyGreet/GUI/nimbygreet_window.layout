@@ -1,0 +1,369 @@
+FrameWidgetClass Root {
+ clipchildren 0
+ color 1 1 1 1
+ position 0 0
+ size 1 1
+ hexactpos 0
+ vexactpos 0
+ hexactsize 0
+ vexactsize 0
+ priority 50
+ {
+  PanelWidgetClass Dim {
+   ignorepointer 1
+   color 0 0 0 0.6
+   position 0 0
+   size 1 1
+   hexactpos 0
+   vexactpos 0
+   hexactsize 0
+   vexactsize 0
+   style rover_sim_colorable
+  }
+  PanelWidgetClass Panel {
+   color 0 0 0 0.85
+   position 0 0
+   size 0.7 0.86
+   halign center_ref
+   valign center_ref
+   hexactpos 0
+   vexactpos 0
+   hexactsize 0
+   vexactsize 0
+   style DayZDefaultPanel
+   {
+    TextWidgetClass Title {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0.02 0.015
+     size 0.96 0.06
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text ""
+     font "gui/fonts/sdf_MetronLight72"
+     "exact text" 1
+     "exact text size" 30
+     "text valign" center
+    }
+    TextWidgetClass Tagline {
+     ignorepointer 1
+     color 0.78 0.78 0.78 1
+     position 0.02 0.075
+     size 0.96 0.035
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text ""
+     font "gui/fonts/sdf_MetronLight24"
+     "exact text" 1
+     "exact text size" 16
+     "text valign" center
+    }
+    ScrollWidgetClass SectionScroll {
+     position 0.02 0.12
+     size 0.22 0.66
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     "no focus" 1
+     "Ignore invisible" 0
+     "Scrollbar V" 1
+     {
+      WrapSpacerWidgetClass SectionList {
+       ignorepointer 1
+       position 0 0
+       size 1 1
+       hexactpos 1
+       vexactpos 1
+       hexactsize 0
+       vexactsize 0
+       "no focus" 1
+       Padding 0
+       Margin 2
+       "Size To Content H" 0
+       "Size To Content V" 1
+      }
+     }
+    }
+    PanelWidgetClass BodyBackground {
+     ignorepointer 1
+     color 0 0 0 0.35
+     position 0.255 0.12
+     size 0.725 0.56
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     style rover_sim_colorable
+    }
+    ScrollWidgetClass BodyScroll {
+     position 0.26 0.125
+     size 0.715 0.55
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     "no focus" 1
+     "Ignore invisible" 0
+     "Scrollbar V" 1
+     {
+      WrapSpacerWidgetClass BodyContent {
+       ignorepointer 1
+       position 0 0
+       size 1 1
+       hexactpos 1
+       vexactpos 1
+       hexactsize 0
+       vexactsize 0
+       "no focus" 1
+       Padding 0
+       Margin 6
+       "Size To Content H" 0
+       "Size To Content V" 1
+      }
+     }
+    }
+    ScrollWidgetClass LinkScroll {
+     position 0.26 0.685
+     size 0.715 0.095
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     "no focus" 1
+     "Ignore invisible" 0
+     "Scrollbar V" 1
+     {
+      WrapSpacerWidgetClass LinkRows {
+       ignorepointer 1
+       position 0 0
+       size 1 1
+       hexactpos 1
+       vexactpos 1
+       hexactsize 0
+       vexactsize 0
+       "no focus" 1
+       Padding 0
+       Margin 2
+       "Size To Content H" 0
+       "Size To Content V" 1
+      }
+     }
+    }
+    ButtonWidgetClass BtnNever {
+     color 0 0 0 0
+     position 0.02 0.805
+     size 0.30 0.055
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     userID 2
+     {
+      PanelWidgetClass BtnNever_panel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style DayZDefaultPanel
+      }
+      TextWidgetClass BtnNever_label {
+       ignorepointer 1
+       color 1 1 1 1
+       position 0.03 0
+       size 0.94 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text ""
+       font "gui/fonts/sdf_MetronLight24"
+       "exact text" 1
+       "exact text size" 16
+       "text valign" center
+      }
+     }
+    }
+    ButtonWidgetClass BtnTextSize {
+     color 0 0 0 0
+     position 0.33 0.805
+     size 0.15 0.055
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     userID 3
+     {
+      PanelWidgetClass BtnTextSize_panel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style DayZDefaultPanel
+      }
+      TextWidgetClass BtnTextSize_label {
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text ""
+       font "gui/fonts/sdf_MetronLight24"
+       "exact text" 1
+       "exact text size" 16
+       "text halign" center
+       "text valign" center
+      }
+     }
+    }
+    ButtonWidgetClass BtnAnimations {
+     color 0 0 0 0
+     position 0.49 0.805
+     size 0.15 0.055
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     userID 4
+     {
+      PanelWidgetClass BtnAnimations_panel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style DayZDefaultPanel
+      }
+      TextWidgetClass BtnAnimations_label {
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text ""
+       font "gui/fonts/sdf_MetronLight24"
+       "exact text" 1
+       "exact text size" 16
+       "text halign" center
+       "text valign" center
+      }
+     }
+    }
+    ButtonWidgetClass BtnLanguage {
+     color 0 0 0 0
+     position 0.65 0.805
+     size 0.15 0.055
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     userID 5
+     {
+      PanelWidgetClass BtnLanguage_panel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style DayZDefaultPanel
+      }
+      TextWidgetClass BtnLanguage_label {
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text ""
+       font "gui/fonts/sdf_MetronLight24"
+       "exact text" 1
+       "exact text size" 16
+       "text halign" center
+       "text valign" center
+      }
+     }
+    }
+    ButtonWidgetClass BtnClose {
+     color 0 0 0 0
+     position 0.81 0.805
+     size 0.17 0.055
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     userID 1
+     {
+      PanelWidgetClass BtnClose_panel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       style DayZDefaultPanel
+      }
+      TextWidgetClass BtnClose_label {
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 1 1
+       hexactpos 0
+       vexactpos 0
+       hexactsize 0
+       vexactsize 0
+       text ""
+       font "gui/fonts/sdf_MetronLight24"
+       "exact text" 1
+       "exact text size" 18
+       "text halign" center
+       "text valign" center
+      }
+     }
+    }
+    TextWidgetClass Hint {
+     ignorepointer 1
+     color 0.6 0.6 0.6 1
+     position 0.02 0.875
+     size 0.96 0.04
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text ""
+     font "gui/fonts/sdf_MetronLight24"
+     "exact text" 1
+     "exact text size" 13
+     "text valign" center
+    }
+   }
+  }
+ }
+}

@@ -15,8 +15,11 @@
 // Language: Widget.TranslateString("#STR_NimbyGreet_Language") returns the client's column
 //           name (NIMBY-T-044); a value outside the 14 columns means the key did not resolve
 //           and the default language is requested. prefs.json's language overrides it.
-// Phase 1 step (a)/(b): the window itself lands in step (c); NimbyGreetOpenWindow logs the
-//           converted payload so the first build proves fetch, caps and conversion in game.
+// Window  : NimbyGreetMenu (nimbygreet_menu.c) is created here, shown with ShowScriptedMenu,
+//           and closed here with a reason: player, escape, hotkey, hit (PlayerBase.OnReceivedHit
+//           or EEHitByRemote through NimbyGreetClient.Hit), unconscious (polled while open),
+//           death (vanilla's own close, UIScriptedMenu.c:603-611). The dismissal is written
+//           when the window closes (G4, Q6); a forced version is recorded at open.
 // Vanilla : UAInput.LocalPress (3_Game/DayZ/InputAPI/UAInput.c:60), GetInputByName (:218);
 //           UIManager.GetMenu (3_Game/DayZ/tools/UIManager.c:59); CallLater (ScriptCallQueue);
 //           Man.IsUnconscious, Object.IsAlive, PlayerBase.IsInVehicle.
@@ -39,6 +42,8 @@ modded class MissionGameplay extends MissionBase
     protected ref NimbyGreetLanguage m_NimbyGreetPendingLanguage;
     protected ref NimbyGreetDone m_NimbyGreetPendingDone;
     protected int m_NimbyGreetSpawnCount;
+    protected ref NimbyGreetMenu m_NimbyGreetMenu;
+    protected ref NimbyGreetManifest m_NimbyGreetManifest;
 
     override void OnInit()
     {
@@ -53,7 +58,9 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Spawned().Insert(NimbyGreetOnSpawned);
         NimbyGreetClient.Chunk().Insert(NimbyGreetOnChunk);
         NimbyGreetClient.Done().Insert(NimbyGreetOnDone);
+        NimbyGreetClient.Hit().Insert(NimbyGreetOnHit);
         NimbyGreetDetectLanguage();
+        NimbyGreetLoadManifest();
         string ready = "client ready; input bound=" + NimbyGreetLog.Bool(m_NimbyGreetInput != null) + " language detected=" + m_NimbyGreetDetectedLanguage + " prefLanguage=" + m_NimbyGreetPrefs.language;
         ready = ready + " neverShow=" + NimbyGreetLog.Bool(m_NimbyGreetSeen.neverShow) + " dismissedVersion=" + m_NimbyGreetSeen.dismissedVersion.ToString();
         ready = ready + " textScale=" + m_NimbyGreetPrefs.textScale.ToString() + " animations=" + NimbyGreetLog.Bool(m_NimbyGreetPrefs.playAnimations);
@@ -65,6 +72,7 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Spawned().Remove(NimbyGreetOnSpawned);
         NimbyGreetClient.Chunk().Remove(NimbyGreetOnChunk);
         NimbyGreetClient.Done().Remove(NimbyGreetOnDone);
+        NimbyGreetClient.Hit().Remove(NimbyGreetOnHit);
         m_NimbyGreetOpenPending = false;
         NimbyGreetLog.Debug("mission finished; spawns this connection=" + m_NimbyGreetSpawnCount.ToString() + " autoOpened=" + NimbyGreetLog.Bool(m_NimbyGreetAutoOpened));
         super.OnMissionFinish();
@@ -74,6 +82,26 @@ modded class MissionGameplay extends MissionBase
     {
         super.OnUpdate(timeslice);
         NimbyGreetHandleHotkey();
+        NimbyGreetWatchWhileOpen();
+    }
+
+    // G15: the media list shipped in the PBO. No manifest or an unreadable one means no media.
+    protected void NimbyGreetLoadManifest()
+    {
+        NimbyGreetManifest manifest = new NimbyGreetManifest();
+        string error;
+        if (!JsonFileLoader<NimbyGreetManifest>.LoadFile(NimbyGreetRules.MANIFEST_PATH, manifest, error))
+        {
+            NimbyGreetLog.Debug("manifest not loaded (" + error + "); no media this build");
+            m_NimbyGreetManifest = new NimbyGreetManifest();
+            return;
+        }
+        if (!manifest.media)
+        {
+            manifest.media = new array<ref NimbyGreetMediaEntry>;
+        }
+        m_NimbyGreetManifest = manifest;
+        NimbyGreetLog.Debug("manifest loaded entries=" + manifest.media.Count().ToString());
     }
 
     // ---- language (G14) ----------------------------------------------------------------------
@@ -219,6 +247,12 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetLog.Debug(completeLine);
         m_NimbyGreetPendingLanguage = language;
         m_NimbyGreetPendingDone = done;
+        if (m_NimbyGreetMenu)
+        {
+            m_NimbyGreetMenu.SetContent(language, done);
+            NimbyGreetLog.Info("content replaced in the open window language=" + language.language + " version=" + done.version.ToString() + " source=" + m_NimbyGreetPendingSource);
+            return;
+        }
         m_NimbyGreetPendingForced = false;
         if (!manual)
         {
@@ -276,11 +310,15 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetOpenWindow(m_NimbyGreetPendingSource);
     }
 
-    // Step (c) replaces the body with the window. Until then the converted payload is logged.
     protected void NimbyGreetOpenWindow(string source)
     {
-        if (!m_NimbyGreetPendingLanguage)
+        if (!m_NimbyGreetPendingLanguage || !m_NimbyGreetPendingDone)
         {
+            return;
+        }
+        if (m_NimbyGreetMenu)
+        {
+            m_NimbyGreetMenu.SetContent(m_NimbyGreetPendingLanguage, m_NimbyGreetPendingDone);
             return;
         }
         if (m_NimbyGreetPendingForced)
@@ -291,15 +329,102 @@ modded class MissionGameplay extends MissionBase
             NimbyGreetClientFiles.SaveSeen(m_NimbyGreetSeen);
             NimbyGreetLog.Info("forced version " + m_NimbyGreetPendingDone.version.ToString() + " recorded as seen");
         }
-        NimbyGreetLog.Info("open version=" + m_NimbyGreetPendingDone.version.ToString() + " source=" + source + " language=" + m_NimbyGreetPendingLanguage.language + " title=" + m_NimbyGreetPendingLanguage.title + " (window not built yet: Phase 1 step c)");
-        foreach (NimbyGreetSection section : m_NimbyGreetPendingLanguage.sections)
+        m_NimbyGreetMenu = new NimbyGreetMenu();
+        m_NimbyGreetMenu.Setup(m_NimbyGreetPendingLanguage, m_NimbyGreetPendingDone, m_NimbyGreetPrefs, m_NimbyGreetSeen, m_NimbyGreetManifest, source);
+        GetGame().GetUIManager().ShowScriptedMenu(m_NimbyGreetMenu, null);
+        string openLine = "open version=" + m_NimbyGreetPendingDone.version.ToString() + " source=" + source + " language=" + m_NimbyGreetPendingLanguage.language;
+        openLine = openLine + " section=" + m_NimbyGreetMenu.GetSelectedSectionId() + " sections=" + m_NimbyGreetPendingLanguage.sections.Count().ToString() + " topMenu=" + NimbyGreetCurrentMenuId().ToString();
+        NimbyGreetLog.Info(openLine);
+    }
+
+    // Asks the window to close with a reason; OnMenuClosed does the bookkeeping.
+    protected void NimbyGreetCloseWindow(string reason)
+    {
+        if (!m_NimbyGreetMenu)
         {
-            NimbyGreetConverted converted = NimbyGreetMarkdown.Convert(section.body, null);
-            NimbyGreetLog.Debug("section id=" + section.id + " heading=" + section.heading + " blocks=" + converted.blocks.Count().ToString() + " links=" + converted.links.Count().ToString() + " notes=" + converted.notes.Count().ToString());
-            foreach (string note : converted.notes)
+            return;
+        }
+        m_NimbyGreetMenu.SetCloseReason(reason);
+        m_NimbyGreetMenu.Close();
+    }
+
+    // Called from NimbyGreetMenu.OnHide, whoever closed it.
+    void NimbyGreetOnMenuClosed(NimbyGreetMenu menu)
+    {
+        if (menu != m_NimbyGreetMenu)
+        {
+            return;
+        }
+        string reason = menu.GetCloseReason();
+        if (reason == "")
+        {
+            reason = "vanilla";
+            PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+            if (!player || !player.IsAlive())
             {
-                NimbyGreetLog.Info("section " + section.id + ": " + note);
+                reason = "death";
             }
+        }
+        bool checked = menu.IsNeverChecked();
+        int version = 0;
+        if (m_NimbyGreetPendingDone)
+        {
+            version = m_NimbyGreetPendingDone.version;
+        }
+        bool write = false;
+        if (checked)
+        {
+            // G4, Q6: ticked at close writes the dismissal, from any open.
+            if (!m_NimbyGreetSeen.neverShow || m_NimbyGreetSeen.dismissedVersion != version)
+            {
+                m_NimbyGreetSeen.neverShow = true;
+                m_NimbyGreetSeen.dismissedVersion = version;
+                write = true;
+            }
+        }
+        else
+        {
+            // Q6: unticked at close after a dismissal clears it, the only in-game undo.
+            if (m_NimbyGreetSeen.neverShow)
+            {
+                m_NimbyGreetSeen.neverShow = false;
+                write = true;
+            }
+        }
+        if (write)
+        {
+            NimbyGreetClientFiles.SaveSeen(m_NimbyGreetSeen);
+        }
+        string closeLine = "close reason=" + reason + " neverShow=" + NimbyGreetLog.Bool(m_NimbyGreetSeen.neverShow) + " dismissedVersion=" + m_NimbyGreetSeen.dismissedVersion.ToString();
+        closeLine = closeLine + " written=" + NimbyGreetLog.Bool(write) + " section=" + menu.GetSelectedSectionId();
+        NimbyGreetLog.Info(closeLine);
+        m_NimbyGreetMenu = null;
+    }
+
+    // G5: a hit or unconsciousness closes the window at once; health drift never does.
+    void NimbyGreetOnHit()
+    {
+        if (!m_NimbyGreetMenu)
+        {
+            return;
+        }
+        NimbyGreetCloseWindow("hit");
+    }
+
+    protected void NimbyGreetWatchWhileOpen()
+    {
+        if (!m_NimbyGreetMenu)
+        {
+            return;
+        }
+        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+        if (!player)
+        {
+            return;
+        }
+        if (player.IsAlive() && player.IsUnconscious())
+        {
+            NimbyGreetCloseWindow("unconscious");
         }
     }
 
@@ -326,7 +451,7 @@ modded class MissionGameplay extends MissionBase
             vehicle = player.IsInVehicle();
         }
         int menuId = NimbyGreetCurrentMenuId();
-        if (menuId == NimbyGreetRules.MENU_ID)
+        if (menuId == NimbyGreetRules.MENU_ID && m_NimbyGreetMenu)
         {
             NimbyGreetCloseWindow("hotkey");
             return;
@@ -348,12 +473,6 @@ modded class MissionGameplay extends MissionBase
         }
         NimbyGreetLog.Debug("hotkey: manual request vehicle=" + NimbyGreetLog.Bool(vehicle));
         NimbyGreetSendRequest(true, "hotkey");
-    }
-
-    // Step (c) closes the window here.
-    protected void NimbyGreetCloseWindow(string reason)
-    {
-        NimbyGreetLog.Debug("close requested reason=" + reason + " (window not built yet: Phase 1 step c)");
     }
 
     protected int NimbyGreetCurrentMenuId()
