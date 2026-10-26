@@ -9,11 +9,14 @@
 //             sits faceClearanceMeters in front of the most forward sample, or at
 //             the fallback offset off the view hit when fewer than FIRE_MIN_HITS
 //             samples land (Jeff, October 25, 2026).
-//           T21 (NIMBY-T-029): a note on a door leaf. The server keeps it where the
-//             closed door holds it (storage saves that), the door index, bone pivot,
-//             and the note's transform in the pivot's frame are net-synced, and each
-//             client parents its own copy to the pivot so it swings with the door.
-//             Nothing new is saved (shared rules 6, net-synced only).
+//           T21b (NIMBY-T-029, T-033): a note on a door leaf. The server moves it
+//             with the door (nimbytack_doors.c) and the note saves its door data
+//             (nimbytack_pinnednote.c); the helpers below find the door and its pivot.
+//           T23 (NIMBY-T-034): a door leaf is measured on the geometry layer with the
+//             deeper door ray (NimbyTackRules.RayBack, SampleCap); the note sits
+//             faceClearanceMeters in front of the most forward geometry sample, or at
+//             faceClearanceMeters off the view hit when fewer than FIRE_MIN_HITS land.
+//             The fire grid is still sampled and logged for the record.
 // Rays    : CollisionFlags.ALLOBJECTS (first contact per object, EnDebug.c:147), so a
 //           note already on the wall cannot hide the wall. The default NEARESTCONTACT
 //           (DayZPhysics.c, RaycastRVParams) is why the debug footprint's centre
@@ -55,10 +58,10 @@ class NimbyTackPlacement
 
 class NimbyTackPlace
 {
-    // How far in front of and behind a sample point the fire ray runs. The back end is past the
-    // 10 cm cap so a face 9.7 cm behind (test 43) is seen and then judged by the cap.
+    // How far in front of a sample point the measuring ray starts. How far behind it runs is
+    // NimbyTackRules.RayBack: 15 cm on a wall, past the 10 cm cap so a face 9.7 cm behind
+    // (test 43) is seen and then judged by the cap; 30 cm on a door leaf (T23).
     static const float RAY_FRONT_METERS = 1.0;
-    static const float RAY_BACK_METERS = 0.15;
     static const float SIDE_PROBE_METERS = 0.2;
 
     // T19 and T20 on the server, before the note exists.
@@ -121,10 +124,16 @@ class NimbyTackPlace
             NimbyTackLog.Debug("post-scan wall=" + NimbyTackWorld.ClassOf(hit.wall) + " seed=-1 hits=" + ScanTag(scan));
         }
 
-        // T19: the fire grid across the sheet at the (possibly moved) origin.
+        // T19: the fire grid across the sheet at the (possibly moved) origin. T23: a door leaf
+        // samples the geometry layer at the same points, both with the deeper door ray.
+        bool onDoor = hit.doorIndex >= 0;
+        float back = NimbyTackRules.RayBack(onDoor);
+        float sampleCap = NimbyTackRules.SampleCap(onDoor);
         float halfWidth = NimbyTackRules.SHEET_WIDTH_METERS * 0.5;
         float halfHeight = NimbyTackRules.SHEET_HEIGHT_METERS * 0.5;
         array<float> depths = new array<float>;
+        array<float> geometryDepths = new array<float>;
+        array<int> geometryComponents = new array<int>;
         for (int row = -1; row <= 1; row++)
         {
             for (int column = -1; column <= 1; column++)
@@ -132,23 +141,48 @@ class NimbyTackPlace
                 float across = column;
                 float down = row;
                 vector point = origin + right * (halfWidth * across) + up * (halfHeight * down);
-                depths.Insert(FireDepth(player, hit.wall, point, normal));
+                int fireComponent = -1;
+                depths.Insert(LayerDepth(player, hit.wall, point, normal, ObjIntersectFire, back, fireComponent));
+                if (onDoor)
+                {
+                    int geometryComponent = -1;
+                    geometryDepths.Insert(LayerDepth(player, hit.wall, point, normal, ObjIntersectGeom, back, geometryComponent));
+                    geometryComponents.Insert(geometryComponent);
+                }
             }
         }
         placement.fireSamples = depths.Count();
-        placement.fireHits = NimbyTackRules.FireHits(depths, cap);
-        placement.front = NimbyTackRules.FireFront(depths, cap);
-        if (NimbyTackRules.UseFire(placement.fireHits))
+        placement.fireHits = NimbyTackRules.FireHits(depths, sampleCap);
+        placement.front = NimbyTackRules.FireFront(depths, sampleCap);
+        if (onDoor)
+        {
+            // T23, NIMBY-T-034: the geometry layer places a door note; the fire grid above is
+            // kept in the log. The tag reports the layer that placed the note.
+            int geometryHits = NimbyTackRules.FireHits(geometryDepths, sampleCap);
+            float geometryFront = NimbyTackRules.FireFront(geometryDepths, sampleCap);
+            placement.method = NimbyTackRules.DoorMethod(geometryHits);
+            if (placement.method == NimbyTackRules.PLACEMENT_DOOR)
+            {
+                placement.offset = NimbyTackRules.FireOffset(geometryFront, config.faceClearanceMeters);
+            }
+            else
+            {
+                // Fewer than 3 geometry samples: a thin plane at the view hit (the unknown-surface
+                // 6 cm floated the 1C1 door on October 25, 2026).
+                placement.offset = config.faceClearanceMeters;
+            }
+            if (NimbyTackLog.IsDebug())
+            {
+                LogDoorGrid(hit.wall, depths, geometryDepths, geometryComponents, geometryHits, geometryFront);
+            }
+            placement.fireHits = geometryHits;
+            placement.fireSamples = geometryDepths.Count();
+            placement.front = geometryFront;
+        }
+        else if (NimbyTackRules.UseFire(placement.fireHits))
         {
             placement.method = NimbyTackRules.PLACEMENT_FIRE;
             placement.offset = NimbyTackRules.FireOffset(placement.front, config.faceClearanceMeters);
-        }
-        else if (hit.doorIndex >= 0)
-        {
-            // A door leaf with no fire geometry (Land_House_1C1 front door, 0 of 9, October 25,
-            // 2026) is a thin plane at the view hit; the unknown-surface 6 cm floated it.
-            placement.method = NimbyTackRules.PLACEMENT_FALLBACK;
-            placement.offset = config.faceClearanceMeters;
         }
         else
         {
@@ -164,9 +198,9 @@ class NimbyTackPlace
         if (NimbyTackLog.IsDebug())
         {
             // NIMBY-T-032 study (debug only): every object the centre ray crosses, unfiltered.
-            LogCentreRay("view", ObjIntersectView, player, origin, normal);
-            LogCentreRay("fire", ObjIntersectFire, player, origin, normal);
-            LogCentreRay("geom", ObjIntersectGeom, player, origin, normal);
+            LogCentreRay("view", ObjIntersectView, player, origin, normal, back);
+            LogCentreRay("fire", ObjIntersectFire, player, origin, normal, back);
+            LogCentreRay("geom", ObjIntersectGeom, player, origin, normal, back);
         }
         if (NimbyTackLog.IsDebug())
         {
@@ -181,19 +215,29 @@ class NimbyTackPlace
     }
 
     // The signed depth of the wall's fire geometry under one point, along the normal from the
-    // plane through the point, or DEPTH_MISS. First contact per object, so other notes and
-    // objects in front of the wall are passed over.
+    // plane through the point, or DEPTH_MISS (the wall ray; the post scan and side probes).
     static float FireDepth(PlayerBase player, Object wall, vector point, vector normal)
     {
+        int component = -1;
+        return LayerDepth(player, wall, point, normal, ObjIntersectFire, NimbyTackRules.WALL_RAY_BACK_METERS, component);
+    }
+
+    // The signed depth of the wall's intersectType layer (fire or geometry) under one point,
+    // along the normal from the plane through the point, or DEPTH_MISS; component receives the
+    // hit component (-1 on a miss). The ray runs RAY_FRONT_METERS in front and backMeters behind.
+    // First contact per object, so other notes and objects in front of the wall are passed over.
+    static float LayerDepth(PlayerBase player, Object wall, vector point, vector normal, int intersectType, float backMeters, out int component)
+    {
+        component = -1;
         if (!wall)
         {
             return NimbyTackRules.DEPTH_MISS;
         }
         vector start = point + normal * RAY_FRONT_METERS;
-        vector end = point - normal * RAY_BACK_METERS;
+        vector end = point - normal * backMeters;
         RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
         params.sorted = true;
-        params.type = ObjIntersectFire;
+        params.type = intersectType;
         params.flags = CollisionFlags.ALLOBJECTS;
         array<ref RaycastRVResult> results = new array<ref RaycastRVResult>;
         if (!DayZPhysics.RaycastRVProxy(params, results))
@@ -206,19 +250,58 @@ class NimbyTackPlace
             {
                 continue;
             }
+            component = result.component;
             return NimbyTackRules.SignedDepth(result.pos, point, normal);
         }
         return NimbyTackRules.DEPTH_MISS;
+    }
+
+    // T23 (debug only): both layers of a door leaf's grid, with each geometry sample's component
+    // and the bone pivot that component moves with at the geometry level, so a sample that hit
+    // the frame instead of the leaf can be told from one on the leaf (NIMBY-T-034).
+    static void LogDoorGrid(Object wall, array<float> fireDepths, array<float> geometryDepths, array<int> geometryComponents, int geometryHits, float geometryFront)
+    {
+        string fire = "";
+        foreach (float fireSample : fireDepths)
+        {
+            fire = fire + " " + NimbyTackRules.DepthTag(fireSample);
+        }
+        string geometry = "";
+        foreach (float geometrySample : geometryDepths)
+        {
+            geometry = geometry + " " + NimbyTackRules.DepthTag(geometrySample);
+        }
+        string parts = "";
+        int level = -1;
+        if (wall)
+        {
+            level = wall.GetGeometryLevel();
+        }
+        foreach (int geometryComponent : geometryComponents)
+        {
+            int pivot = -1;
+            if (wall && geometryComponent >= 0)
+            {
+                pivot = wall.GetBonePivot(level, geometryComponent);
+            }
+            parts = parts + " " + geometryComponent.ToString() + "/" + pivot.ToString();
+        }
+        string line = "door-grid wall=" + NimbyTackWorld.ClassOf(wall) + " fire=" + fire;
+        NimbyTackLog.Debug(line);
+        line = "door-grid geom=" + geometry + " hits=" + geometryHits.ToString() + " front=" + NimbyTackRules.DepthTag(geometryFront);
+        NimbyTackLog.Debug(line);
+        line = "door-grid comp/pivot=" + parts;
+        NimbyTackLog.Debug(line);
     }
 
     // NIMBY-T-032 study (debug only, October 25, 2026): on Land_House_1C1 a note 1.5 cm in front of
     // the fire face was hidden, and on Land_HouseBlock_2C1 a note clipped where physics stood 7.6 cm
     // proud; this lists every object on the centre ray, with its depth, so a drawn part that is a
     // separate object (proxy) shows up. Moves nothing.
-    static void LogCentreRay(string layer, int intersectType, PlayerBase player, vector origin, vector normal)
+    static void LogCentreRay(string layer, int intersectType, PlayerBase player, vector origin, vector normal, float backMeters)
     {
         vector start = origin + normal * RAY_FRONT_METERS;
-        vector end = origin - normal * RAY_BACK_METERS;
+        vector end = origin - normal * backMeters;
         RaycastRVParams params = new RaycastRVParams(start, end, player, 0.0);
         params.sorted = true;
         params.type = intersectType;

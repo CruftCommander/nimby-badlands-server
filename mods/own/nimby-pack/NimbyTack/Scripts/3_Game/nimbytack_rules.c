@@ -261,6 +261,50 @@ class NimbyTackRules
         return front + clearance;
     }
 
+    // ---- T23, NIMBY-T-034 (Jeff, October 25, 2026): door leaves measure the geometry layer ----
+    // A door leaf is placed from the geometry layer, not the fire layer. On the Land_House_1C1
+    // front door, pinned from outside, the fire ray answered nothing within the wall ray and the
+    // geometry layer stood 13.2 cm behind the view hit (October 25, 2026, 18:37:01); from inside
+    // the same leaf the fire layer sat 1.5 cm behind the view hit (17:54:40). The door ray reaches
+    // DOOR_RAY_BACK_METERS behind the view hit, where the wall ray reaches WALL_RAY_BACK_METERS,
+    // and a door sample counts within DOOR_SAMPLE_CAP_METERS, where a wall sample counts within
+    // FIRE_SAMPLE_CAP_METERS. Fewer than FIRE_MIN_HITS geometry samples fall back to
+    // faceClearanceMeters off the view hit. The door allowance (T22) applies either way.
+    static const float WALL_RAY_BACK_METERS = 0.15;
+    static const float DOOR_RAY_BACK_METERS = 0.3;
+    static const float DOOR_SAMPLE_CAP_METERS = 0.25;
+    static const string PLACEMENT_DOOR = "door-geom";
+
+    // How far behind the sample point the measuring ray runs.
+    static float RayBack(bool onDoor)
+    {
+        if (onDoor)
+        {
+            return DOOR_RAY_BACK_METERS;
+        }
+        return WALL_RAY_BACK_METERS;
+    }
+
+    // How far from the view hit a sample still counts.
+    static float SampleCap(bool onDoor)
+    {
+        if (onDoor)
+        {
+            return DOOR_SAMPLE_CAP_METERS;
+        }
+        return FIRE_SAMPLE_CAP_METERS;
+    }
+
+    // The placement method of a door leaf from its geometry hits.
+    static string DoorMethod(int geometryHits)
+    {
+        if (UseFire(geometryHits))
+        {
+            return PLACEMENT_DOOR;
+        }
+        return PLACEMENT_FALLBACK;
+    }
+
     // ---- T20, NIMBY-T-025 (Jeff, October 25, 2026): notes on posts ----
     // A horizontal fire scan across the hit, POST_SCAN_HALF_METERS either side in
     // POST_SCAN_STEP_METERS steps (31 samples, the hit at index 15). The run of hits around the
@@ -368,20 +412,21 @@ class NimbyTackRules
 
     // ---- T21, NIMBY-T-029 (Jeff, October 25, 2026): notes on doors ----
     // A note on a door leaf attaches to the door (each client parents its copy to the door's
-    // pivot) and the server keeps it where the closed door holds it, so nothing new is saved;
-    // a door leaf that is not closed refuses the pin. doorIndex is -1 off a door.
-    static const string REASON_DOOR_NOT_CLOSED = "door-not-closed";
+    // pivot) and the server moves it with the door (T21b). doorIndex is -1 off a door. T24 (Jeff,
+    // October 25, 2026, late evening): a door leaf pins open or closed; the "closed pins" rule of
+    // T21 is retired because T21b records the note in the door's live frame, so an open-leaf pin
+    // rides the leaf and snaps onto the closed door after a restart like any other. The
+    // door-not-closed refusal and its finish re-check are gone (83 refusals in one evening).
 
-    // T22, NIMBY-T-032: the extra offset for one pin: the last allowance listed for the model, plus
-    // the door allowance on a door leaf.
-    static float ModelAllowance(NimbyTackConfig config, string model)
+    // T22, NIMBY-T-032: the last allowance listed for the model on one list, or 0.
+    static float ListAllowance(array<ref NimbyTackAllowance> list, string model)
     {
         float meters = 0.0;
-        if (!config || !config.modelAllowances)
+        if (!list)
         {
             return meters;
         }
-        foreach (NimbyTackAllowance allowance : config.modelAllowances)
+        foreach (NimbyTackAllowance allowance : list)
         {
             if (allowance && allowance.model == model)
             {
@@ -391,13 +436,33 @@ class NimbyTackRules
         return meters;
     }
 
-    // A door leaf takes the door allowance alone: the model allowances describe a building's walls,
-    // and the 1C1 front door floated 11 cm with both (October 25, 2026).
+    static float ModelAllowance(NimbyTackConfig config, string model)
+    {
+        if (!config)
+        {
+            return 0.0;
+        }
+        return ListAllowance(config.modelAllowances, model);
+    }
+
+    // T25, NIMBY-T-048: the door-leaf list is separate from the wall list, because one building
+    // can want both signs (Land_House_1C1: walls +3 cm, its front door already floats).
+    static float DoorModelAllowance(NimbyTackConfig config, string model)
+    {
+        if (!config)
+        {
+            return 0.0;
+        }
+        return ListAllowance(config.doorModelAllowances, model);
+    }
+
+    // The extra offset for one pin: on a door leaf the door allowance plus the door-leaf model
+    // allowance; on a wall the wall model allowance. The wall list never reaches a door leaf.
     static float AllowanceFor(NimbyTackConfig config, string model, bool onDoor)
     {
         if (onDoor)
         {
-            return config.doorAllowanceMeters;
+            return config.doorAllowanceMeters + DoorModelAllowance(config, model);
         }
         return ModelAllowance(config, model);
     }
@@ -410,15 +475,6 @@ class NimbyTackRules
             return true;
         }
         return doorIndex >= 0 && doorIndex <= 63 && pivot >= 0;
-    }
-
-    static bool DoorPinAllowed(int doorIndex, bool doorClosed)
-    {
-        if (doorIndex < 0)
-        {
-            return true;
-        }
-        return doorClosed;
     }
 
     // T4: health taken from the sheet by one take-down.
@@ -559,18 +615,13 @@ class NimbyTackRules
         before = config.doorAllowanceMeters;
         config.doorAllowanceMeters = Math.Clamp(before, 0.0, 0.15);
         changed = changed + Changed(before, config.doorAllowanceMeters);
-        if (config.modelAllowances)
+        changed = changed + SanitizeList(config.modelAllowances);
+        changed = changed + SanitizeList(config.doorModelAllowances);
+        // T27: the notices switch is 0 or 1; anything else means on.
+        if (config.refusalNotices != 0 && config.refusalNotices != 1)
         {
-            foreach (NimbyTackAllowance allowance : config.modelAllowances)
-            {
-                if (!allowance)
-                {
-                    continue;
-                }
-                before = allowance.meters;
-                allowance.meters = Math.Clamp(before, 0.0, 0.15);
-                changed = changed + Changed(before, allowance.meters);
-            }
+            config.refusalNotices = 1;
+            changed = changed + 1;
         }
         // NIMBY-T-023 (Jeff, October 24, 2026): a negative cap is a typo, so it takes the default
         // instead of 0, which disables the cap; 0 written on purpose still disables it.
@@ -583,6 +634,27 @@ class NimbyTackRules
         return changed;
     }
 
+    // T22, T25: every allowance on a list clamps to 0 and 15 cm; the count of entries changed.
+    static int SanitizeList(array<ref NimbyTackAllowance> list)
+    {
+        int changed = 0;
+        if (!list)
+        {
+            return changed;
+        }
+        foreach (NimbyTackAllowance allowance : list)
+        {
+            if (!allowance)
+            {
+                continue;
+            }
+            float before = allowance.meters;
+            allowance.meters = Math.Clamp(before, 0.0, 0.15);
+            changed = changed + Changed(before, allowance.meters);
+        }
+        return changed;
+    }
+
     // T6: bring a file written by an older build to the current version; true when it changed
     // something, so the loader writes the file back once. Version 1 files (October 17-20, 2026)
     // can lack the surface offsets added since, and version 1 and 2 files lack faceClearanceMeters
@@ -590,7 +662,9 @@ class NimbyTackRules
     // its initializer or at zero is native and unstated, so a value that reads zero or below takes
     // the default here and a value the operator wrote by hand is kept. A version 2 file's
     // roughSurfaceOffsetMeters is no longer a field; the write-back drops it. A file newer than
-    // the build is left alone (version 4 returns false here).
+    // the build is left alone (version 5 returns false here). Version 5 (NIMBY-T-048): a file
+    // without the door-leaf list takes the built-in one; a version 4 doorAllowanceMeters is kept
+    // as written (the profile that measured it at 0 holds 0).
     static bool UpgradeConfig(NimbyTackConfig config, NimbyTackConfig defaults)
     {
         if (config.version >= defaults.version)
@@ -609,6 +683,16 @@ class NimbyTackRules
         if (!config.modelAllowances || config.modelAllowances.Count() == 0)
         {
             config.modelAllowances = defaults.modelAllowances;
+        }
+        if (!config.doorModelAllowances || config.doorModelAllowances.Count() == 0)
+        {
+            config.doorModelAllowances = defaults.doorModelAllowances;
+        }
+        // Version 6 (T27): the key did not exist before, so a file older than 6 takes the default
+        // (a missing int may read as 0, which would silence the boxes by accident).
+        if (config.version < 6)
+        {
+            config.refusalNotices = defaults.refusalNotices;
         }
         config.version = defaults.version;
         return true;
@@ -880,11 +964,26 @@ class NimbyTackRules
         failures += Case(results, "sanitize leaves defaults alone", Sanitize(defaults) == 0);
 
         // T6: the version 2 to 3 upgrade adds faceClearanceMeters once (NIMBY-T-028).
-        failures += Case(results, "config version is 4", defaults.version == 4);
+        failures += Case(results, "config version is 6", defaults.version == 6);
+        // T27: the refusal boxes switch.
+        failures += Case(results, "refusal notices default on", defaults.refusalNotices == 1);
+        NimbyTackConfig v5File = new NimbyTackConfig();
+        v5File.version = 5;
+        v5File.refusalNotices = 0;
+        bool upgradedV5 = UpgradeConfig(v5File, defaults);
+        failures += Case(results, "version 5 file gains notices on", upgradedV5 && v5File.version == 6 && v5File.refusalNotices == 1);
+        NimbyTackConfig oddNotices = new NimbyTackConfig();
+        oddNotices.refusalNotices = 2;
+        failures += Case(results, "sanitize folds an odd notices value to 1 and keeps 0", Sanitize(oddNotices) == 1 && oddNotices.refusalNotices == 1);
         // T22, NIMBY-T-032: allowances.
         failures += Case(results, "1C1 allowance default is 3 cm", Math.AbsFloat(ModelAllowance(defaults, "Land_House_1C1") - 0.03) < 0.0001);
         failures += Case(results, "2C1 has no allowance (known clipping, T-032)", ModelAllowance(defaults, "Land_HouseBlock_2C1") == 0.0);
-        failures += Case(results, "a door leaf ignores the model allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_House_1C1", true) - defaults.doorAllowanceMeters) < 0.0001);
+        failures += Case(results, "a door leaf ignores the wall model allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_House_1C1", true) - defaults.doorAllowanceMeters) < 0.0001);
+        // T23, T25: the door allowance measured at 0 on October 25, 2026; Workshop2's door at 3 cm.
+        failures += Case(results, "door allowance default is 0 (measured)", defaults.doorAllowanceMeters == 0.0);
+        failures += Case(results, "Workshop2 door allowance default is 3 cm", Math.AbsFloat(DoorModelAllowance(defaults, "Land_Workshop2") - 0.03) < 0.0001);
+        failures += Case(results, "a door leaf adds its door model allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_Workshop2", true) - 0.03) < 0.0001);
+        failures += Case(results, "a Workshop2 wall ignores the door model allowance", AllowanceFor(defaults, "Land_Workshop2", false) == 0.0);
         failures += Case(results, "door data with no door is valid", DoorDataValid(-1, -1));
         failures += Case(results, "door data with a door and a pivot is valid", DoorDataValid(2, 83886083));
         failures += Case(results, "a junk door index is invalid", !DoorDataValid(1065353216, 0));
@@ -897,13 +996,21 @@ class NimbyTackRules
         NimbyTackConfig wild = new NimbyTackConfig();
         wild.doorAllowanceMeters = 1.0;
         wild.modelAllowances.Insert(new NimbyTackAllowance("Land_House_1C1", -0.5));
+        wild.doorModelAllowances.Insert(new NimbyTackAllowance("Land_Workshop2", 0.9));
         Sanitize(wild);
         failures += Case(results, "allowances clamp to 0 and 15 cm", Math.AbsFloat(wild.doorAllowanceMeters - 0.15) < 0.0001 && ModelAllowance(wild, "Land_House_1C1") == 0.0);
+        failures += Case(results, "door model allowances clamp to 15 cm", Math.AbsFloat(DoorModelAllowance(wild, "Land_Workshop2") - 0.15) < 0.0001);
         NimbyTackConfig v3File = new NimbyTackConfig();
         v3File.version = 3;
         v3File.modelAllowances = new array<ref NimbyTackAllowance>;
         bool upgradedV3 = UpgradeConfig(v3File, defaults);
-        failures += Case(results, "version 3 file gains the built-in allowance list", upgradedV3 && v3File.version == 4 && Math.AbsFloat(ModelAllowance(v3File, "Land_House_1C1") - 0.03) < 0.0001);
+        failures += Case(results, "version 3 file gains the built-in allowance list", upgradedV3 && v3File.version == defaults.version && Math.AbsFloat(ModelAllowance(v3File, "Land_House_1C1") - 0.03) < 0.0001);
+        NimbyTackConfig v4File = new NimbyTackConfig();
+        v4File.version = 4;
+        v4File.doorAllowanceMeters = 0.0;
+        v4File.doorModelAllowances = new array<ref NimbyTackAllowance>;
+        bool upgradedV4 = UpgradeConfig(v4File, defaults);
+        failures += Case(results, "version 4 file gains the door model list and keeps its door allowance", upgradedV4 && v4File.version == defaults.version && Math.AbsFloat(DoorModelAllowance(v4File, "Land_Workshop2") - 0.03) < 0.0001 && v4File.doorAllowanceMeters == 0.0);
         NimbyTackConfig oldFile = new NimbyTackConfig();
         oldFile.version = 2;
         oldFile.faceClearanceMeters = 0.0;
@@ -920,7 +1027,7 @@ class NimbyTackRules
         NimbyTackConfig oldestFile = new NimbyTackConfig();
         oldestFile.version = 1;
         bool upgradedOldest = UpgradeConfig(oldestFile, defaults);
-        failures += Case(results, "version 1 file is upgraded to 4", upgradedOldest && oldestFile.version == 4);
+        failures += Case(results, "version 1 file is upgraded to the current version", upgradedOldest && oldestFile.version == defaults.version);
         NimbyTackConfig oldUnknown = new NimbyTackConfig();
         oldUnknown.version = 1;
         oldUnknown.unknownSurfaceOffsetMeters = 0.0;
@@ -929,10 +1036,10 @@ class NimbyTackRules
         NimbyTackConfig current = new NimbyTackConfig();
         failures += Case(results, "current file is not upgraded", !UpgradeConfig(current, defaults));
         NimbyTackConfig future = new NimbyTackConfig();
-        future.version = 5;
+        future.version = defaults.version + 1;
         future.faceClearanceMeters = 0.022;
         bool futureTouched = UpgradeConfig(future, defaults);
-        failures += Case(results, "newer file is left alone", !futureTouched && future.version == 5 && Math.AbsFloat(future.faceClearanceMeters - 0.022) < 0.0001);
+        failures += Case(results, "newer file is left alone", !futureTouched && future.version == defaults.version + 1 && Math.AbsFloat(future.faceClearanceMeters - 0.022) < 0.0001);
 
         // NIMBY-T-015 (T17) and NIMBY-T-030: the physics-depth guard at 20 cm.
         float depthLimit = PHYSICS_DEPTH_LIMIT_METERS;
@@ -1013,6 +1120,20 @@ class NimbyTackRules
         noFront.Insert(0.5);
         failures += Case(results, "no qualifying sample has no front", FireFront(noFront, FIRE_SAMPLE_CAP_METERS) == DEPTH_MISS);
 
+        // T23, NIMBY-T-034: door leaves from the geometry layer (Land_House_1C1 front door, 18:37:01).
+        failures += Case(results, "a door leaf is measured deeper than a wall", RayBack(true) > RayBack(false) && SampleCap(true) > SampleCap(false));
+        failures += Case(results, "the door ray and cap reach the 1C1 leaf 13.2 cm back", RayBack(true) >= 0.132 && SampleCap(true) >= 0.132);
+        array<float> doorLeaf = new array<float>;
+        for (int leafSample = 0; leafSample < 9; leafSample++)
+        {
+            doorLeaf.Insert(-0.131907);
+        }
+        failures += Case(results, "the 1C1 leaf is a miss under the wall cap", FireHits(doorLeaf, SampleCap(false)) == 0);
+        failures += Case(results, "the 1C1 leaf counts 9 of 9 under the door cap", FireHits(doorLeaf, SampleCap(true)) == 9);
+        float leafFront = FireFront(doorLeaf, SampleCap(true));
+        failures += Case(results, "door geometry pulls the note in to the leaf (-11.7 cm)", Math.AbsFloat(FireOffset(leafFront, defaults.faceClearanceMeters) + 0.116907) < 0.0001);
+        failures += Case(results, "three door samples place by geometry, two fall back", DoorMethod(3) == PLACEMENT_DOOR && DoorMethod(2) == PLACEMENT_FALLBACK);
+
         // T20, NIMBY-T-025: the post run.
         float scanSpan = POST_SCAN_COUNT - 1;
         scanSpan = POST_SCAN_STEP_METERS * scanSpan;
@@ -1039,10 +1160,8 @@ class NimbyTackRules
         failures += Case(results, "side normals 90 degrees apart disagree", !SidesAgree("1 0 0", "0 0 1", POST_SIDE_AGREE_DEGREES));
         failures += Case(results, "a missing side normal disagrees", !SidesAgree("0 0 0", "0 0 1", POST_SIDE_AGREE_DEGREES));
 
-        // T21, NIMBY-T-029: the door rule.
-        failures += Case(results, "a wall that is no door pins", DoorPinAllowed(-1, false));
-        failures += Case(results, "a closed door pins", DoorPinAllowed(2, true));
-        failures += Case(results, "an open door refuses", !DoorPinAllowed(2, false));
+        // T24: door leaves pin open or closed; the area cap is the only count-based refusal.
+        failures += Case(results, "the area cap refuses at the count", !WithinAreaCap(20, 20) && WithinAreaCap(19, 20));
 
         failures += Case(results, "pinned class per fastener", NimbyTackFastener.PinnedClass(NimbyTackFastener.KNIFE) == "NimbyTack_PinnedNote_Knife");
         failures += Case(results, "unknown fastener has no class", NimbyTackFastener.PinnedClass(9) == "");

@@ -32,11 +32,13 @@ class NimbyTackAllowance
 
 class NimbyTackConfig
 {
-    // 4 since October 25, 2026 (doorAllowanceMeters and modelAllowances, NIMBY-T-032); 3 the same
-    // day (faceClearanceMeters added, roughSurfaceOffsetMeters retired, NIMBY-T-028); 2 since
+    // 6 since October 25, 2026, late evening (refusalNotices, T27); 5 the same evening
+    // (doorModelAllowances, NIMBY-T-034 and T-048); 4 the
+    // same day (doorAllowanceMeters and modelAllowances, NIMBY-T-032); 3 the same day
+    // (faceClearanceMeters added, roughSurfaceOffsetMeters retired, NIMBY-T-028); 2 since
     // October 20, 2026. A file written at an older version is upgraded once on load and written
     // back, see NimbyTackRules.UpgradeConfig, so the operator sees the keys added since.
-    int version = 4;
+    int version = 6;
     // T2: a wall hit by the raycast within this many meters of the player's head.
     float reachMeters = 1.5;
     // T2: the surface normal is within this many degrees of horizontal.
@@ -71,13 +73,21 @@ class NimbyTackConfig
     int areaCapCount = 20;
     float areaCapRadiusMeters = 50.0;
     // T22, NIMBY-T-032 (Jeff, October 25, 2026: per-model allowance): added to the placement offset
-    // on a door leaf (the drawn leaf stands in front of its geometry, October 25, 2026 on
-    // Land_House_2B01) and for each model on the list. Server only: placement runs on the server,
-    // so the client never reads these. Starting values are guesses to be measured in game; a
-    // model can appear more than once and the last entry wins, so an entry the operator appends
-    // overrides the built-in one. Clamped 0 to 15 cm.
-    float doorAllowanceMeters = 0.02;
+    // on every door leaf (doorAllowanceMeters), for each wall model on modelAllowances, and for
+    // each door-leaf model on doorModelAllowances (T25, NIMBY-T-048). Server only: placement runs
+    // on the server, so the client never reads these. A model can appear more than once and the
+    // last entry wins, so an entry the operator appends overrides the built-in one. Clamped 0 to
+    // 15 cm. doorAllowanceMeters measured at 0 on October 25, 2026 (eleven door models placed from
+    // the geometry layer, T23, all flush at 1.5 cm by Jeff's verdict); it was a 2 cm guess before.
+    float doorAllowanceMeters = 0.0;
     ref array<ref NimbyTackAllowance> modelAllowances;
+    ref array<ref NimbyTackAllowance> doorModelAllowances;
+    // T27 (Jeff, October 25, 2026): 1 shows the refusal boxes (too many notes nearby, knife on a
+    // non-wood wall, no wall there, the wall is not where it looks, wall gone) to players; 0 shows
+    // none of them. The refusals themselves and their log lines are unchanged. The server carries
+    // the value to each player as a net-synced flag on PlayerBase (nimbytack_playerbase.c), so
+    // the boxes the player's own game decides obey it too. Any other value reads as 1.
+    int refusalNotices = 1;
 
     void NimbyTackConfig()
     {
@@ -87,6 +97,10 @@ class NimbyTackConfig
         // its drawn front varies spot to spot (notes at 1.8, 4.8 and 5.3 cm each clipped or sat
         // flush), and Jeff ruled it a known clipping model (T-032).
         modelAllowances.Insert(new NimbyTackAllowance("Land_House_1C1", 0.03));
+        doorModelAllowances = new array<ref NimbyTackAllowance>;
+        // October 25, 2026 (NIMBY-T-048): the Land_Workshop2 metal door swallowed a note at 1.5 cm
+        // with view, fire and geometry flush; 3 cm is the starting guess, to be measured.
+        doorModelAllowances.Insert(new NimbyTackAllowance("Land_Workshop2", 0.03));
     }
 }
 

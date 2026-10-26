@@ -266,15 +266,7 @@ class NimbyTackWorld
                 component = target.GetComponentIndex();
                 doorIndex = NimbyTackPlace.DoorIndexOf(wall, component);
             }
-            if (!NimbyTackRules.DoorPinAllowed(doorIndex, NimbyTackPlace.DoorClosed(wall, doorIndex)))
-            {
-                s_LastProbeReason = NimbyTackRules.REASON_DOOR_NOT_CLOSED;
-                if (WantDetail())
-                {
-                    s_LastProbeDetail = "door=" + doorIndex.ToString() + " component=" + component.ToString();
-                }
-                return false;
-            }
+            // T24 (Jeff, October 25, 2026): a door leaf pins open or closed; T21b follows the leaf.
             hit = new NimbyTackHit();
             hit.position = result.pos;
             hit.normal = normal;
@@ -389,7 +381,19 @@ class NimbyTackWorld
         return null;
     }
 
-    // T6: pinned notes already inside the radius of a position.
+    // T26, NIMBY-T-047: the wall and door of a refusal, for the production refuse pin lines.
+    static string WallTag(NimbyTackHit hit)
+    {
+        if (!hit)
+        {
+            return "wall=- door=-1";
+        }
+        return "wall=" + ClassOf(hit.wall) + " door=" + hit.doorIndex.ToString();
+    }
+
+    // T6: pinned notes already inside the radius of a position. On the client (T26) the notes
+    // inside the radius are the networked copies it has been sent, so the count can run short of
+    // the server's near the edge of the player's network bubble; the server's count decides.
     static int CountPinnedNear(vector position, float radius)
     {
         array<Object> objects = new array<Object>;

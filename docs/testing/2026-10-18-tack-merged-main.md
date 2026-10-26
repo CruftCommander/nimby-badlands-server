@@ -352,3 +352,50 @@ Findings:
 Not covered this round: `Wall_M5_Corner`, the `Wall_FenW_7` round post (T20's main case), `Land_House_2M1`, `Land_House_1W01`, the `2B01` and `Shed_M1` walls, player builds, knife and epoxy pins under fire placement, a second player.
 
 Rulings, October 25, 2026 (Jeff): range clean-up by flag; fall back to the old offsets when fewer than 3 fire samples land; door notes: first client swings with closed pins (T21), then, after NIMBY-T-033, the server moves the note and saves the door data (T21b); per-model allowance (T22); `Land_HouseBlock_2C1` known clipping; finish the evening with one build and the write-up.
+
+## Door depth and refusals in game, October 25, 2026 (late evening)
+
+Branch `feat/tack-placement` from `535ad5c` (plan v0.16 then v0.17: T23 door leaves from the geometry layer, T24 open-door pins, T25 door-leaf model allowance, T26 readable refusals, T27 the refusal-box switch). Builds, all from the worktree, 0 `SCRIPT (E)` on every boot: `@NIMBY-20261025-191015` (T23; Tack 145 cases), `-200702` (FAIL: one self-test case hard-coded version 4), `-201918` (T24, T25, T26, config version 5; 149), `-204629` (once-per-approach boxes; 149), `-222717` (FAIL: the "newer file" case hard-coded version 5), `-223458` and `-223846` (T27, config version 6, cap values carried to the client; 152, identical Tack PBO). Replica `D:\DayZServer`, instance 999, profile `main-round1` (range and debug flags on, range `init.c` candidate 8 unchanged). Profile config: `doorAllowanceMeters` 0.02 to 0 by hand at 19:24 (backup `config.json.pre-door0-20261025`), upgraded 4 to 5 at 20:22 and 5 to 6 at 22:40 by the server, `refusalNotices` 0 for one boot (22:45) then restored to 1 (backups `config.json.pre-notices0-20261025`, `config.json.v6-20261025`). Session tests continue from 92. Verdicts are Jeff's. Depths are signed along the normal from the view hit; "geometry" is the `door-grid geom=` front.
+
+| Test | Row / object | Result | Evidence |
+| --- | --- | --- | --- |
+| 93 | Build `-191015` (T23) | PASS | `SUMMARY PASS`, `SELFTEST Tack cases=145 pass=145`, boot 0 `SCRIPT (E)` |
+| 94 | `Land_House_1C1` front door, outside, closed (TK-020) | PASS, "still some room to reduce floating" | 19:17:36 `placement=door-geom front=-0.131907 samples=9/9 allowance=0.02`, offset -0.097: the view hit is 13.2 cm in front of the geometry leaf and 20.5 cm in front of the fire leaf (`door-grid fire= -0.208...`); all nine geometry samples component 100 on one bone pivot |
+| 95 | Same note, door opened and closed | PASS, swings | Jeff |
+| 96 | `Land_House_1C1` door 1 | PASS, no clipping | 19:19:34 geometry -1.3 cm, fire -11.3 cm, note at +2.2 cm |
+| 97 | `Land_HouseBlock_2C1` doors (two leaves), 2 cm door allowance | PASS (doors "working very well") | 19:20:49 and 19:21:07 every layer flush, note at 3.5 cm; the 19:22:42 1C1 front-door re-pin at 3.5 cm off the geometry leaf "still floating" |
+| 98 | `Land_House_1C1` front door at `doorAllowanceMeters` 0 | PASS with a residual float, accepted (Jeff: "not at all concerned") | 19:27:22 `allowance=0` offset -0.116, 1.5 cm off the geometry leaf; the drawn leaf stands between the geometry (-13.2 cm) and fire (-20.5 cm) layers |
+| 99 | `Land_House_2B01` door at 1.5 cm (clipped at 1.5 cm on the afternoon build) | PASS | 19:29:32 `door-geom front=0 samples=9/9` |
+| 100 | `Land_Shed_M1` door | PASS | 19:29:58 front 0 |
+| 101 | `Land_Slum_House1` door | PASS | 19:30:16 front 0 |
+| 102 | `Land_Village_Store_Enoch` door | PASS | 19:30:33 geometry -2.8 cm, fire -4.4 cm, note at -1.3 cm |
+| 103 | `Land_Village_HealthCare_Enoch` doors (three) | PASS | 19:30:52 geometry +1.9 cm, 19:31:10 and 19:31:26 +0.8 cm |
+| 104 | `Land_House_2W04_Blue` doors (three) | PASS | 19:31:42, 19:31:52, 19:32:31 front 0 to +0.1 cm |
+| 105 | `Land_Tisy_Garages2_Sakhal` doors, tape and epoxy (TK-018) | PASS (Jeff: "happy with the results") | 19:35:01 tape, 19:36:06 to 19:36:41 four epoxy pins, front 0 (fire 11 cm behind on three of them) |
+| 106 | Off-range door and wall sweep: `Land_House_1W01_Red` door, `Land_HouseBlock_2C1` wall, `Land_Shed_W6` door, a Chinook wreck (`wall=-`), `Land_Container_1Mo_Desert` doors (two), `Land_Workshop4` door, `Land_Airport_Small_Hangar2` wall, `Land_Mil_Barracks3` doors (two), `Land_Workshop2` brick door front | PASS (Jeff: "generally speaking, this is working well") | 19:38:03 to 19:47:23; walls `placement=fire`, doors `door-geom`, every one 9/9 |
+| 107 | `Land_Workshop2` metal door at 1.5 cm | FAIL: the note went through the leaf (NIMBY-T-048) | 19:47:33 `surface=metalPlate` view, fire and geometry all flush, `offset=0.015` |
+| 108 | Knife pins under fire placement (coverage gap from the evening round) | PASS | 20:32:43 `Land_Slum_House1` door, 20:33:11 `Land_Village_Store_Enoch` door, `fastener=knife placement=door-geom`; epoxy covered by 105 and 106 |
+| 109 | `Wall_FenW_7` round post (T20's main case) | Not covered | Jeff chose doors for the evening |
+| 110 | `Wall_M5_Corner` | Not covered | - |
+| 111 | `Land_House_2M1` and `Land_House_1W01` walls | Not covered | - |
+| 112 | `Land_House_2B01` and `Land_Shed_M1` walls | Not covered | Only their doors were pinned (99, 100) |
+| 113 | Build `-201918` (T24, T25, T26, config version 5) | PASS | `SELFTEST Tack cases=149 pass=149`, total 363, 0 `SCRIPT (E)` |
+| 114 | Config upgrade 4 to 5 (TK-022) | PASS | 20:22:59 `config upgraded; from=4 to=5`; the file gained `doorModelAllowances` and kept `doorAllowanceMeters` 0 |
+| 115 | `Land_Workshop2` metal door with the 3 cm door-leaf allowance (TK-022) | PASS | 20:27:21 `allowance=0.03 offset=0.045` |
+| 116 | Pin on an open door leaf, then close and reopen (TK-021, T24) | PASS | Jeff; no `door-not-closed` line exists any more |
+| 117 | Area-cap box before the animation (TK-023) | PASS on the box, FAIL on the cadence: "it spams" | Client 20:30:24 `pin-check ... reason=area-cap detail=nearby=21 cap=20`; the box repeated every 10 s while the aim held (a plain interval) |
+| 118 | Knife on a metal wall (TK-024) | FAIL: no prompt and no box | `not-wood` is decided on the client, which showed nothing |
+| 119 | Restart with the open-leaf note (TK-021) | PASS: the note is on the closed door | 20:37:39 `door load result=restored` for every door note; two `Land_Workshop2` notes restored onto a leaf still open at load (`closed=false moved=0.85`, `moved=1.17`), so the snap follows the leaf's live pose either way |
+| 120 | Cap box once per approach, build `-204629` | PASS ("functioning as intended") | One box while the aim held 15 s; one more after looking away and back |
+| 121 | Knife on a metal wall shows its box once | PASS | Client `not-wood` refusals 20:38:55 onward |
+| 122 | Config upgrade 5 to 6 and the boxes on by default (TK-025), build `-223846` | PASS | 22:40:59 `config upgraded; from=5 to=6`, file `"refusalNotices": 1`; knife on metal 22:42:53 showed the box |
+| 123 | `refusalNotices` 0 (TK-025) | PASS: no prompt, no box | 22:45 boot, 15 client `not-wood` refusals, nothing shown; switch restored to 1 after the stop |
+
+Findings:
+
+- **NIMBY-T-034 (closed):** door leaves are measured on the geometry layer with a 30 cm ray and a 25 cm cap (T23); the door allowance, a 2 cm guess, measured 0 across eleven door models (tests 98 to 106). Residual: the `Land_House_1C1` front door still floats a little at 1.5 cm off its geometry leaf, because its drawn leaf stands between the geometry layer (-13.2 cm) and the fire layer (-20.5 cm); Jeff accepted it. A `doorModelAllowances` entry cannot pull a note in (clamped at 0), so a per-model negative value would be the next step if he ever wants it.
+- **NIMBY-T-047 (low, Tack, refusals, fixed by T26 and T27):** the area-cap refusal arrived after the hammering as the small status line and read like a buried note; a player holding only a stack of paper got no prompt and no server line; `refuse pin` lines did not name the wall or door. Now every refuse line carries `wall=` and `door=`, the server's refusals show as the notification box, the client refuses the cap before the prompt with a once-per-approach box (test 120) and the knife on a non-wood wall likewise (121), the stack stays silent by ruling, and `refusalNotices` turns the boxes off (123). The cap count and radius ride to the client with the switch, so the pre-check uses the server's numbers.
+- **NIMBY-T-048 (medium, Tack, placement, fixed by T25):** the `Land_Workshop2` metal door draws its leaf in front of every layer a ray can hit (view, fire, geometry flush; the T-032 pattern on a door). Config version 5 `doorModelAllowances`, `Land_Workshop2` 0.03, placed it flush (test 115).
+- **Noted, no finding:** on the 19:13 boot the 18:37 1C1 door note loaded with `moved=1.057`: the server had saved it with the door open at the 18:48 shutdown and the load snapped it onto the closed leaf. On the 20:37 boot two `Land_Workshop2` door notes loaded onto a leaf reported `closed=false`, at the right spot on that leaf. Both are the T21b pivot-frame restore working, and the reason T24 is safe.
+
+Rulings, October 25, 2026, late evening (Jeff): door allowance 0 as the code default; the refusal round on this branch before the merge; open-door pins (T21's closed-only rule retired); `doorModelAllowances` as a new list, 0 to 15 cm; refusal boxes for the server's refusals and the client's cap and knife refusals, once per approach; the stack-of-paper case stays silent (option A); the boxes are an admin switch (`refusalNotices`); troubleshooting tables in the pack README and the Workshop text.

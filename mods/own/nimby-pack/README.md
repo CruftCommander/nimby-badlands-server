@@ -17,6 +17,22 @@ One signed client-and-server mod, `@NIMBY`, that carries every small mod the ser
 
 Legs: if you played on a build before October 19, 2026, reset "Legs: toggle autorun" to default in Options > Controls > NIMBY; the game keeps your old binding (numpad plus) otherwise (NIMBY-T-004).
 
+## Troubleshooting Tack
+
+Check these before reporting that a note "will not pin" or "went into the wall". Each one is logged on the server as `[NIMBY][Tack] refuse pin reason=<reason> ... wall=<class> door=<index>`, with the player's id and Steam64, so the server log says which one it was. The boxes the player sees are an admin switch: `refusalNotices` in the server's `$profile:NimbyTack\config.json` (1 on, 0 off; takes effect at the next restart). The log lines are written either way. The cap itself is `areaCapCount` (default 20; 0 disables it) and `areaCapRadiusMeters` (default 50) in the same file; the server tells each player's game the values on connect, so the prompt withdraws at the server's limit.
+
+| What the player sees | Cause | Server log | What to do |
+| --- | --- | --- | --- |
+| No pin prompt at all with a hammer, tape, epoxy or knife in hands | The player holds only a stack of paper (or no paper). Tack pins one sheet, never a stack | Nothing: the prompt is decided on the player's game (`no-single-sheet`) | Split one sheet off the stack (drag it out in the inventory), then aim again |
+| No pin prompt, box "Too many notes nearby" | The area cap: 20 pinned notes within 50 m of the spot (server `config.json`, `areaCapCount` and `areaCapRadiusMeters`) | `reason=area-cap nearby=N cap=N` if the player's game let it through | Take a note down nearby, or pin somewhere else |
+| The hammering animation ran, then a box "Too many notes nearby" and no note on the wall | Same cap, counted by the server at the finish (the player's game counted fewer) | `reason=area-cap` | As above |
+| No prompt on a wall that looks fine | The wall is more than 1.5 m from the player's head, or the face is more than 25 degrees off vertical, or the aim is on a window, a sill, or a thin edge | `pin-check` lines only with the debug flag | Step closer, aim at the flat of the wall |
+| Box "There is no wall there" | The thing aimed at is not a building, fence, wall, or player build, or it was destroyed during the hold | `reason=no-wall detail=<probe reason>` or `reason=wall-gone` | Aim at a building or wall piece |
+| Box "The wall is not where it looks" | The building's drawn surface stands more than 20 cm in front of where the game can measure it; the note would be buried | `reason=no-wall detail=physics-ahead` | Pin on another face of the building |
+| Box "The knife will not go into that" | A knife pins only on wood | `reason=not-wood surface=<material>` | Use a hammer, tape, or epoxy, or find a wooden wall |
+| Note sits inside the wall or floats off it | The building model draws its wall in front of (or behind) every layer the game can measure. Known: `Land_HouseBlock_2C1` (accepted), `Land_House_1C1` front door (small float) | `pin ... placement=... front=... allowance=...` | Report the building class from the `pin` line; the operator adds it to `modelAllowances` or `doorModelAllowances` in the server `config.json` |
+| Door notes | A note pins on a door open or closed, swings with the door, and is back on the door after a restart | `pin ... door=<index>/pivot=...` and `door load result=restored` | Nothing; if a door note hangs in the air after a restart, report the building class |
+
 ## Layout when built
 
 ```
