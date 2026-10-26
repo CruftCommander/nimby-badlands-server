@@ -178,7 +178,11 @@ modded class MissionServer extends MissionBase
         }
         m_NimbyGreetFile = data;
         m_NimbyGreetSource = source;
-        NimbyGreetLog.Info("greet.json loaded source=" + source + " version=" + data.version.ToString() + " forceShow=" + NimbyGreetLog.Bool(data.forceShow) + " languages=" + string.Join(",", m_NimbyGreetCodes) + " default=" + data.defaultLanguage + " bytes=" + totalBytes.ToString() + " truncations=" + totalCuts.ToString() + " openDelay=" + data.openDelaySeconds.ToString() + " cooldown=" + data.requestCooldownSeconds.ToString() + " reread=" + data.rereadSeconds.ToString());
+        string line = "greet.json loaded source=" + source + " version=" + data.version.ToString() + " forceShow=" + NimbyGreetLog.Bool(data.forceShow);
+        line = line + " languages=" + string.Join(",", m_NimbyGreetCodes) + " default=" + data.defaultLanguage;
+        line = line + " bytes=" + totalBytes.ToString() + " truncations=" + totalCuts.ToString();
+        line = line + " openDelay=" + data.openDelaySeconds.ToString() + " cooldown=" + data.requestCooldownSeconds.ToString() + " reread=" + data.rereadSeconds.ToString();
+        NimbyGreetLog.Info(line);
     }
 
     // Write the temp file, read it back, copy over the target, delete the temp (there is no rename, EnSystem.c:525-531).
@@ -266,7 +270,9 @@ modded class MissionServer extends MissionBase
         {
             done.reason = "dismissed";
             player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
-            NimbyGreetLog.Info("serve id=" + requestId.ToString() + " chunks=0 reason=dismissed version=" + m_NimbyGreetFile.version.ToString() + " dismissedVersion=" + dismissedVersion.ToString() + " asked=" + language + " " + who);
+            string dismissedLine = "serve id=" + requestId.ToString() + " chunks=0 reason=dismissed version=" + m_NimbyGreetFile.version.ToString();
+            dismissedLine = dismissedLine + " dismissedVersion=" + dismissedVersion.ToString() + " asked=" + language + " " + who;
+            NimbyGreetLog.Info(dismissedLine);
             return;
         }
         string payload;
@@ -293,6 +299,8 @@ modded class MissionServer extends MissionBase
             NimbyGreetLog.Info("done record is " + doneJson.Length().ToString() + " bytes, above CHUNK_BYTES; the client will drop it");
         }
         player.NimbyGreetSendDone(sender, requestId, count, doneJson);
-        NimbyGreetLog.Info("serve id=" + requestId.ToString() + " asked=" + language + " served=" + served + " version=" + m_NimbyGreetFile.version.ToString() + " chunks=" + count.ToString() + " bytes=" + payload.Length().ToString() + " manual=" + NimbyGreetLog.Bool(manual) + " " + who);
+        string serveLine = "serve id=" + requestId.ToString() + " asked=" + language + " served=" + served + " version=" + m_NimbyGreetFile.version.ToString();
+        serveLine = serveLine + " chunks=" + count.ToString() + " bytes=" + payload.Length().ToString() + " manual=" + NimbyGreetLog.Bool(manual) + " " + who;
+        NimbyGreetLog.Info(serveLine);
     }
 }

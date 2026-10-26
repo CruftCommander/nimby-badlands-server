@@ -54,7 +54,10 @@ modded class MissionGameplay extends MissionBase
         NimbyGreetClient.Chunk().Insert(NimbyGreetOnChunk);
         NimbyGreetClient.Done().Insert(NimbyGreetOnDone);
         NimbyGreetDetectLanguage();
-        NimbyGreetLog.Debug("client ready; input bound=" + NimbyGreetLog.Bool(m_NimbyGreetInput != null) + " language detected=" + m_NimbyGreetDetectedLanguage + " prefLanguage=" + m_NimbyGreetPrefs.language + " neverShow=" + NimbyGreetLog.Bool(m_NimbyGreetSeen.neverShow) + " dismissedVersion=" + m_NimbyGreetSeen.dismissedVersion.ToString() + " textScale=" + m_NimbyGreetPrefs.textScale.ToString() + " animations=" + NimbyGreetLog.Bool(m_NimbyGreetPrefs.playAnimations));
+        string ready = "client ready; input bound=" + NimbyGreetLog.Bool(m_NimbyGreetInput != null) + " language detected=" + m_NimbyGreetDetectedLanguage + " prefLanguage=" + m_NimbyGreetPrefs.language;
+        ready = ready + " neverShow=" + NimbyGreetLog.Bool(m_NimbyGreetSeen.neverShow) + " dismissedVersion=" + m_NimbyGreetSeen.dismissedVersion.ToString();
+        ready = ready + " textScale=" + m_NimbyGreetPrefs.textScale.ToString() + " animations=" + NimbyGreetLog.Bool(m_NimbyGreetPrefs.playAnimations);
+        NimbyGreetLog.Debug(ready);
     }
 
     override void OnMissionFinish()
@@ -170,7 +173,9 @@ modded class MissionGameplay extends MissionBase
             NimbyGreetLog.Debug("done dropped id=" + requestId.ToString() + " why=" + why);
             return;
         }
-        NimbyGreetLog.Debug("done id=" + requestId.ToString() + " chunkCount=" + chunkCount.ToString() + " version=" + done.version.ToString() + " served=" + done.servedLanguage + " reason=" + done.reason + " received=" + m_NimbyGreetFetch.m_Received.ToString());
+        string doneLine = "done id=" + requestId.ToString() + " chunkCount=" + chunkCount.ToString() + " version=" + done.version.ToString();
+        doneLine = doneLine + " served=" + done.servedLanguage + " reason=" + done.reason + " received=" + m_NimbyGreetFetch.m_Received.ToString();
+        NimbyGreetLog.Debug(doneLine);
         if (m_NimbyGreetFetch.IsComplete())
         {
             NimbyGreetOnPayloadComplete();
@@ -208,7 +213,10 @@ modded class MissionGameplay extends MissionBase
         }
         array<string> capNotes;
         int cuts = NimbyGreetText.ApplyCaps(language, capNotes);
-        NimbyGreetLog.Debug("payload complete id=" + m_NimbyGreetFetch.m_RequestId.ToString() + " language=" + language.language + " version=" + done.version.ToString() + " chunks=" + m_NimbyGreetFetch.m_ChunkCount.ToString() + " bytes=" + assembled.Length().ToString() + " sections=" + language.sections.Count().ToString() + " clientCuts=" + cuts.ToString() + " elapsedMs=" + elapsed.ToString());
+        string completeLine = "payload complete id=" + m_NimbyGreetFetch.m_RequestId.ToString() + " language=" + language.language + " version=" + done.version.ToString();
+        completeLine = completeLine + " chunks=" + m_NimbyGreetFetch.m_ChunkCount.ToString() + " bytes=" + assembled.Length().ToString();
+        completeLine = completeLine + " sections=" + language.sections.Count().ToString() + " clientCuts=" + cuts.ToString() + " elapsedMs=" + elapsed.ToString();
+        NimbyGreetLog.Debug(completeLine);
         m_NimbyGreetPendingLanguage = language;
         m_NimbyGreetPendingDone = done;
         m_NimbyGreetPendingForced = false;

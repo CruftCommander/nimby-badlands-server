@@ -97,7 +97,10 @@ class NimbyGreetSelfTest
         failures += Case(results, "md: raw brackets become angle quotes, line intact", c.blocks.Get(0).markup == "a ‹ b and c › d");
 
         c = NimbyGreetMarkdown.Convert("# Big\n\n## Small\n\nbody", media);
-        failures += Case(results, "md: headings are their own blocks", c.blocks.Count() == 3 && c.blocks.Get(0).kind == NimbyGreetBlockKind.HEADING1 && c.blocks.Get(0).markup == "Big" && c.blocks.Get(1).kind == NimbyGreetBlockKind.HEADING2 && c.blocks.Get(1).markup == "Small");
+        bool headingsOk = c.blocks.Count() == 3;
+        headingsOk = headingsOk && c.blocks.Get(0).kind == NimbyGreetBlockKind.HEADING1 && c.blocks.Get(0).markup == "Big";
+        headingsOk = headingsOk && c.blocks.Get(1).kind == NimbyGreetBlockKind.HEADING2 && c.blocks.Get(1).markup == "Small";
+        failures += Case(results, "md: headings are their own blocks", headingsOk);
 
         c = NimbyGreetMarkdown.Convert("above\n\n---\n\nbelow", media);
         failures += Case(results, "md: rule block", c.blocks.Count() == 3 && c.blocks.Get(1).kind == NimbyGreetBlockKind.RULE);
@@ -126,10 +129,15 @@ class NimbyGreetSelfTest
         failures += Case(results, "md: ninth link beyond the cap prints as text", c.links.Count() == 8 && c.notes.Count() == 1);
 
         c = NimbyGreetMarkdown.Convert("| When | What |\n| --- | --- |\n| 06:00 | Restart |\n| 18:00 | Restart |", media);
-        failures += Case(results, "md: two-column table", c.blocks.Count() == 1 && c.blocks.Get(0).kind == NimbyGreetBlockKind.TABLE && c.blocks.Get(0).rows.Count() == 3 && c.blocks.Get(0).rows.Get(0).Get(1) == "What" && c.blocks.Get(0).rows.Get(2).Get(0) == "18:00");
+        bool tableOk = c.blocks.Count() == 1 && c.blocks.Get(0).kind == NimbyGreetBlockKind.TABLE && c.blocks.Get(0).rows.Count() == 3;
+        tableOk = tableOk && c.blocks.Get(0).rows.Get(0).Get(1) == "What" && c.blocks.Get(0).rows.Get(2).Get(0) == "18:00";
+        failures += Case(results, "md: two-column table", tableOk);
 
         c = NimbyGreetMarkdown.Convert("| a | b |\n| --- | --- |\n| 1 | 2 | 3 |\n| 4 | 5 |", media);
-        failures += Case(results, "md: three-cell row prints as written between table parts", c.blocks.Count() == 3 && c.blocks.Get(0).kind == NimbyGreetBlockKind.TABLE && c.blocks.Get(1).kind == NimbyGreetBlockKind.TEXT && c.blocks.Get(1).markup == "| 1 | 2 | 3 |" && c.blocks.Get(2).kind == NimbyGreetBlockKind.TABLE);
+        bool wideOk = c.blocks.Count() == 3 && c.blocks.Get(0).kind == NimbyGreetBlockKind.TABLE;
+        wideOk = wideOk && c.blocks.Get(1).kind == NimbyGreetBlockKind.TEXT && c.blocks.Get(1).markup == "| 1 | 2 | 3 |";
+        wideOk = wideOk && c.blocks.Get(2).kind == NimbyGreetBlockKind.TABLE;
+        failures += Case(results, "md: three-cell row prints as written between table parts", wideOk);
 
         c = NimbyGreetMarkdown.Convert("![The map](map)", media);
         failures += Case(results, "md: known media id is a media block", c.blocks.Count() == 1 && c.blocks.Get(0).kind == NimbyGreetBlockKind.MEDIA && c.blocks.Get(0).mediaId == "map" && c.blocks.Get(0).alt == "The map");
@@ -267,7 +275,13 @@ class NimbyGreetSelfTest
         string json = NimbyGreetDone.ToJson(done);
         string error;
         NimbyGreetDone back = NimbyGreetDone.FromJson(json, error);
-        failures += Case(results, "done: json round trip", back != null && back.version == 3 && back.forceShow && back.servedLanguage == "russian" && back.languages.Count() == 2 && back.totalBytes == payload.Length() && back.hash == payload.Hash());
+        bool roundTrip = back != null;
+        if (roundTrip)
+        {
+            roundTrip = back.version == 3 && back.forceShow && back.servedLanguage == "russian";
+            roundTrip = roundTrip && back.languages.Count() == 2 && back.totalBytes == payload.Length() && back.hash == payload.Hash();
+        }
+        failures += Case(results, "done: json round trip", roundTrip);
         failures += Case(results, "done: malformed json is null with an error", NimbyGreetDone.FromJson("{ nope", error) == null && error.Length() > 0);
 
         NimbyGreetFetch fetch = new NimbyGreetFetch();
