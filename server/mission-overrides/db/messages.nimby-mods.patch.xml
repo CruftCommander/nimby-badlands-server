@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   messages.nimby-mods.patch.xml - on-connect how-to lines for the NIMBY mods.
-  SUPERSEDED for Legs, Ears and Scrawl (Greet plan G8, release gate step 5, October 26, 2026): Greet's
-  Mods tab carries this text and these blocks are not copied at the first release. Kept for reference.
-  DRAFT. Nothing here is live. Each <message> block is copied into db/messages.xml (then deployed
-  per the README) at the restart that releases that mod, and never before: no instructions for a
-  mod that is not on the server (Jeff, October 19, 2026). Keep each text at or under 160 characters
+  SUPERSEDED for every mod (Greet plan G8, release gate step 5, October 26, 2026): Greet's Mods tab
+  carries this text, and no block here is copied into db/messages.xml at any release; each mod's
+  release updates the Mods tab instead. Kept for reference. The blocks were drafted to be copied at
+  the restart that releases each mod, and never before: no instructions for a mod that is not on
+  the server (Jeff, October 19, 2026). Keep each text at or under 160 characters
   (the engine cap). Bindings named here are the defaults; players rebind under Options > Controls, in the NIMBY tab (NIMBY-T-007, October 19, 2026).
 -->
 <messages>
