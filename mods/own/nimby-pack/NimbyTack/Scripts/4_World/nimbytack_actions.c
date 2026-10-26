@@ -37,6 +37,22 @@
 //           Tack action (ActionNimbyTackBurn) under the same rule; vanilla Ignite no
 //           longer offers on a pinned note. With the debug flag, a stopped hold
 //           writes one hold-cancel line naming why.
+// Place   : October 25, 2026 placement round (plan v0.15): the finish measures where
+//           the note goes before creating it (NimbyTackPlace.Compute: post centring
+//           T20, fire-relative offset T19) and attaches a door note (T21b). T24
+//           (late evening): a door leaf pins open or closed; the door-not-closed
+//           refusal is gone.
+// Refusals: T26, NIMBY-T-047 (Jeff, October 25, 2026): a refusal the player could read
+//           as a buried note shows as the top-right notification box
+//           (NotificationSystem.SendNotificationToPlayerExtended, NotificationSystem.c:125),
+//           not the small status line; every production refuse pin line names the
+//           wall class and door index. The area cap is counted on the client in the
+//           condition (CountPinnedNear over the networked notes, at most every
+//           CAP_CHECK_SECONDS) so the prompt withdraws before the animation and a
+//           local box says why, once per approach (ClientNotice), as does a knife on
+//           a non-wood wall; the server count at the finish stays the authority. A stack with no single sheet stays silent
+//           (Jeff: vanilla style, option A). T27: config refusalNotices 0 turns every
+//           box off; the client reads it from the net-synced flag on PlayerBase.
 // -----------------------------------------------------------------------------
 
 // T18: a hold-cancel line, debug only, written once (the action ends on the first false).
@@ -132,6 +148,78 @@ class ActionNimbyTackPinBase : ActionContinuousBase
     protected string m_NimbyDetail = "-";
     protected string m_NimbyLastKey = "";
     protected float m_NimbyLastSeconds = -1000.0;
+    // T26: the client's area-cap count is refreshed at most this often while the prompt is
+    // evaluated (one GetObjectsAtPosition3D per refresh, not per frame), and its box shows at most
+    // this often.
+    static const float CAP_CHECK_SECONDS = 0.5;
+    // T26: a client-side box shows once per approach: when a refusal reason first appears, and
+    // again only after the aim has been off that refusal for NOTICE_GAP_SECONDS; never two boxes
+    // within NOTICE_MIN_SECONDS (test 117, October 25, 2026: a box every 10 s while aiming read
+    // as spam).
+    static const float NOTICE_GAP_SECONDS = 1.0;
+    static const float NOTICE_MIN_SECONDS = 5.0;
+    static const float NOTIFY_SECONDS = 4.0;
+    static const string NOTIFY_ICON = "set:dayz_gui image:icon_x";
+    protected float m_NimbyCapCheckedAt = -1000.0;
+    protected int m_NimbyCapCount = 0;
+    protected string m_NimbyNoticeReason = "";
+    protected float m_NimbyNoticeSeenAt = -1000.0;
+    protected float m_NimbyNoticeShownAt = -1000.0;
+
+    // T26: the notification box, server side to one player (NotificationSystem.c:125). T27: off
+    // when the server config says so.
+    static void NotifyPlayer(PlayerBase player, string title, string detail)
+    {
+        if (!player || NimbyTackConfigLoader.Get().refusalNotices == 0)
+        {
+            return;
+        }
+        NotificationSystem.SendNotificationToPlayerExtended(player, NOTIFY_SECONDS, title, detail, NOTIFY_ICON);
+    }
+
+    // T26: a client-side refusal box, once per approach (see NOTICE_GAP_SECONDS). Called on the
+    // client only, from the condition, while the refusal holds.
+    protected void ClientNotice(PlayerBase player, string reason, string title, string detail)
+    {
+        // T27: the server's switch, carried on the player (nimbytack_playerbase.c).
+        if (!player || !player.NimbyTackNoticesOn())
+        {
+            return;
+        }
+        float now = GetGame().GetTickTime();
+        bool fresh = reason != m_NimbyNoticeReason || now - m_NimbyNoticeSeenAt > NOTICE_GAP_SECONDS;
+        m_NimbyNoticeReason = reason;
+        m_NimbyNoticeSeenAt = now;
+        if (!fresh || now - m_NimbyNoticeShownAt < NOTICE_MIN_SECONDS)
+        {
+            return;
+        }
+        m_NimbyNoticeShownAt = now;
+        NotificationSystem.AddNotificationExtended(NOTIFY_SECONDS, title, detail, NOTIFY_ICON);
+    }
+
+    // T26: the client's own count of pinned notes around the hit, refreshed at most every
+    // CAP_CHECK_SECONDS; true when the cap is reached. T27: the cap and radius are the server's,
+    // carried on the player (nimbytack_playerbase.c), not the client's default config.
+    protected bool ClientCapReached(PlayerBase player, vector position)
+    {
+        if (!player)
+        {
+            return false;
+        }
+        float now = GetGame().GetTickTime();
+        if (now - m_NimbyCapCheckedAt >= CAP_CHECK_SECONDS)
+        {
+            m_NimbyCapCount = NimbyTackWorld.CountPinnedNear(position, player.NimbyTackCapRadius());
+            m_NimbyCapCheckedAt = now;
+        }
+        if (NimbyTackRules.WithinAreaCap(m_NimbyCapCount, player.NimbyTackCapCount()))
+        {
+            return false;
+        }
+        ClientNotice(player, "area-cap", "Too many notes nearby", "Take one down first.");
+        return true;
+    }
 
     void ActionNimbyTackPinBase()
     {
@@ -378,13 +466,27 @@ class ActionNimbyTackPinBase : ActionContinuousBase
             {
                 m_NimbyDetail = "surface=" + hit.surface;
             }
+            if (!GetGame().IsServer())
+            {
+                ClientNotice(player, "not-wood", "The knife will not go into that", "Only wood takes a knife.");
+            }
             return Refuse("not-wood");
+        }
+        // T26, NIMBY-T-047: the area cap before the animation, on the client only (the server
+        // counts at the finish with its own config).
+        if (!GetGame().IsServer() && ClientCapReached(player, hit.position))
+        {
+            if (debugOn)
+            {
+                m_NimbyDetail = "nearby=" + m_NimbyCapCount.ToString() + " cap=" + player.NimbyTackCapCount().ToString() + " radius=" + player.NimbyTackCapRadius().ToString();
+            }
+            return Refuse("area-cap");
         }
         // Part B (B1): what the pin would use. On the client this is the default config, which
         // the server's matches unless its config.json changes the offsets.
         if (debugOn)
         {
-            m_NimbyDetail = "surface=" + hit.surface + " offset=" + NimbyTackRules.OffsetFor(hit.surface, config).ToString();
+            m_NimbyDetail = "surface=" + hit.surface + " fallback-offset=" + NimbyTackRules.OffsetFor(hit.surface, config).ToString() + " door=" + hit.doorIndex.ToString();
         }
         m_NimbyReason = REASON_PASSED;
         return true;
@@ -456,11 +558,11 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         }
         if (reason == NimbyTackRules.REASON_PHYSICS_AHEAD)
         {
-            player.MessageStatus("The wall is not where it looks; the note would be buried.");
+            NotifyPlayer(player, "The wall is not where it looks", "The note would be buried.");
         }
         else
         {
-            player.MessageStatus("There is no wall there.");
+            NotifyPlayer(player, "There is no wall there", "");
         }
     }
 
@@ -518,29 +620,29 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         // T18: a player-built wall can be dismantled or destroyed during the hold.
         if (!hit.wall || hit.wall.IsDamageDestroyed())
         {
-            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=wall-gone " + who + " " + NimbyTackWorld.PositionTag(hit.position));
-            player.MessageStatus("There is no wall there.");
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=wall-gone " + NimbyTackWorld.WallTag(hit) + " " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+            NotifyPlayer(player, "There is no wall there", "");
             return;
         }
         if (fastener == NimbyTackFastener.KNIFE && !NimbyTackRules.IsWoodSurface(hit.surface))
         {
-            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=not-wood surface=" + hit.surface + " " + who);
-            player.MessageStatus("The knife will not go into that.");
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=not-wood surface=" + hit.surface + " " + NimbyTackWorld.WallTag(hit) + " " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+            NotifyPlayer(player, "The knife will not go into that", "Only wood takes a knife.");
             return;
         }
         int nearby = NimbyTackWorld.CountPinnedNear(hit.position, config.areaCapRadiusMeters);
         if (!NimbyTackRules.WithinAreaCap(nearby, config.areaCapCount))
         {
-            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=area-cap nearby=" + nearby.ToString() + " cap=" + config.areaCapCount.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position));
-            player.MessageStatus("Too many notes on these walls already.");
+            NimbyTackLog.Info("refuse pin fastener=" + name + " reason=area-cap nearby=" + nearby.ToString() + " cap=" + config.areaCapCount.ToString() + " " + NimbyTackWorld.WallTag(hit) + " " + who + " " + NimbyTackWorld.PositionTag(hit.position));
+            NotifyPlayer(player, "Too many notes nearby", "Take one down first.");
             return;
         }
-        // NIMBY-T-008: a surface with no name (the tent's cloth) takes the unknown-surface offset;
-        // NIMBY-T-013: a rough material (mud brick) takes the rough-surface offset.
-        float pinOffset = NimbyTackRules.OffsetFor(hit.surface, config);
+        // T24: a door leaf pins open or closed (the T21 closed-door finish re-check is retired).
+        // T19, T20: where the note goes, measured before it exists (NIMBY-T-028, T-025).
+        NimbyTackPlacement placement = NimbyTackPlace.Compute(player, hit, config);
         // Read before the sheet is deleted (NIMBY-T-009: the log tells which sheet went up).
         string textTag = NimbyTackRules.TextTag(NimbyTackWorld.IsWritten(sheet));
-        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, hit, sheet, pinOffset);
+        NimbyTack_PinnedNote pinned = NimbyTackWorld.CreatePinned(fastener, placement, sheet);
         if (!pinned)
         {
             NimbyTackLog.Info("failed pin fastener=" + name + " reason=create " + who + " " + NimbyTackWorld.PositionTag(hit.position));
@@ -548,12 +650,19 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         }
         ConsumeFastener(player, tool, nail, pinned, config);
         GetGame().ObjectDelete(sheet);
-        // Built in two statements: one concatenation this long is "Formula too complex" to Enforce.
-        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + NimbyTackWorld.ClassOf(hit.wall) + " surface=" + hit.surface + " normal=" + hit.normal.ToString() + " offset=" + pinOffset.ToString();
+        // T21: a note on a door leaf syncs its door and pivot so each client swings it.
+        string doorTag = "-";
+        if (hit.doorIndex >= 0)
+        {
+            doorTag = pinned.NimbyTackAttachDoorServer(hit.wall, hit.doorIndex, hit.component, "pin");
+        }
+        // Built in statements: one concatenation this long is "Formula too complex" to Enforce.
+        string line = "pin fastener=" + name + " class=" + pinned.GetType() + " wall=" + NimbyTackWorld.ClassOf(hit.wall) + " surface=" + hit.surface + " normal=" + placement.normal.ToString() + " offset=" + placement.offset.ToString();
+        line = line + " " + placement.Tag() + " door=" + doorTag;
         line = line + " text=" + textTag + " health=" + pinned.GetHealth().ToString() + " nearby=" + nearby.ToString() + " " + who + " " + NimbyTackWorld.PositionTag(hit.position);
         NimbyTackLog.Info(line);
         // Part B (B5): debug only; measures the footprint, moves nothing.
-        NimbyTackWorld.LogFootprint(player, hit, pinned, pinOffset, config.wallOffsetMeters);
+        NimbyTackWorld.LogFootprint(player, hit, pinned, placement.offset, config.wallOffsetMeters);
     }
 
     // T2: what the pin costs. Nail, tape, and epoxy are spent and never come back; the knife
