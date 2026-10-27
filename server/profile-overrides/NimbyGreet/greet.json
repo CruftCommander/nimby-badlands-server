@@ -123,9 +123,9 @@
             "| --- | --- |",
             "| Legs | Autorun. Double-tap Left Shift; any move, fire, or raise input stops it |",
             "| Ears | Earplugs. N lowers effect volume, N again restores. Voice chat unaffected |",
-            "| Scrawl | Notes. Pen in hands, drop a sheet on it, hold the action key to write; hold left mouse to read. Paper stacks to 5; untouched notes last 30 days |",
+            "| Scrawl | Notes. Pen in hands, drop a sheet on it, hold the action key to write; hold left mouse to read. Paper stacks to 5; notes last 30 days |",
             "| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |",
-            "| Hands | Hold an item, press O to offer it; they take it from your hands. Empty hands and O asks for theirs. Bind Hands: open or close pockets to let others put items in your pockets |",
+            "| Hands | Hold an item, press O to offer it; they take it from your hands. Empty hands and O asks for theirs. Bind Hands: open or close pockets to accept items in your pockets |",
             "| Tack | Pin a sheet to a wall: hammer in hands with a nail in inventory, or tape, epoxy, or a knife in hands; look at the wall, hold the action key. Take down returns the sheet worn; the third ruins it |",
             "",
             "Coming later: the admin tool; see the Discord mod-roadmap channel."

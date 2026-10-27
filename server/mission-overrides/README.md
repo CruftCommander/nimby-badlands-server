@@ -5,6 +5,7 @@ Files here are applied to the active mission folder on the server
 
 | File | Applies to | How |
 | --- | --- | --- |
+| `LOOT-CHANGELOG.md` | (record) | Every loot change: who, before and after values, when, why. Add the row before the panel edit, mark it APPLIED after (Jeff's rule, October 26, 2026). |
 | `db/messages.xml` | `mpmissions/<mission>/db/messages.xml` | Replace the stock file. Update "Last wipe" on every wipe. |
 | `cfggameplay.patch.json` | `mpmissions/<mission>/cfggameplay.json` | Merge onto the stock file: set only the listed keys. Keep the map's own temperatures and other values. |
 | `db/types.scrawl.patch.xml` | `mpmissions/<mission>/db/types.xml` | DRAFT until Scrawl Phase 2. Replace the five `<type>` rows of the same name (Paper and the four pens); leave every other row. Back up `types.xml` first; apply at a scheduled restart. |
