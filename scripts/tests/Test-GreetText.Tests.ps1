@@ -154,6 +154,15 @@ Describe 'Test-GreetDocument' {
         ($warnings -join "`n") | Should -Match '17 sections'
         Get-Errors (Test-GreetDocument -Document $doc -MediaIds @()) | Should -BeNullOrEmpty
     }
+    It 'warns on a body above 1,000 characters, the client render limit (NIMBY-T-059)' {
+        $over = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(('a' * 500), ('a' * 500)) }
+        ((Get-Warnings (Test-GreetDocument -Document $over -MediaIds @())) -join "`n") | Should -Match 'body is 1001 characters; the client shows about 1,100'
+        $at = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(('a' * 500), ('a' * 499)) }
+        ((Get-Warnings (Test-GreetDocument -Document $at -MediaIds @())) -join "`n") | Should -Not -Match 'NIMBY-T-059'
+        $cut = New-GreetDoc { param($d) $d.languages[0].sections[0].body = @(('a' * 801), ('a' * 801), ('a' * 801), ('a' * 801), ('a' * 801)) }
+        ((Get-Warnings (Test-GreetDocument -Document $cut -MediaIds @())) -join "`n") | Should -Match 'body is 4009 characters, cut to 4000'
+        ((Get-Warnings (Test-GreetDocument -Document $cut -MediaIds @())) -join "`n") | Should -Not -Match 'NIMBY-T-059'
+    }
     It 'rejects a non-https link and an unknown media id, warns on a v0.2 url field' {
         $doc = New-GreetDoc {
             param($d)

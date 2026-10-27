@@ -75,6 +75,9 @@ $script:GreetCaps = @{
     MaxSections = 16; MaxBodyChars = 4000; MaxLinksPerSection = 8; MaxMediaPerSection = 4; MaxTablesPerSection = 2
     MaxTotalChars = 40000; MaxTitleChars = 60; MaxTaglineChars = 80; MaxHeadingChars = 40; MaxIdChars = 32
     EngineStringBytes = 1023; EngineStringWarnBytes = 1020
+    # NIMBY-T-059 (Jeff, October 26, 2026): the client shows about 1,100 characters of a body although the
+    # server serves up to MaxBodyChars; until that is placed, a body above this many characters is a WARN.
+    ShownBodyChars = 1000
     MaxOpenDelaySeconds = 30; MaxOpenRetrySeconds = 300; MaxCooldownSeconds = 60; MaxRereadSeconds = 3600
 }
 
@@ -253,6 +256,7 @@ function Test-GreetDocument {
             $body = $bodyLines -join "`n"
             if (-not $body.Trim()) { Add-Finding 'ERROR' ("{0}: body is missing or empty" -f $where); continue }
             if ($body.Length -gt $script:GreetCaps.MaxBodyChars) { Add-Finding 'WARN' ("{0}: body is {1} characters, cut to {2}" -f $where, $body.Length, $script:GreetCaps.MaxBodyChars) }
+            elseif ($body.Length -gt $script:GreetCaps.ShownBodyChars) { Add-Finding 'WARN' ("{0}: body is {1} characters; the client shows about 1,100 (NIMBY-T-059), so keep it at {2} or fewer" -f $where, $body.Length, $script:GreetCaps.ShownBodyChars) }
             $total += [Math]::Min($body.Length, $script:GreetCaps.MaxBodyChars)
             foreach ($bad in @('url', 'links', 'media')) {
                 if (Test-HasProperty $section $bad) { Add-Finding 'WARN' ("{0}: field '{1}' is not part of the format (v0.2 leftover) and is ignored" -f $where, $bad) }
