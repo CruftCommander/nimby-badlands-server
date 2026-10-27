@@ -3,7 +3,9 @@
 // Purpose : (N5) Registers ActionWritePaper and ActionReadPaper with the action
 //           manager so AddAction on Paper and Pen_ColorBase resolves them; (N2)
 //           restricts writing to a single sheet; (N11) ends either action when
-//           the note menu closes.
+//           the note menu closes; (N17) records the writer on the sheet at the
+//           server start and refuses a second player's start while a write is
+//           open; (N18) requires a world target within reach.
 // Vanilla : ActionConstructor.RegisterActions ActionConstructor.c:27;
 //           ActionWritePaper.ActionCondition ActionWritePaper.c:57-59.
 // N11     : Both vanilla actions loop CMD_ACTIONFB_VIEWNOTE on a CAContinuousTime(-1)
@@ -278,11 +280,93 @@ modded class ActionManagerClient
 
 modded class ActionWritePaper
 {
+    // N17: how long one "someone is writing" box stands for on the client before another
+    // approach shows it again.
+    static const float NOTICE_GAP_SECONDS = 4.0;
+
     protected ref NimbyNotesMenuWatch m_NimbyNotesWatch;
+    protected float m_NimbyNotesNoticeAt;
 
     void ActionWritePaper()
     {
         m_NimbyNotesWatch = new NimbyNotesMenuWatch("write");
+        m_NimbyNotesNoticeAt = -100.0;
+    }
+
+    // N17: the server records the writer the moment the action is accepted, after vanilla has
+    // bound the pen and the sheet (ActionWritePaper.c:78-90).
+    override void OnStartServer(ActionData action_data)
+    {
+        super.OnStartServer(action_data);
+        Paper sheet = NimbyNotesSheetOf(action_data);
+        if (!sheet || !action_data.m_Player)
+        {
+            return;
+        }
+        sheet.NimbyNotesOpenWrite(action_data.m_Player.GetIdentity());
+    }
+
+    // N17: the action ended on the server, by the menu closing (OK or Cancel, through the N11
+    // watcher), an interrupt, or the player leaving. The record outlives this by WRITE_LATE_MS
+    // for the OK's RPC.
+    override void OnEndServer(ActionData action_data)
+    {
+        super.OnEndServer(action_data);
+        Paper sheet = NimbyNotesSheetOf(action_data);
+        if (!sheet)
+        {
+            return;
+        }
+        sheet.NimbyNotesEndWrite();
+    }
+
+    // The sheet of a write, whichever side it is on (ActionWritePaper.c:22-30).
+    protected static Paper NimbyNotesSheetOf(ActionData action_data)
+    {
+        if (!action_data || !action_data.m_MainItem || !action_data.m_Target)
+        {
+            return null;
+        }
+        if (action_data.m_MainItem.ConfigIsExisting("writingColor"))
+        {
+            return Paper.Cast(action_data.m_Target.GetObject());
+        }
+        return Paper.Cast(action_data.m_MainItem);
+    }
+
+    // N18: the target (the sheet in the pen-in-hands order, the pen in the sheet-in-hands order)
+    // is in the writer's own inventory or within WRITE_REACH_METERS of the writer, measured on
+    // whichever side runs this from object positions, never from the client's cursor. Vanilla
+    // commented its own distance check out (ActionWritePaper.c:54), which let a client name
+    // any sheet in its bubble as the target (review SCRAWL-R2-01).
+    protected bool NimbyNotesTargetInReach(PlayerBase player, ActionTarget target)
+    {
+        Object obj = target.GetObject();
+        if (!obj)
+        {
+            return false;
+        }
+        bool held = obj.GetHierarchyRootPlayer() == player;
+        float fromFeet = vector.Distance(obj.GetPosition(), player.GetPosition());
+        float fromHead = vector.Distance(obj.GetPosition(), MiscGameplayFunctions.GetPlayerHeadPosition(player));
+        return NimbyNotesRules.WriteTargetInReach(held, fromFeet, fromHead);
+    }
+
+    // N17: a box on the client, once per approach, when the prompt is withheld because
+    // another player's write is open on the sheet.
+    protected void NimbyNotesLockedNotice(PlayerBase player)
+    {
+        if (GetGame().IsServer() && GetGame().IsMultiplayer())
+        {
+            return;
+        }
+        float now = GetGame().GetTickTime();
+        if (now - m_NimbyNotesNoticeAt < NOTICE_GAP_SECONDS)
+        {
+            return;
+        }
+        m_NimbyNotesNoticeAt = now;
+        NotificationSystem.SendNotificationToPlayerExtended(player, 3.0, "Notes", "Someone is writing on this sheet.", "");
     }
 
     override void OnStartClient(ActionData action_data)
@@ -306,22 +390,111 @@ modded class ActionWritePaper
         m_NimbyNotesWatch.Update(action_data);
     }
 
+    // The sheet of a condition: whichever side is not the pen (ActionWritePaper.c:57).
+    protected static Paper NimbyNotesSheetOfCondition(ActionTarget target, ItemBase item)
+    {
+        if (item && item.ConfigIsExisting("writingColor"))
+        {
+            if (!target)
+            {
+                return null;
+            }
+            return Paper.Cast(target.GetObject());
+        }
+        return Paper.Cast(item);
+    }
+
+    // Vanilla's pair test (ActionWritePaper.c:59), restated so the continue condition can run
+    // it without going through ActionCondition: a pen in hands with a Paper target, or a Paper
+    // in hands with a pen target.
+    protected static bool NimbyNotesPairOk(ActionTarget target, ItemBase item)
+    {
+        if (!item || !target)
+        {
+            return false;
+        }
+        Object obj = target.GetObject();
+        if (!obj)
+        {
+            return false;
+        }
+        if (item.ConfigIsExisting("writingColor") && Paper.Cast(obj))
+        {
+            return true;
+        }
+        return obj.ConfigIsExisting("writingColor") && Paper.Cast(item);
+    }
+
+    // N2 (one sheet) and N18 (reach), after the pair test. Shared by the start condition and
+    // the continue condition.
+    protected bool NimbyNotesBaseCondition(PlayerBase player, ActionTarget target, ItemBase item)
+    {
+        if (!NimbyNotesPairOk(target, item))
+        {
+            return false;
+        }
+        Paper sheet = NimbyNotesSheetOfCondition(target, item);
+        if (!sheet || !player)
+        {
+            return false;
+        }
+        if (!NimbyNotesRules.CanWrite(sheet.GetQuantity()))
+        {
+            return false;
+        }
+        // N18: reach, on both sides. The server's answer is the one that counts
+        // (ActionBase.Can, ActionManagerServer.c:168); the client's hides the prompt.
+        if (!NimbyNotesTargetInReach(player, target))
+        {
+            if (GetGame().IsServer() && GetGame().IsMultiplayer())
+            {
+                NimbyNotesLog.InfoGated(NimbyNotesLog.IdentityKey(player.GetIdentity()), "write refused: target out of reach sheet=" + sheet.GetType() + " " + NimbyNotesLog.PlayerTag(player.GetIdentity()));
+            }
+            return false;
+        }
+        return true;
+    }
+
+    // The start condition: base plus N17, one open write per sheet. The client sees the
+    // net-synced lock and withholds the prompt with a box; the server knows the writer and
+    // lets the same player restart.
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
         if (!super.ActionCondition(player, target, item))
         {
             return false;
         }
-        // The sheet is whichever side is not the pen (ActionWritePaper.c:57).
-        ItemBase sheet = item;
-        if (item && item.ConfigIsExisting("writingColor"))
-        {
-            sheet = ItemBase.Cast(target.GetObject());
-        }
-        if (!sheet)
+        if (!NimbyNotesBaseCondition(player, target, item))
         {
             return false;
         }
-        return NimbyNotesRules.CanWrite(sheet.GetQuantity());
+        Paper sheet = NimbyNotesSheetOfCondition(target, item);
+        if (GetGame().IsServer() && GetGame().IsMultiplayer())
+        {
+            if (!sheet.NimbyNotesCanStartWrite(player.GetIdentity()))
+            {
+                NimbyNotesLog.InfoGated(NimbyNotesLog.IdentityKey(player.GetIdentity()), "write refused: another write is open sheet=" + sheet.GetType() + " " + NimbyNotesLog.PlayerTag(player.GetIdentity()));
+                return false;
+            }
+            return true;
+        }
+        if (sheet.NimbyNotesIsWriteLocked())
+        {
+            NimbyNotesLockedNotice(player);
+            return false;
+        }
+        return true;
+    }
+
+    // The continue condition runs every tick of the running action (AnimatedActionBase.c:239).
+    // It must not read the lock: the writer's own lock syncs to their client before the menu
+    // opens, and vanilla's default would end the action on it.
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (!action_data)
+        {
+            return false;
+        }
+        return NimbyNotesBaseCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem);
     }
 }
