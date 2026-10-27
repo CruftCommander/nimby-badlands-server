@@ -14,7 +14,8 @@
 //           presses, menu changes, the first drifted sample as RESET, one sample
 //           per second while earplugs are in, and the vanilla respawn restore.
 //           The sample line is built only when the flag is set.
-// Vanilla : GetUApi().GetInputByName and UAInput.LocalPress (UAInput.c:218, :60);
+// Vanilla : GetUApi().GetInputByName, UAInput.GetPersistentWrapper, UAIDWrapper.InputP, and
+//           UAInput.LocalPress (UAInput.c:218, :99, :24-29, :60);
 //           UIManager.GetMenu and UIScriptedMenu.GetID (UIManager.c:59,
 //           UIScriptedMenu.c:151); SoundScene GetSoundVolume/SetSoundVolume
 //           (Sound.c:71-72) is the scene effect channel: a multiplier the engine
@@ -38,9 +39,12 @@
 modded class MissionGameplay extends MissionBase
 {
     protected ref NimbyEarplugsLevel m_NimbyEarplugs;
-    // Resolved once in OnInit; vanilla caches its inputs the same way (Inventory.c:71).
-    protected UAInput m_NimbyEarplugsInput;
-    // The launch value of the scene effect channel (E14), read once in OnInit before any press.
+    // Resolved once in OnInit as the persistent wrapper, the handle vanilla keeps across an input
+    // rebind (UAInput.c GetPersistentWrapper; UAIDWrapper.InputP re-resolves the UAInput). A bare
+    // UAInput cached in OnInit went stale after an Options > Controls rebind (EP-005 re-run).
+    protected UAIDWrapper m_NimbyEarplugsInput;
+    // The launch value of the scene effect channel (E14, E15): the DeferredInit cache when it is
+    // populated, else the channel itself, read once in OnInit before any press.
     // Earplugs in writes 0.15 of it; take-out writes it back. The Options Effects slider is the
     // player's own setting, applied by the engine on top of this channel, and is never read.
     protected float m_NimbyEarplugsLaunch;
@@ -56,9 +60,20 @@ modded class MissionGameplay extends MissionBase
         m_NimbyEarplugsDebug = FileExist("$profile:NimbyEarplugs\\debug");
         if (GetUApi())
         {
-            m_NimbyEarplugsInput = GetUApi().GetInputByName("UANimbyEarplugsToggle");
+            UAInput toggle = GetUApi().GetInputByName("UANimbyEarplugsToggle");
+            if (toggle)
+            {
+                m_NimbyEarplugsInput = toggle.GetPersistentWrapper();
+            }
         }
-        m_NimbyEarplugsLaunch = g_Game.GetSoundScene().GetSoundVolume();
+        float cachedLaunch = g_Game.m_volume_sound;
+        float sceneLaunch = g_Game.GetSoundScene().GetSoundVolume();
+        m_NimbyEarplugsLaunch = NimbyEarplugsLevel.PickBaseline(cachedLaunch, sceneLaunch);
+        string launchFrom = "scene";
+        if (cachedLaunch > 0)
+        {
+            launchFrom = "cache";
+        }
         bool bound = false;
         if (m_NimbyEarplugsInput)
         {
@@ -66,6 +81,7 @@ modded class MissionGameplay extends MissionBase
         }
         string line = "loaded; input=UANimbyEarplugsToggle bound=" + NimbyEarplugsBool(bound);
         line = line + NimbyEarplugsLaunchToken();
+        line = line + " launch_from=" + launchFrom;
         line = line + " debug=" + NimbyEarplugsBool(m_NimbyEarplugsDebug);
         line = line + NimbyEarplugsLevels();
         NimbyEarplugsDebugLog(line);
@@ -169,7 +185,12 @@ modded class MissionGameplay extends MissionBase
         {
             return false;
         }
-        if (!m_NimbyEarplugsInput.LocalPress())
+        UAInput toggle = m_NimbyEarplugsInput.InputP();
+        if (!toggle)
+        {
+            return false;
+        }
+        if (!toggle.LocalPress())
         {
             return false;
         }

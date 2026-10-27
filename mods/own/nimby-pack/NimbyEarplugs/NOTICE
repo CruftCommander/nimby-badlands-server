@@ -4,6 +4,17 @@ Modifies the vanilla DayZ 1.30 MissionBase, MissionGameplay, and NotificationUI 
 
 Changes, newest first:
 
+- October 27, 2026, release-1 patch 1 (plan v0.12, E15, branch
+  fix/release-1-patch-1, from the October 27 review, row 21): the launch
+  value is the DeferredInit cache (g_Game.m_volume_sound) when it is
+  populated and the live channel only when that cache reads 0, so a rejoin
+  after a death-screen or unconscious exit in the same client process no
+  longer starts from a channel that death left at 0 (NimbyEarplugsLevel
+  .PickBaseline, two self-test cases, 28 total); the loaded line carries
+  launch_from=cache|scene. The toggle input is held as the persistent
+  wrapper (UAIDWrapper, UAInput.c:99, :29) and re-resolved on each read, so
+  an Options > Controls rebind takes effect without a relog (EP-005 re-run
+  on the cached-input build is the test).
 - October 21, 2026, release-1 round (E14 revised by Jeff on the measured
   rows, findings NIMBY-T-018 and NIMBY-T-019 in the test record): the
   Effects slider read is gone; OnInit reads the launch value of the scene

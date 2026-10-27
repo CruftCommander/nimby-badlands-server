@@ -4,6 +4,15 @@ Bohemia's own ActionWritePaper and ActionReadPaper classes; no third-party mod c
 
 Changes, newest first:
 
+- October 27, 2026, release-1 patch 1 (plan N17 to N20): the writer of a sheet is the
+  identity whose ActionWritePaper the server accepted, recorded on modded Paper in
+  memory (never persisted); one write open per sheet, a second player's start refused
+  with a box, a 300 s grace, the record never cleared by a refusal; a 2 m reach check
+  on a target outside the writer's inventory, measured from object positions on the
+  server (vanilla commented its own out, ActionWritePaper.c:54); the vanilla
+  RPC_WRITE_NOTE and RPC_READ_NOTE handlers are not reached on a dedicated server;
+  the RPC path re-checks the single-sheet rule; client-triggered Info lines are
+  gated per sender. Still no third-party code.
 - October 21, 2026, release-1 round (plan v0.9, N14 to N16): a net-synced written
   flag on the vanilla Paper (never persisted) so the client refuses to combine a
   written note too; the vanilla WrittenNoteData owner reference is bound from

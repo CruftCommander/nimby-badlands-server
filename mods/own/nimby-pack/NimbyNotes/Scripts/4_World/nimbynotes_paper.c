@@ -55,11 +55,21 @@
 //           forged RPC on a sheet the sender holds) skips the ink instead of passing
 //           null to the notnull parameter of DepleteWritingImplement
 //           (WrittenNoteData.c:83) and is a production audit line.
-// N16     : The writer is the root player of the bound pen, else of the sheet
-//           (EntityAI.c:882). The three supported orders keep at least one of them
-//           on the writer: pen in hands with the sheet anywhere, sheet in hands with
-//           the pen in the inventory, sheet in hands with the pen on the ground.
-//           A sender who is neither is refused at Info with both ids.
+// N16/N17 : The writer is the identity whose write action started on the sheet, recorded
+//           by the server in ActionWritePaper.OnStartServer on modded Paper (an in-memory
+//           field; Paper's own members are not serialized, only the WrittenNoteData object
+//           is). The pen reference that vanilla rebinds on every start no longer decides
+//           it: any client could fill that slot with a forged start, any refusal used to
+//           clear it, and two players on one wall note overwrote each other's (review
+//           SCRAWL-R2-01, R2-03, R2-04, October 27, 2026). One write is open per sheet;
+//           a second player's start is refused with a box. A sender who is not the
+//           recorded writer is refused at Info with both ids, gated per sender.
+// RPCs    : RPC_WRITE_NOTE and RPC_READ_NOTE are server-to-client messages
+//           (ActionWritePaper.c:32, ActionReadPaper.c:24). Vanilla's handler runs
+//           SetNoteText on whichever side receives them with no sender check
+//           (WrittenNoteData.c:18-22, 46-50), so on a dedicated server they are dropped
+//           here with a gated Info line (review SCRAWL-R2-02). Offline (one process) they
+//           still reach vanilla.
 // Ink     : DepleteWritingImplement takes one quantity per character added
 //           (WrittenNoteData.c:83-88), once per confirmed write.
 // -----------------------------------------------------------------------------
@@ -73,12 +83,19 @@ modded class WrittenNoteData
 {
     override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
     {
-        if (rpc_type != ERPCs.RPC_WRITE_NOTE_CLIENT)
+        if (rpc_type == ERPCs.RPC_WRITE_NOTE_CLIENT)
         {
-            super.OnRPC(sender, rpc_type, ctx);
+            NimbyNotesWrite(sender, ctx);
             return;
         }
-        NimbyNotesWrite(sender, ctx);
+        bool serverToClientType = rpc_type == ERPCs.RPC_WRITE_NOTE || rpc_type == ERPCs.RPC_READ_NOTE;
+        if (serverToClientType && GetGame().IsServer() && GetGame().IsMultiplayer())
+        {
+            string key = NimbyNotesLog.IdentityKey(sender);
+            NimbyNotesLog.InfoGated(key, "write refused: server-only rpc type=" + rpc_type.ToString() + " sheet=" + NimbyNotesSheetType() + " " + NimbyNotesLog.PlayerTag(sender));
+            return;
+        }
+        super.OnRPC(sender, rpc_type, ctx);
     }
 
     // N15: every text change, from Scrawl's write or from another addon's SetNoteText, syncs
@@ -100,39 +117,31 @@ modded class WrittenNoteData
         InitNoteInfo(m_WritingImplement, owner);
     }
 
-    // Clears the pen after a write or a refusal; the owner reference stays.
+    // Clears the pen after a stored write; the owner reference stays. Never called on a
+    // refusal any more (N17): a refused packet must not touch the writer's binding.
     void NimbyNotesClearPen()
     {
         InitNoteInfo(null, m_Paper);
     }
 
-    // N16: the writer is the root player of the pen when the pen is held or carried, else the
-    // root player of the sheet (the pen-on-the-ground order).
+    // N17: the writer is the identity the owning sheet recorded at the action start.
     protected bool NimbyNotesSenderIsWriter(PlayerIdentity sender)
     {
-        if (!sender)
+        Paper owner = Paper.Cast(m_Paper);
+        if (!owner)
         {
             return false;
         }
-        Man writer = null;
-        if (m_WritingImplement)
+        return owner.NimbyNotesAcceptsWriteFrom(sender);
+    }
+
+    protected float NimbyNotesSheetQuantity()
+    {
+        if (!m_Paper)
         {
-            writer = m_WritingImplement.GetHierarchyRootPlayer();
+            return 0;
         }
-        if (!writer && m_Paper)
-        {
-            writer = m_Paper.GetHierarchyRootPlayer();
-        }
-        if (!writer)
-        {
-            return false;
-        }
-        PlayerIdentity identity = writer.GetIdentity();
-        if (!identity)
-        {
-            return false;
-        }
-        return identity.GetId() == sender.GetId();
+        return m_Paper.GetQuantity();
     }
 
     protected string NimbyNotesSheetType()
@@ -155,25 +164,30 @@ modded class WrittenNoteData
         }
         bool isWriter = NimbyNotesSenderIsWriter(sender);
         string tag = NimbyNotesLog.PlayerTag(sender);
+        string key = NimbyNotesLog.IdentityKey(sender);
         string sheetType = NimbyNotesSheetType();
-        NimbyNotesWriteOutcome outcome = NimbyNotesRules.WriteOutcome(param.param1, hasPen, readable, isWriter);
+        NimbyNotesWriteOutcome outcome = NimbyNotesRules.WriteOutcome(param.param1, hasPen, readable, isWriter, NimbyNotesSheetQuantity());
+        // N17: a refusal changes nothing on the sheet: not the pen binding, not the writer record.
         if (outcome.m_Verdict == NimbyNotesRules.WRITE_UNREADABLE)
         {
-            NimbyNotesClearPen();
-            NimbyNotesLog.Info("write refused: text unreadable sheet=" + sheetType + " " + tag);
+            NimbyNotesLog.InfoGated(key, "write refused: text unreadable sheet=" + sheetType + " " + tag);
             return;
         }
         if (outcome.m_Verdict == NimbyNotesRules.WRITE_NOT_WRITER)
         {
-            NimbyNotesClearPen();
-            NimbyNotesLog.Info("write refused: sender is not the writer sheet=" + sheetType + " " + tag);
+            NimbyNotesLog.InfoGated(key, "write refused: sender is not the writer sheet=" + sheetType + " " + tag);
+            return;
+        }
+        if (outcome.m_Verdict == NimbyNotesRules.WRITE_NOT_SINGLE)
+        {
+            NimbyNotesLog.InfoGated(key, "write refused: sheet is not a single sheet quantity=" + NimbyNotesSheetQuantity().ToString() + " sheet=" + sheetType + " " + tag);
             return;
         }
         int sent = param.param1.Length();
         int kept = outcome.m_Text.Length();
         if (outcome.m_Capped)
         {
-            NimbyNotesLog.Info("write capped " + tag + " from=" + sent.ToString() + " to=" + kept.ToString());
+            NimbyNotesLog.InfoGated(key, "write capped " + tag + " from=" + sent.ToString() + " to=" + kept.ToString());
         }
         string oldText = m_SimpleText;
         SetNoteText(outcome.m_Text);
@@ -192,10 +206,15 @@ modded class WrittenNoteData
         {
             string noPenLine = "write ink: no pen reference; text stored, ink not taken; sheet=" + sheetType;
             noPenLine = noPenLine + " length " + oldLength.ToString() + " -> " + newLength.ToString() + " " + tag;
-            NimbyNotesLog.Info(noPenLine);
+            NimbyNotesLog.InfoGated(key, noPenLine);
         }
         NimbyNotesClearPen();
-        NimbyNotesLog.Debug("write finished; pen reference cleared");
+        Paper owner = Paper.Cast(m_Paper);
+        if (owner)
+        {
+            owner.NimbyNotesClearWrite("stored");
+        }
+        NimbyNotesLog.Debug("write finished; pen reference and writer record cleared");
     }
 }
 
@@ -207,10 +226,148 @@ modded class Paper
     // (ItemBase.c:125,203-205); Hands registers two on PlayerBase the same way.
     protected bool m_NimbyNotesWritten;
 
+    // N17: net-synced, never persisted: true while a write is open on this sheet, so the
+    // client hides the write prompt for everyone else (ActionCondition) without knowing who
+    // the writer is. The server clears it when the write is stored, when the action ends, and
+    // when the grace runs out.
+    protected bool m_NimbyNotesWriteLocked;
+
+    // N17: the open write, server memory only. Paper's own members are never serialized
+    // (vanilla Paper.OnStoreSave writes the WrittenNoteData object, Paper.c:27, nothing else),
+    // so these never reach the save and shared rules 6.1 is untouched.
+    protected string m_NimbyNotesWriterId;
+    protected int m_NimbyNotesWriteOpenedMs;
+    protected int m_NimbyNotesWriteEndedMs;
+
     void Paper()
     {
         RegisterNetSyncVariableBool("m_NimbyNotesWritten");
+        RegisterNetSyncVariableBool("m_NimbyNotesWriteLocked");
+        m_NimbyNotesWriterId = "";
+        m_NimbyNotesWriteOpenedMs = 0;
+        m_NimbyNotesWriteEndedMs = 0;
         NimbyNotesBindOwner();
+    }
+
+    // The grace timer is an instance call on a 4_World entity (shared rules 7.1, the Tack
+    // precedent); it is removed before the entity goes.
+    override void EEDelete(EntityAI parent)
+    {
+        if (GetGame() && GetGame().IsServer())
+        {
+            GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).Remove(NimbyNotesExpireWrite);
+        }
+        super.EEDelete(parent);
+    }
+
+    // N17: records the writer at the action start. A restart by the same writer replaces
+    // their own record; another player's start never reaches here (ActionCondition).
+    void NimbyNotesOpenWrite(PlayerIdentity identity)
+    {
+        if (!GetGame().IsServer())
+        {
+            return;
+        }
+        string id = NimbyNotesLog.IdentityKey(identity);
+        if (id == "none")
+        {
+            return;
+        }
+        m_NimbyNotesWriterId = id;
+        m_NimbyNotesWriteOpenedMs = GetGame().GetTime();
+        m_NimbyNotesWriteEndedMs = 0;
+        GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).Remove(NimbyNotesExpireWrite);
+        GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).CallLater(NimbyNotesExpireWrite, NimbyNotesRules.WRITE_GRACE_MS, false);
+        NimbyNotesSyncWriteLocked();
+        NimbyNotesLog.Debug("write opened sheet=" + GetType() + " " + NimbyNotesLog.PlayerTag(identity));
+    }
+
+    // N17: the action ended (OK, Cancel, Escape, walked away, disconnect). The record stays for
+    // WRITE_LATE_MS so the OK's RPC, sent just before the menu closed, is still the writer's.
+    void NimbyNotesEndWrite()
+    {
+        if (!GetGame().IsServer() || m_NimbyNotesWriterId == "")
+        {
+            return;
+        }
+        if (m_NimbyNotesWriteEndedMs == 0)
+        {
+            m_NimbyNotesWriteEndedMs = GetGame().GetTime();
+        }
+        NimbyNotesSyncWriteLocked();
+        NimbyNotesLog.Debug("write action ended sheet=" + GetType() + " writer=" + m_NimbyNotesWriterId);
+    }
+
+    // N17: forgets the writer. From the stored write, and from the grace timer.
+    void NimbyNotesClearWrite(string why)
+    {
+        if (!GetGame().IsServer())
+        {
+            return;
+        }
+        bool hadWriter = m_NimbyNotesWriterId != "";
+        m_NimbyNotesWriterId = "";
+        m_NimbyNotesWriteOpenedMs = 0;
+        m_NimbyNotesWriteEndedMs = 0;
+        GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).Remove(NimbyNotesExpireWrite);
+        NimbyNotesSyncWriteLocked();
+        if (hadWriter)
+        {
+            NimbyNotesLog.Debug("write record cleared sheet=" + GetType() + " why=" + why);
+        }
+    }
+
+    // The grace timer: a write still open after WRITE_GRACE_MS is forgotten (a menu left open,
+    // a client that never sent the action end). A production line: it is the case the grace
+    // exists for, and it is bounded to one per grace per sheet.
+    void NimbyNotesExpireWrite()
+    {
+        if (!GetGame().IsServer() || m_NimbyNotesWriterId == "")
+        {
+            return;
+        }
+        if (NimbyNotesRules.IsWriteOpen(m_NimbyNotesWriterId, m_NimbyNotesWriteOpenedMs, m_NimbyNotesWriteEndedMs, GetGame().GetTime()))
+        {
+            return;
+        }
+        NimbyNotesLog.Info("write expired: open write forgotten after the grace sheet=" + GetType() + " writer=" + m_NimbyNotesWriterId);
+        NimbyNotesClearWrite("grace");
+    }
+
+    // N17: whether a start by this identity is allowed now (server side of ActionCondition).
+    bool NimbyNotesCanStartWrite(PlayerIdentity identity)
+    {
+        string id = NimbyNotesLog.IdentityKey(identity);
+        return NimbyNotesRules.CanStartWrite(m_NimbyNotesWriterId, m_NimbyNotesWriteOpenedMs, m_NimbyNotesWriteEndedMs, GetGame().GetTime(), id);
+    }
+
+    // N17: whether a write RPC from this identity is the recorded writer's.
+    bool NimbyNotesAcceptsWriteFrom(PlayerIdentity identity)
+    {
+        string id = NimbyNotesLog.IdentityKey(identity);
+        return NimbyNotesRules.AcceptsWriteFrom(m_NimbyNotesWriterId, m_NimbyNotesWriteOpenedMs, m_NimbyNotesWriteEndedMs, GetGame().GetTime(), id);
+    }
+
+    // The client's view of the lock (ActionCondition on the client hides the prompt).
+    bool NimbyNotesIsWriteLocked()
+    {
+        if (GetGame().IsServer())
+        {
+            return NimbyNotesRules.IsWriteOpen(m_NimbyNotesWriterId, m_NimbyNotesWriteOpenedMs, m_NimbyNotesWriteEndedMs, GetGame().GetTime());
+        }
+        return m_NimbyNotesWriteLocked;
+    }
+
+    // Server only. Dirty only on change.
+    protected void NimbyNotesSyncWriteLocked()
+    {
+        bool locked = NimbyNotesRules.IsWriteOpen(m_NimbyNotesWriterId, m_NimbyNotesWriteOpenedMs, m_NimbyNotesWriteEndedMs, GetGame().GetTime());
+        if (locked == m_NimbyNotesWriteLocked)
+        {
+            return;
+        }
+        m_NimbyNotesWriteLocked = locked;
+        SetSynchDirty();
     }
 
     // Entity event after a load from the player database or the world storage, after the

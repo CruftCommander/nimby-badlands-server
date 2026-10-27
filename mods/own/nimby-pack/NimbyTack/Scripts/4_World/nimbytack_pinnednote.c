@@ -65,8 +65,16 @@ class NimbyTack_PinnedNote : Paper
         }
     }
 
+    // Both queued instance calls are removed before the entity goes (review TACK-R2-05): vanilla
+    // removes its own before a delete (ItemBase.c:4447, Fence.c:526), and a burn mid-swing or a
+    // CE delete inside the 5 s load delay would otherwise leave a call aimed at a dead note.
     override void EEDelete(EntityAI parent)
     {
+        if (GetGame() && GetGame().IsServer())
+        {
+            NimbyTackStopFollow();
+            GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).Remove(NimbyTackRestoreDoor);
+        }
         NimbyTackDoors.Unregister(this);
         super.EEDelete(parent);
     }

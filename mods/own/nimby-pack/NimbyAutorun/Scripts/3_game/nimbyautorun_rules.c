@@ -19,8 +19,8 @@ class NimbyAutorunRpc
     // and remembered state and does not re-send start.
     static const int CANCEL = 6550102;
     // Server to the owning client, round 3: Param1<bool stopOnSwim>, sent with every accepted
-    // start so the client's swim rule follows the server config. Inside the Legs block (shared
-    // rules 4.1 lists 6550101 and 6550102; this id is reported to the orchestrator).
+    // start so the client's swim rule follows the server config. Listed in shared rules 4.1
+    // since v1.3.
     static const int SETTINGS = 6550103;
 }
 
@@ -63,14 +63,13 @@ class NimbyAutorunThrottle
         return true;
     }
 
-    // At most one cancellation RPC per window for dropped requests, so a flood is not answered
-    // with a flood.
+    // One cancellation RPC per dropped running request. The client applied the request locally
+    // before sending it, so every drop leaves the client running under its own override while
+    // the server is stopped; only a cancel per drop keeps the two in step (review LEGS-R2-04,
+    // prior item 16). One cancel per request is a 1:1 echo, not amplification. m_CancelSent is
+    // kept so the window bookkeeping stays as it was.
     bool TakeCancel()
     {
-        if (m_CancelSent)
-        {
-            return false;
-        }
         m_CancelSent = true;
         return true;
     }
@@ -113,7 +112,9 @@ class NimbyAutorunRules
     // the menu by a frame or more (GesturesMenu.c:143-148 removes it in the destructor). Inside
     // this window a control-disabled state is not a stop.
     static const float MENU_GRACE_SECONDS = 0.5;
-    static const int REQUESTS_PER_SECOND_MIN = 1;
+    // The honest client emits up to three changes in a second (a start, the walk double-tap
+    // inside 0.5 s), so a budget below three throttles ordinary play.
+    static const int REQUESTS_PER_SECOND_MIN = 3;
     static const int REQUESTS_PER_SECOND_MAX = 100;
     // NimbyAutorunConfig.version written by this build.
     static const int CONFIG_VERSION = 2;
@@ -466,10 +467,10 @@ class NimbyAutorunRules
         failures += Case(results, "throttle counts two drops", throttle.TakeDropped() == 2);
         failures += Case(results, "throttle drop count resets", throttle.TakeDropped() == 0);
         failures += Case(results, "throttle first cancel sent", throttle.TakeCancel());
-        failures += Case(results, "throttle second cancel held", !throttle.TakeCancel());
+        failures += Case(results, "throttle cancel sent on every drop", throttle.TakeCancel());
         failures += Case(results, "throttle window resets after one second", throttle.Admit(2.0, false));
-        failures += Case(results, "throttle cancel rearms with window", throttle.TakeCancel());
         failures += Case(results, "throttle resets on clock rewind", throttle.Admit(0.5, false));
+        failures += Case(results, "throttle floor is three per second", REQUESTS_PER_SECOND_MIN == 3);
         NimbyAutorunThrottle stops = new NimbyAutorunThrottle(1);
         int admittedStops = 0;
         for (int i = 0; i < 50; i++)
@@ -504,7 +505,7 @@ class NimbyAutorunRules
         NimbyAutorunConfig low = new NimbyAutorunConfig();
         low.requestsPerSecond = 0;
         failures += Case(results, "sanitize counts low budget", Sanitize(low) == 1);
-        failures += Case(results, "sanitize raises budget to 1", low.requestsPerSecond == REQUESTS_PER_SECOND_MIN);
+        failures += Case(results, "sanitize raises budget to the floor", low.requestsPerSecond == REQUESTS_PER_SECOND_MIN);
         NimbyAutorunConfig high = new NimbyAutorunConfig();
         high.requestsPerSecond = 5000;
         Sanitize(high);
@@ -514,9 +515,14 @@ class NimbyAutorunRules
         failures += Case(results, "cancel rpc id", NimbyAutorunRpc.CANCEL == 6550102);
         failures += Case(results, "settings rpc id", NimbyAutorunRpc.SETTINGS == 6550103);
 
-        failures += Case(results, "who from cache names the player", NimbyAutorunLog.WhoFrom("Road Dog", "BIHASH=", "76561190000000000") == "player=Road Dog (BIHASH=, 76561190000000000)");
-        failures += Case(results, "who from empty cache is unknown", NimbyAutorunLog.WhoFrom("", "", "") == "player=unknown (unknown, unknown)");
-        failures += Case(results, "who without identity is unknown", NimbyAutorunLog.Who(null) == "player=unknown (unknown, unknown)");
+        failures += Case(results, "who from cache names the player, ids first", NimbyAutorunLog.WhoFrom("Road Dog", "BIHASH=", "76561190000000000") == "player=(BIHASH=, 76561190000000000) \"Road Dog\"");
+        failures += Case(results, "who from empty cache is unknown", NimbyAutorunLog.WhoFrom("", "", "") == "player=(unknown, unknown) \"\"");
+        failures += Case(results, "who without identity is unknown", NimbyAutorunLog.Who(null) == "player=(unknown, unknown) \"\"");
+        string hostile = "A (B, 76561198354705597)";
+        failures += Case(results, "who from a hostile name keeps the real ids first", NimbyAutorunLog.WhoFrom(hostile, "REAL=", "76561190000000001") == "player=(REAL=, 76561190000000001) \"A (B, 76561198354705597)\"");
+        failures += Case(results, "escape doubles a backslash", NimbyAutorunLog.Escape("a\\b") == "a\\\\b");
+        failures += Case(results, "escape quotes a quote", NimbyAutorunLog.Escape("say \"hi\"") == "say \\\"hi\\\"");
+        failures += Case(results, "escape flattens a line break", NimbyAutorunLog.Escape("a\nb") == "a b");
         return failures;
     }
 

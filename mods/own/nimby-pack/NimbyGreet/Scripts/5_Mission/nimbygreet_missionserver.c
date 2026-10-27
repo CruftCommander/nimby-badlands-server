@@ -32,6 +32,7 @@ modded class MissionServer extends MissionBase
     protected ref map<string, string> m_NimbyGreetSerialized;     // language code to Language JSON
     protected ref map<string, float> m_NimbyGreetLastServed;      // identity id to tick time
     protected ref map<string, float> m_NimbyGreetLastRefusedLog;  // identity id to tick time
+    protected ref map<string, int> m_NimbyGreetRefusalReplies;    // identity id to replies sent in the current refusal window (GREET-R2-03)
     protected float m_NimbyGreetLoadedAt = -1.0;
     protected string m_NimbyGreetSource = "none";                 // greet.json | greet.json.lkg | default | none
     protected string m_NimbyGreetLastError = "";                  // last greet.json problem logged ("invalid: <error>" or "cannot be opened for reading"); "" once a read parses again
@@ -50,6 +51,7 @@ modded class MissionServer extends MissionBase
         m_NimbyGreetSerialized = new map<string, string>;
         m_NimbyGreetLastServed = new map<string, float>;
         m_NimbyGreetLastRefusedLog = new map<string, float>;
+        m_NimbyGreetRefusalReplies = new map<string, int>;
         if (!FileExist(NimbyGreetRules.DIR))
         {
             MakeDirectory(NimbyGreetRules.DIR);
@@ -62,6 +64,21 @@ modded class MissionServer extends MissionBase
     {
         NimbyGreetClient.Request().Remove(NimbyGreetOnRequest);
         super.OnMissionFinish();
+    }
+
+    // The per-identity maps are pruned when the player leaves (review GREET-R2-07), so the
+    // gates and the refusal counters never outlive the connection they describe.
+    override void InvokeOnDisconnect(PlayerBase player)
+    {
+        super.InvokeOnDisconnect(player);
+        if (!player || !player.GetIdentity())
+        {
+            return;
+        }
+        string key = player.GetIdentity().GetId();
+        m_NimbyGreetLastServed.Remove(key);
+        m_NimbyGreetLastRefusedLog.Remove(key);
+        m_NimbyGreetRefusalReplies.Remove(key);
     }
 
     override void InvokeOnConnect(PlayerBase player, PlayerIdentity identity)
@@ -380,7 +397,6 @@ modded class MissionServer extends MissionBase
             return;
         }
         float now = GetGame().GetTickTime();
-        string who = NimbyGreetLog.Who(sender);
         // The language string comes from the client; only a known column name reaches the log (no forged lines).
         string asked = language;
         if (!NimbyGreetRules.IsKnownLanguage(language))
@@ -402,13 +418,26 @@ modded class MissionServer extends MissionBase
             {
                 // Phase 1 run 1: a silent refusal left the language selector waiting on nothing. The refusal
                 // is now a bare done with the time left, and a manual request retries itself once after it.
+                // The reply is bounded per sender per window (review GREET-R2-03): the honest client sends
+                // at most two requests inside a window; a flood gets the first few replies and then nothing.
                 float lastLog;
                 bool logged = m_NimbyGreetLastRefusedLog.Find(key, lastLog);
                 if (!logged || now - lastLog >= cooldown)
                 {
                     m_NimbyGreetLastRefusedLog.Set(key, now);
-                    NimbyGreetLog.Info("request refused reason=cooldown id=" + requestId.ToString() + " " + who);
+                    m_NimbyGreetRefusalReplies.Set(key, 0);
+                    NimbyGreetLog.Info("request refused reason=cooldown id=" + requestId.ToString() + " " + NimbyGreetLog.Who(sender));
                 }
+                int replies = 0;
+                if (m_NimbyGreetRefusalReplies.Contains(key))
+                {
+                    replies = m_NimbyGreetRefusalReplies.Get(key);
+                }
+                if (!NimbyGreetRules.RefusalReplyAllowed(replies))
+                {
+                    return;
+                }
+                m_NimbyGreetRefusalReplies.Set(key, replies + 1);
                 NimbyGreetDone refused = new NimbyGreetDone();
                 refused.reason = "cooldown";
                 refused.retryAfterSeconds = cooldown - (now - last);
@@ -416,6 +445,7 @@ modded class MissionServer extends MissionBase
                 return;
             }
         }
+        string who = NimbyGreetLog.Who(sender);
         m_NimbyGreetLastServed.Set(key, now);
         if (now - m_NimbyGreetLoadedAt >= reread)
         {

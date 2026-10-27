@@ -130,26 +130,30 @@ modded class PlayerBase extends ManBase
 
     protected void NimbyGreetHandleRequest(PlayerIdentity sender, ParamsReadContext ctx)
     {
+        // Every refusal below is reachable per packet by a client aiming the RPC at any PlayerBase
+        // it has a reference to, or sending a malformed payload, so each line is gated per sender
+        // (shared rules 4.3, review GREET-R2-02).
         PlayerIdentity owner = GetIdentity();
+        string key = NimbyGreetLog.IdentityKey(sender);
         if (!sender)
         {
-            NimbyGreetLog.Info("request refused reason=null-sender");
+            NimbyGreetLog.InfoGated(key, "request refused reason=null-sender");
             return;
         }
         if (!owner)
         {
-            NimbyGreetLog.Info("request refused reason=target-has-no-identity sender " + NimbyGreetLog.Who(sender));
+            NimbyGreetLog.InfoGated(key, "request refused reason=target-has-no-identity sender " + NimbyGreetLog.Who(sender));
             return;
         }
         if (sender.GetId() != owner.GetId())
         {
-            NimbyGreetLog.Info("request refused reason=sender-not-owner sender " + NimbyGreetLog.Who(sender) + " target " + NimbyGreetLog.Who(owner));
+            NimbyGreetLog.InfoGated(key, "request refused reason=sender-not-owner sender " + NimbyGreetLog.Who(sender) + " target " + NimbyGreetLog.Who(owner));
             return;
         }
         Param5<int, string, int, bool, bool> request = new Param5<int, string, int, bool, bool>(0, "", 0, false, false);
         if (!ctx.Read(request))
         {
-            NimbyGreetLog.Info("request refused reason=unreadable " + NimbyGreetLog.Who(sender));
+            NimbyGreetLog.InfoGated(key, "request refused reason=unreadable " + NimbyGreetLog.Who(sender));
             return;
         }
         NimbyGreetClient.Request().Invoke(this, sender, request.param1, request.param2, request.param3, request.param4, request.param5);

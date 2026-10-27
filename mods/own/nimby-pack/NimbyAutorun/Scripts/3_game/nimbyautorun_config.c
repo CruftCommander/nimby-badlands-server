@@ -63,7 +63,10 @@ class NimbyAutorunLog
         return identity.GetId() + ", " + identity.GetPlainId();
     }
 
-    // "player=<name> (<bi-id>, <steam64>)", the form of the plan's logging table.
+    // "player=(<bi-id>, <steam64>) "<name>"": the ids first, the launcher name last, quoted and
+    // escaped. The name is player-chosen and may contain parentheses, commas and quotes; before
+    // October 27, 2026 it came first and unquoted, so a name like "A (B, 76561198000000000)"
+    // forged a second id pair in front of the real one (review LEGS-R2-02, prior item 15).
     static string Who(PlayerIdentity identity)
     {
         if (!identity)
@@ -80,14 +83,46 @@ class NimbyAutorunLog
     {
         if (biId == "")
         {
-            return "player=unknown (unknown, unknown)";
+            return "player=(unknown, unknown) \"\"";
         }
-        return "player=" + name + " (" + biId + ", " + plainId + ")";
+        return "player=(" + biId + ", " + plainId + ") \"" + Escape(name) + "\"";
+    }
+
+    // A quoted field: backslash and double quote escaped, line breaks replaced, so the field
+    // ends at the first unescaped quote whatever the player typed.
+    static string Escape(string text)
+    {
+        string result = text;
+        result.Replace("\\", "\\\\");
+        result.Replace("\"", "\\\"");
+        result.Replace("\n", " ");
+        result.Replace("\r", " ");
+        return result;
     }
 
     static void Info(string line)
     {
         Print(PREFIX + " " + line);
+    }
+
+    // One gate per sender id, for lines a stranger can trigger on another player's object: the
+    // ownership refusal used to go through the target's gate and let one forged request per
+    // window silence the target's own refusal lines (review LEGS-R2-03, prior item 18).
+    protected static ref map<string, ref NimbyAutorunLogGate> s_SenderGates;
+
+    static bool AllowForSender(string key, float now)
+    {
+        if (!s_SenderGates)
+        {
+            s_SenderGates = new map<string, ref NimbyAutorunLogGate>();
+        }
+        NimbyAutorunLogGate gate = s_SenderGates.Get(key);
+        if (!gate)
+        {
+            gate = new NimbyAutorunLogGate();
+            s_SenderGates.Set(key, gate);
+        }
+        return gate.Allow(now, NimbyAutorunRules.LOG_INTERVAL_SECONDS);
     }
 
     // Same prefix as Info, so the plan's "Toggle player=..." line reads exactly as specified.
@@ -141,16 +176,20 @@ class NimbyAutorunConfigLoader
                 {
                     int oldVersion = loaded.version;
                     loaded.version = NimbyAutorunRules.CONFIG_VERSION;
-                    JsonFileLoader<NimbyAutorunConfig>.JsonSaveFile(PATH, loaded);
-                    NimbyAutorunLog.Info("config upgraded; from=" + oldVersion.ToString() + " to=" + loaded.version.ToString() + " path=" + PATH);
+                    if (Save(loaded))
+                    {
+                        NimbyAutorunLog.Info("config upgraded; from=" + oldVersion.ToString() + " to=" + loaded.version.ToString() + " path=" + PATH);
+                    }
                 }
             }
         }
         else
         {
             MakeDirectory(FOLDER);
-            JsonFileLoader<NimbyAutorunConfig>.JsonSaveFile(PATH, loaded);
-            NimbyAutorunLog.Info("config missing; defaults written; path=" + PATH);
+            if (Save(loaded))
+            {
+                NimbyAutorunLog.Info("config missing; defaults written; path=" + PATH);
+            }
         }
         int clamped = NimbyAutorunRules.Sanitize(loaded);
         if (clamped > 0)
@@ -160,5 +199,20 @@ class NimbyAutorunConfigLoader
         s_Config = loaded;
         // Always on since round 3: the line shows which way the swim experiment runs (R3-6).
         NimbyAutorunLog.Info("config requestsPerSecond=" + loaded.requestsPerSecond.ToString() + " stopOnSwim=" + NimbyAutorunLog.Bool(loaded.stopOnSwim));
+    }
+
+    // SaveFile reports a failed open or serialization (JsonFileLoader.c:42-60); the deprecated
+    // void JsonSaveFile swallowed both and the loader then logged a success that never happened
+    // (review LEGS-R2-06). The file is not written atomically: it controls no admission, so a
+    // half-written file costs one "config invalid; defaults in use" at the next boot.
+    protected static bool Save(NimbyAutorunConfig config)
+    {
+        string error;
+        if (JsonFileLoader<NimbyAutorunConfig>.SaveFile(PATH, config, error))
+        {
+            return true;
+        }
+        NimbyAutorunLog.Info("config write failed; path=" + PATH + " error=" + error);
+        return false;
     }
 }

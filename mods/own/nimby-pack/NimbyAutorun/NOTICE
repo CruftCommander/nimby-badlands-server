@@ -12,6 +12,20 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Changes are listed newest first. Display name: Legs (decided October 15, 2026); the code prefix
 stays NimbyAutorun.
 
+Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 27, 2026 (release-1
+patch 1, from the October 27 review, DayZ 1.30):
+- The server clears its override when a client leaves, from a modded
+  MissionServer.OnClientDisconnectedEvent (reason=logout), instead of when the logout timer
+  ends 15 s later; the timer-end clear (reason=removed) stays as the backstop.
+- Production lines write the ids first and the launcher name last, quoted and escaped:
+  player=(<bi-id>, <steam64>) "<name>". A name could forge an id pair before.
+- A request aimed at another player's object gets its own line, naming sender and target,
+  gated per sender rather than through the target's gate.
+- Every dropped running request sends the cancel RPC, so a throttled client never runs with
+  the server stopped; the request budget floor is 3 per second.
+- The server resolves sprint with stamina as well as CanSprint, the pair the client sends.
+- Config writes report a failure instead of logging a success that did not happen.
+
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server, October 20, 2026 (Legs plan
 decision A8, DayZ 1.30):
 - stopOnSwim now defaults to false: autorun carries into water and keeps swimming until a stop

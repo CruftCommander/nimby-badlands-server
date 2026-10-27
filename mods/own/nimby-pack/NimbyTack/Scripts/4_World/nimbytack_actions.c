@@ -458,7 +458,15 @@ class ActionNimbyTackPinBase : ActionContinuousBase
         if (!NimbyTackWorld.ProbeWall(player, target, config, wantSurface, hit))
         {
             m_NimbyDetail = NimbyTackWorld.LastProbeDetail();
-            return Refuse(NimbyTackWorld.LastProbeReason());
+            string probeReason = NimbyTackWorld.LastProbeReason();
+            // Player builds (fences, watchtowers, tents) are ItemBase and refused by the probe
+            // until the player-build round lands (review TACK-R2-04; Jeff, October 27, 2026);
+            // until then the player at their own base is told why instead of seeing nothing.
+            if (probeReason == "target-not-building" && !GetGame().IsServer())
+            {
+                ClientNotice(player, "target-not-building", "Notes pin on map buildings", "Player-built walls and tents are not supported yet.");
+            }
+            return Refuse(probeReason);
         }
         if (GetFastener() == NimbyTackFastener.KNIFE && !NimbyTackRules.IsWoodSurface(hit.surface))
         {
