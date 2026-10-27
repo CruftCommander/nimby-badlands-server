@@ -17,6 +17,14 @@ English text until a font with those glyphs is proven (plan v0.4, G14, NIMBY-T-0
 
 Changes, newest first:
 
+- October 27, 2026, release-1 patch 1 (review GREET-R2-01 to R2-05, R2-07; plan G18):
+  production lines write player=(<bi-id>, <steam64>) "<name>" with the name escaped (a
+  name could forge an id pair before); the four request refusals in PlayerBase and every
+  other client-triggered Info line are gated per sender at 10 s; the cooldown refusal
+  reply is capped at 3 per sender per window; requestCooldownSeconds and rereadSeconds
+  floor at 1 s; the hotkey is read through the persistent UAIDWrapper; the per-identity
+  maps are pruned on disconnect. The validator refuses a body above 1,100 characters
+  (ERROR, exit 1) until NIMBY-T-059 is placed. Self-test gains 11 cases.
 - October 26, 2026, after the Phase 1 runs (unbuilt at the time of writing): the dropchunk debug
   flag and a 20 s fetch give-up for G-21; self-review fixes: a cooldown retry dies with the
   window and an Insert press cancels a pending one; the connection's automatic open is spent

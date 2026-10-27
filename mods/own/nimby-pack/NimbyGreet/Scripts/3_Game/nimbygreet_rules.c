@@ -55,6 +55,34 @@ class NimbyGreetRules
     static const float DEFAULT_OPEN_RETRY_SECONDS = 30.0;
     static const float DEFAULT_COOLDOWN_SECONDS = 5.0;
     static const float DEFAULT_REREAD_SECONDS = 10.0;
+    // Floors for the two operator-edited rates (review GREET-R2-05): 0 switched the request
+    // rate limit off and read the file from disk on every request.
+    static const float MIN_COOLDOWN_SECONDS = 1.0;
+    static const float MIN_REREAD_SECONDS = 1.0;
+    // Shared rules 4.3: one Info line per sender per window for client-triggered lines, and at
+    // most this many cooldown refusal replies per sender per cooldown window (the honest client
+    // sends at most two requests inside a window: the spawn request and one manual press).
+    static const float LOG_GATE_SECONDS = 10.0;
+    static const int MAX_REFUSAL_REPLIES_PER_WINDOW = 3;
+
+    // 4.3: the first line in a window passes; later lines in the same window are suppressed.
+    // A clock that moved backwards passes.
+    static bool GateAllows(float last, float now, float window)
+    {
+        float since = now - last;
+        if (since < 0)
+        {
+            return true;
+        }
+        return since >= window;
+    }
+
+    // A cooldown refusal is answered while the sender has had fewer than the cap of replies in
+    // the current window; the rest of a flood is dropped without a reply (review GREET-R2-03).
+    static bool RefusalReplyAllowed(int repliesThisWindow)
+    {
+        return repliesThisWindow < MAX_REFUSAL_REPLIES_PER_WINDOW;
+    }
     static const int FETCH_TIMEOUT_MS = 20000;   // a request with no complete payload by then is given up with one log line (G-21)
     static const int OPEN_RETRY_MS = 250;   // Phase 1 run 1: 1,000 ms made the open feel late behind the respawn countdown
     static const float MIN_OPEN_DELAY_SECONDS = 0.0;

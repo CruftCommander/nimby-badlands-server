@@ -264,6 +264,23 @@ class NimbyGreetSelfTest
         failures += Case(results, "id: leading or trailing dash rejected", !NimbyGreetRules.IsValidId("-a") && !NimbyGreetRules.IsValidId("a-"));
         failures += Case(results, "id: 33 characters rejected", !NimbyGreetRules.IsValidId(NimbyGreetRules.Repeat("a", 33)) && NimbyGreetRules.IsValidId(NimbyGreetRules.Repeat("a", 32)));
         failures += Case(results, "media id: trailing -digit rejected", !NimbyGreetRules.IsValidMediaId("clip-0") && NimbyGreetRules.IsValidMediaId("clip") && NimbyGreetRules.IsValidMediaId("map-2024-a"));
+
+        // Patch 1 (October 27, 2026): log identity, gates, refusal replies, timing floors.
+        failures += Case(results, "who: ids first, name quoted", NimbyGreetLog.WhoFrom("Road Dog", "BIHASH=", "76561190000000000") == "player=(BIHASH=, 76561190000000000) \"Road Dog\"");
+        failures += Case(results, "who: a hostile name cannot forge the id pair", NimbyGreetLog.WhoFrom("A (B, 76561198354705597)", "REAL=", "76561190000000001") == "player=(REAL=, 76561190000000001) \"A (B, 76561198354705597)\"");
+        failures += Case(results, "escape: backslash and quote", NimbyGreetLog.Escape("a\\\"b") == "a\\\\\\\"b");
+        failures += Case(results, "escape: line break flattened", NimbyGreetLog.Escape("a\nb") == "a b");
+        failures += Case(results, "gate: first line passes", NimbyGreetRules.GateAllows(-1000.0, 5.0, NimbyGreetRules.LOG_GATE_SECONDS));
+        failures += Case(results, "gate: line inside the window suppressed", !NimbyGreetRules.GateAllows(5.0, 5.0 + NimbyGreetRules.LOG_GATE_SECONDS - 0.5, NimbyGreetRules.LOG_GATE_SECONDS));
+        failures += Case(results, "gate: line at the window passes", NimbyGreetRules.GateAllows(5.0, 5.0 + NimbyGreetRules.LOG_GATE_SECONDS, NimbyGreetRules.LOG_GATE_SECONDS));
+        failures += Case(results, "gate: clock rewind passes", NimbyGreetRules.GateAllows(9.0, 8.0, NimbyGreetRules.LOG_GATE_SECONDS));
+        failures += Case(results, "refusal reply: the first replies are answered", NimbyGreetRules.RefusalReplyAllowed(0) && NimbyGreetRules.RefusalReplyAllowed(NimbyGreetRules.MAX_REFUSAL_REPLIES_PER_WINDOW - 1));
+        failures += Case(results, "refusal reply: the cap drops the rest", !NimbyGreetRules.RefusalReplyAllowed(NimbyGreetRules.MAX_REFUSAL_REPLIES_PER_WINDOW));
+        NimbyGreetFile timing = new NimbyGreetFile();
+        timing.requestCooldownSeconds = 0.0;
+        timing.rereadSeconds = 0.0;
+        NimbyGreetText.ClampTiming(timing);
+        failures += Case(results, "timing: cooldown and reread floor at one second", timing.requestCooldownSeconds == NimbyGreetRules.MIN_COOLDOWN_SECONDS && timing.rereadSeconds == NimbyGreetRules.MIN_REREAD_SECONDS);
         return failures;
     }
 

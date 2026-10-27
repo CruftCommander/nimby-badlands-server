@@ -248,8 +248,8 @@ class NimbyGreetText
         }
         file.openDelaySeconds = NimbyGreetRules.ClampFloat(file.openDelaySeconds, NimbyGreetRules.MIN_OPEN_DELAY_SECONDS, NimbyGreetRules.MAX_OPEN_DELAY_SECONDS);
         file.openRetrySeconds = NimbyGreetRules.ClampFloat(file.openRetrySeconds, 0.0, NimbyGreetRules.MAX_OPEN_RETRY_SECONDS);
-        file.requestCooldownSeconds = NimbyGreetRules.ClampFloat(file.requestCooldownSeconds, 0.0, 60.0);
-        file.rereadSeconds = NimbyGreetRules.ClampFloat(file.rereadSeconds, 0.0, 3600.0);
+        file.requestCooldownSeconds = NimbyGreetRules.ClampFloat(file.requestCooldownSeconds, NimbyGreetRules.MIN_COOLDOWN_SECONDS, 60.0);
+        file.rereadSeconds = NimbyGreetRules.ClampFloat(file.rereadSeconds, NimbyGreetRules.MIN_REREAD_SECONDS, 3600.0);
     }
 
     // The G3 default greet.json: english only, the four placeholder sections. Real text is the repository draft (G12).

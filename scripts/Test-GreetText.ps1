@@ -76,8 +76,12 @@ $script:GreetCaps = @{
     MaxTotalChars = 40000; MaxTitleChars = 60; MaxTaglineChars = 80; MaxHeadingChars = 40; MaxIdChars = 32
     EngineStringBytes = 1023; EngineStringWarnBytes = 1020
     # NIMBY-T-059 (Jeff, October 26, 2026): the client shows about 1,100 characters of a body although the
-    # server serves up to MaxBodyChars; until that is placed, a body above this many characters is a WARN.
+    # server serves up to MaxBodyChars (both measurements, G-P1-44 and G-P1-49, agree on a character count
+    # of the joined body at 1,119 to 1,120). Until the cut is placed, a body above RenderedBodyChars is an
+    # ERROR (exit 1: the "validator PASS then WinSCP" gate must be able to refuse it, review GREET-R2-04),
+    # and a body above ShownBodyChars is a WARN with the margin left.
     ShownBodyChars = 1000
+    RenderedBodyChars = 1100
     MaxOpenDelaySeconds = 30; MaxOpenRetrySeconds = 300; MaxCooldownSeconds = 60; MaxRereadSeconds = 3600
 }
 
@@ -256,6 +260,7 @@ function Test-GreetDocument {
             $body = $bodyLines -join "`n"
             if (-not $body.Trim()) { Add-Finding 'ERROR' ("{0}: body is missing or empty" -f $where); continue }
             if ($body.Length -gt $script:GreetCaps.MaxBodyChars) { Add-Finding 'WARN' ("{0}: body is {1} characters, cut to {2}" -f $where, $body.Length, $script:GreetCaps.MaxBodyChars) }
+            if ($body.Length -gt $script:GreetCaps.RenderedBodyChars) { Add-Finding 'ERROR' ("{0}: body is {1} characters; the client renders about 1,100 and drops the rest (NIMBY-T-059), so cut it to {2} or fewer" -f $where, $body.Length, $script:GreetCaps.ShownBodyChars) }
             elseif ($body.Length -gt $script:GreetCaps.ShownBodyChars) { Add-Finding 'WARN' ("{0}: body is {1} characters; the client shows about 1,100 (NIMBY-T-059), so keep it at {2} or fewer" -f $where, $body.Length, $script:GreetCaps.ShownBodyChars) }
             $total += [Math]::Min($body.Length, $script:GreetCaps.MaxBodyChars)
             foreach ($bad in @('url', 'links', 'media')) {

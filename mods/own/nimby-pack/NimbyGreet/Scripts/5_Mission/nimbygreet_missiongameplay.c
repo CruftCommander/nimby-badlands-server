@@ -32,7 +32,11 @@ modded class MissionGameplay extends MissionBase
     protected ref NimbyGreetFetch m_NimbyGreetFetch;
     protected ref NimbyGreetSeen m_NimbyGreetSeen;
     protected ref NimbyGreetPrefs m_NimbyGreetPrefs;
-    protected UAInput m_NimbyGreetInput;
+    // The persistent handle, not the raw UAInput: vanilla keeps GetPersistentWrapper() and
+    // re-derives InputP() per use (Inventory.c:247, :1693; ActionInput.c:79), and the API calls the
+    // wrapper the "persistent object for input access" (UAInput.c:99). A raw pointer cached across
+    // a Controls rebind, Revert or preset change is unverified (review GREET-R2-02 / EARS-R2-02).
+    protected UAIDWrapper m_NimbyGreetInput;
     protected string m_NimbyGreetDetectedLanguage = "english";
     protected bool m_NimbyGreetAutoOpened;         // G4: at most one automatic open per connection
     protected bool m_NimbyGreetOpenPending;
@@ -58,7 +62,11 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetPrefs = NimbyGreetClientFiles.LoadPrefs();
         if (GetUApi())
         {
-            m_NimbyGreetInput = GetUApi().GetInputByName("UANimbyGreetOpen");
+            UAInput open = GetUApi().GetInputByName("UANimbyGreetOpen");
+            if (open)
+            {
+                m_NimbyGreetInput = open.GetPersistentWrapper();
+            }
         }
         NimbyGreetClient.Spawned().Insert(NimbyGreetOnSpawned);
         NimbyGreetClient.Chunk().Insert(NimbyGreetOnChunk);
@@ -544,7 +552,8 @@ modded class MissionGameplay extends MissionBase
         {
             return;
         }
-        if (!m_NimbyGreetInput.LocalPress())
+        UAInput open = m_NimbyGreetInput.InputP();
+        if (!open || !open.LocalPress())
         {
             return;
         }
