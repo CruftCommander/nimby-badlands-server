@@ -31,4 +31,4 @@ Credits. Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Giv
 4. HostHavoc panel, service 246248: `Steam Workshop (installed)` > install the item by ID; confirm `@NIMBY\keys\nimby.bikey` was copied to the server `keys\` folder (`Non-Workshop Mods` or the File Manager shows it); if not, upload `build\@NIMBY-20261026-214828\keys\nimby.bikey` to `/keys/` over SFTP.
 5. Launch line (`Commandline Manager`): `-mod=@NIMBY` (today the line is `-servermod="" -mod=""`). Applies at the step 8 restart.
 
-Item ID: (fill in)
+Item ID: **3828109139** (https://steamcommunity.com/sharedfiles/filedetails/?id=3828109139). Published October 26, 2026, 23:36 Central, by Claude driving DayZ Tools Publisher at Jeff's request: Public, tags Equipment and Mechanics, content 711.4 KB (Publisher) / 728.5 KB (Workshop page), "all signed". Verified from outside at 23:38: title, author Road Dog, description and preview visible to an anonymous visitor.
