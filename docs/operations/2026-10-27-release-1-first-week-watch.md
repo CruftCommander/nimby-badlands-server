@@ -14,8 +14,10 @@ boot since the previous pull for:
 | Check | Where | Pattern | Clean means |
 | --- | --- | --- | --- |
 | Script errors | `script_*.log`, `*.RPT` | `SCRIPT (E)` | 0 |
-| Hands refusals | `script_*.log` | `[NIMBY][Hands] ... state=REFUSED` | 0, or every refusal explained by its `detail=` |
+| Hands outcomes | `script_*.log` | `[NIMBY][Hands] ... state=REQUESTED`, `state=CONFIRMED`, `state=REFUSED`, `state=UNCONFIRMED`, counted per boot | Every `REQUESTED` id has a `CONFIRMED`; `REFUSED` explained by its `detail=`; `UNCONFIRMED` 0 (the release-1 code on live ends every transfer `UNCONFIRMED` after 5,000 ms, NIMBY-T-010, so any count above 0 is a player trying to trade on the unpatched build) |
+| Legs forged or runaway requests | `script_*.log` | `[NIMBY][Autorun] Rejected request`, `Throttled`, `Forced clear ... via=tick` | 0 / 0 / 0; a `sender does not own this player` line is a forged request and is escalated the same day |
 | Greet text problems | `script_*.log` | `[NIMBY][Greet] ... invalid` | 0; each connect shows one `serve ... manual=false` |
+| Greet refusals | `script_*.log` | `[NIMBY][Greet] ... refused reason=` counted by reason | 0 `sender-not-owner`; a few `cooldown` per player at most (the patch-1 build gates repeats per sender and prints `suppressed=N`) |
 | Tack note persistence | `script_*.log` | `[NIMBY][Tack] door load result=` | `restored` or `found` for every note pinned before the restart; no `no-building` or `invalid-cleared` |
 | Storage | `*.RPT` | `Scripted variables corrupted`, failed storage items | 0 / 0 |
 | Badlands noise baseline | `*.RPT` | `[CE][LoadPrototype]` 7 lines, spawn-point 6 lines | Same counts as every boot since October 26 |
@@ -30,9 +32,9 @@ live check.
 
 ## 2. Pulls
 
-| # | Pull (Central) | Boots covered (panel clock) | `SCRIPT (E)` | Hands REFUSED | Greet invalid / serves | Tack door load | Storage | Players | Verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | October 27, 2026, 10:28 (`logs\server-20261027-102800\`, 223 files, 223 OK) | 21:57:31, 21:59:36, 22:01:18, 22:15:40 (the 22:15:40 boot still running, 10 h up; the noon restart had not fired) | 0 / 0 / 0 / 0 | 0 (no transfer attempted) | 0 / 0, 0, 2, 3 | 22:15:40: 1 `restored` (`NimbyTack_PinnedNote_Tape`, door 3, `Land_Workshop5`); no new pins | 0 / 0 | One connection since 23:57: `Road Dog` 22:31:01 to about 22:33 (panel), 598 of 600 one-minute samples `Players: 0` | Clean, idle. Hands, Scrawl and the loot changes have had no exposure |
+| # | Pull (Central) | Boots covered (panel clock) | `SCRIPT (E)` | Hands REQUESTED / CONFIRMED / REFUSED / UNCONFIRMED | Legs rejected / throttled / tick | Greet invalid / serves / refused | Tack door load | Storage | Players | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | October 27, 2026, 10:28 (`logs\server-20261027-102800\`, 223 files, 223 OK) | 21:57:31, 21:59:36, 22:01:18, 22:15:40 (the 22:15:40 boot still running, 10 h up; the noon restart had not fired) | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 (no transfer attempted; re-read October 27 with the four-state pattern) | 0 / 0 / 0 (re-read October 27) | 0 / 0, 0, 2, 3 / 0 (re-read October 27) | 22:15:40: 1 `restored` (`NimbyTack_PinnedNote_Tape`, door 3, `Land_Workshop5`); no new pins | 0 / 0 | One connection since 23:57: `Road Dog` 22:31:01 to about 22:33 (panel), 598 of 600 one-minute samples `Players: 0` | Clean, idle. Hands, Scrawl and the loot changes have had no exposure |
 
 ### Pull 1 notes, October 27, 2026
 
