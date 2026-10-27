@@ -1,6 +1,6 @@
 # Patch 1 session, October 27, 2026 (evening)
 
-Release 1 patch 1 (`main` 38b10b5, PR #1) verified in game before the Workshop update. Two clients, both played by Jeff: **D** is the desktop on his main account, **L** is the G15 laptop on the second Steam account. Test numbers continue after S6-25 of the six-addon session (`docs/testing/2026-10-26-six-addon-session.md`); each row is one test and names the plan row or audit finding it stands for (audit: `claude/reviews/2026-10-27-test-gap-audit-report.md`, TGA-033 to TGA-060). Findings continue at NIMBY-T-061. Locations are named by place, never by map coordinate.
+Release 1 patch 1 (`main` 38b10b5, PR #1) verified in game before the Workshop update. Two clients, both played by Jeff: **D** is the desktop on his main account, **L** is the G15 laptop on the second Steam account. Test numbers continue after S6-25 of the six-addon session (`docs/testing/2026-10-26-six-addon-session.md`); each row is one test and names the plan row or audit finding it stands for (audit: `claude/reviews/2026-10-27-test-gap-audit-report.md`, TGA-033 to TGA-060). Findings continue at NIMBY-T-062 (NIMBY-T-061, the launcher seeing Workshop id 0, is recorded in the first-week watch). Locations are named by place, never by map coordinate.
 
 Status: rows written 2026-10-27 15:40 Central, before the session. Result and Evidence are filled during the run.
 
@@ -135,4 +135,4 @@ None yet.
 
 ## Exit
 
-Proposed for Jeff's ruling, not a standing gate: the Workshop update with patch 1 goes ahead when S6-30 to S6-32 show CONFIRMED with 0 UNCONFIRMED, S6-26 and S6-27, S6-38, S6-42 to S6-45, and S6-57 pass, and every boot shows 0 `SCRIPT (E)` and 0 `Scripted variables corrupted`; then gate 9.2 (storage and `$profile:Nimby*` backup first) at a scheduled restart.
+Proposed for Jeff's ruling, not a standing gate: the Workshop update with patch 1 goes ahead when S6-30 to S6-32 show CONFIRMED with 0 UNCONFIRMED, S6-26 and S6-27, S6-38, S6-42 to S6-45, and S6-57 pass, and every boot shows 0 `SCRIPT (E)` and 0 `Scripted variables corrupted`; then gate 9.2 (storage and `$profile:Nimby*` backup first) at a scheduled restart. The Workshop update is published from a build made after `fix/workshop-meta` merges, so the item carries `meta.cpp` (NIMBY-T-061); the PBOs are byte-identical to `-124130`, so these rows stand for it.
