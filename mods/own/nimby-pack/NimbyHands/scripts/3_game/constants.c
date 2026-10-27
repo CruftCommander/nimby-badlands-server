@@ -13,4 +13,12 @@ class NimbyHandsConstants
     // Meters added to an action's own reach when the server revalidates proximity at dispatch,
     // so a receiver who drifts during the animation is not refused for a few centimeters.
     static const float PROXIMITY_TOLERANCE = 0.5;
+
+    // Seconds the transfer outcome toast stays on screen (NIMBY-T-012, J4), and its title.
+    static const float TOAST_SECONDS = 4.0;
+    static const string TOAST_TITLE = "Hands";
+
+    // Server-side minimum interval between two pocket toggles of one player (review item 3).
+    // A press inside it is refused silently: a refused repeat is not a consent change.
+    static const int POCKET_TOGGLE_MIN_MS = 500;
 }

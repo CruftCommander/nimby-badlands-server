@@ -3,6 +3,9 @@ modded class PlayerBase
     protected ENimbyHandsState m_NimbyHandsState = ENimbyHandsState.NONE;
     // G3: off by default; a new character (respawn) starts closed because nothing is persisted.
     protected bool m_NimbyHandsPocketsOpen = false;
+    // Server memory only, never persisted: when this player last toggled pockets (review item
+    // 3). Starts one interval in the past so the first press of a mission is allowed.
+    protected int m_NimbyHandsPocketToggleMs = -NimbyHandsConstants.POCKET_TOGGLE_MIN_MS;
 
     override void Init()
     {
@@ -12,8 +15,15 @@ modded class PlayerBase
         RegisterNetSyncVariableBool( "m_NimbyHandsPocketsOpen" );
     }
 
+    // Marks the player dirty only on a change: the offer and request loops call this on
+    // every animation event (review item 7).
     void NimbyHandsSetState( ENimbyHandsState state )
     {
+        if ( m_NimbyHandsState == state )
+        {
+            return;
+        }
+
         m_NimbyHandsState = state;
 
         SetSynchDirty();
@@ -34,6 +44,19 @@ modded class PlayerBase
     bool NimbyHandsGetPocketsOpen()
     {
         return m_NimbyHandsPocketsOpen;
+    }
+
+    // Server only. True, and records the press, when at least POCKET_TOGGLE_MIN_MS passed since
+    // the last allowed toggle; false for a repeat inside the interval, which changes nothing.
+    bool NimbyHandsPocketToggleAllowed( int nowMs )
+    {
+        if ( !NimbyHandsRules.PocketToggleAllowed( m_NimbyHandsPocketToggleMs, nowMs, NimbyHandsConstants.POCKET_TOGGLE_MIN_MS ) )
+        {
+            return false;
+        }
+
+        m_NimbyHandsPocketToggleMs = nowMs;
+        return true;
     }
 
     // G4 and G3: the server closes open pockets and writes the forced-clear line. Closed

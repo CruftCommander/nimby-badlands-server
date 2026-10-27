@@ -175,3 +175,89 @@ Next:
 
 1. Build P3 on `study/hands-t010` with the NIMBY-T-012 toast to both players on success and failure (J4).
 2. Re-test on the P3 build: HD-001 to HD-003, P0-4c to P0-4e, HD-011, and the two P3 cost paths (giver inventory full, so step 1 is refused; receiver fills between the steps, so the item ends in the giver's inventory).
+
+## P3 build, October 21, 2026 (`study/hands-t010`, worktree `hands-p3`)
+
+Build `@NIMBY-20261021-143500` (`Build-NimbyPack.ps1 -Dev -Qualification`, `storageAutoFix = 0`, boot check SUMMARY PASS on Nasdara, log `logs\build-20261021-143500\build.log`, server script log `logs\build-20261021-143500\server-profile\script_2026-10-21_14-35-01.log`). Branch `study/hands-t010` from `02a0972` (`main` at `10f4901` merged). Plan v0.7 (decisions H1 to H7) records the design as built; the Hands `NOTICE` lists every change. The dev harness companion is `build\@NIMBY-Dev-20261021-143500` (the same stamp). No client joined this build yet: every in-game row below is owed to the two-client session.
+
+What the build proves without a client:
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| HD-010 (P3) | PASS | `SELFTEST Hands ran=yes cases=156 pass=156 fail=0` (was 52): every new `CanMove` cell, `ClassifyMove` from `REQUESTED` and `STAGED`, `ClassifyStep2` (three outcomes), `ClassifyTimeout` with the giver-inventory input, the staged registry cases, `CheckRequest` precedence (15 step 1 details, 11 step 2 details; dead before restrained, disconnected before unconscious), `PocketToggleAllowed`, and `ToastText` for every terminal state and 26 refusal details. `SELFTEST TOTAL pass=370 fail=0 flags=6 expected=6 source=script`. 0 `SCRIPT (E)` |
+| Self-test gate | PASS | A deliberate flip of one cell (`staged to confirmed is legal` inverted) failed the boot: `build-20261021-143655`, `BOOT FAIL 14:37:13.913 ... [NIMBY][Hands][SelfTest] FAIL staged to confirmed is legal`, `SUMMARY FAIL`; reverted in the same command, the file matches the committed text |
+| Dev harness | PASS | `SELFTEST DevHarness ran=yes cases=16 pass=16 fail=0`; the 16 `[NIMBY][DevHarness][SelfTest] PASS` lines at 14:35:36.268 are listed under "Harness rows" below |
+| Client output with and without `-Dev` | PASS | `@NIMBY-20261021-143500` (built with `-Dev`) and `@NIMBY-20261021-143633` (built without): the five `ADDON OK ... sha256=` lines and the file hashes of every `.pbo` and `nimby.bikey` are identical (`NimbyHands.pbo` `90832AC50B41A064E87BC02F9D254B53BB542C0A35BBCFC2D1200BC5C21B59A1`) |
+| Static gate | PASS | `logs\static-20261021-142748\static.log`: secrets, em-dash, and-and, cfgmods (the dev harness folder included), pack, eol |
+
+Two boots crashed before the PASS, both inside the harness (the production path never ran them): `build-20261021-142821` and `build-20261021-143213`, access violation in the native `FindFreeLocationFor` on a receiver dummy at step 2, called for a forged staged entry whose giver dummy had no identity. The fact collectors now stop at the first refusing fact in precedence order (the dummy giver fails the party check first), which is also one native call fewer on the real path; the verdict is unchanged because the precedence function reads the facts in the same order. The in-game V3 diagnostic of October 20 made the same receiver-side call on real players four times without trouble (ids 10 to 13).
+
+### Harness rows (boot, `@NIMBY-20261021-143500`, server script log 14:35:36)
+
+All 16 cases ran on two dressed survivor dummies (`SurvivorM_Mirek` with a T-shirt and jeans, no identity) spawned at `1024 0 1024` and deleted afterwards. A dummy fails the party check as "disconnected", so a case that reaches that check proves the branches before it and the refusal itself, not the facts after it.
+
+| Case | Result | Evidence (script log) |
+| --- | --- | --- |
+| `legs-request-aimed-at-another-player` (Legs P2-11, boot variant: null sender) | PASS | `[NIMBY][Autorun] Rejected request from unknown, unknown: sender does not own this player` 14:35:36.266; `target autorunning=false` |
+| `hands-take-without-consent` (HD-013 server half) | PASS | `id=1 ... state=REFUSED ... detail=no consent: giver is no longer offering`; wrench still `HANDS:SurvivorM_Mirek`, registry 0 |
+| `hands-two-takers-on-one-offer` (HD-011, HD-032 server half) | PASS | forged in-flight entry id=2; the real second request `id=3 ... REFUSED ... detail=item in flight (id=2)`; registry 1; wrench in hands; `hands-forged-entry-evicts` registry 0 after cleanup |
+| `hands-pockets-close-on-restraint-and-deposit-refused` (HD-020, HD-021 server half, restrained) | PASS | `pockets player=no-identity open=false reason=restrained`; `id=4 action=NimbyHandsActionPutInPockets state=REFUSED ... detail=giver disconnected` (the dummy giver fails first); wrench in hands. The unconscious half has no server-side setter on a dummy; its client half passed October 20 (HD-019, HD-021) and its precedence is in the rules self-test |
+| `hands-forged-step2-unknown-id`, `hands-forged-step2-on-requested` | PASS | `OnStep2(987654)` changed nothing; a forged `REQUESTED` entry stayed `REQUESTED` (step 2 runs only from `STAGED`), wrench in hands |
+| `hands-forged-step2-staged-guard` | PASS | forged `STAGED` entry for pliers in the dummy's shirt: `id=6 ... REFUSED ... detail=giver disconnected; item with giver at CARGO:TShirt_Black@no-identity`; pliers stayed with the giver; entry evicted |
+| `hands-step2-forced-refusal-switch`, `hands-step2-forced-refusal-consumed`, `hands-step2-switch-fires-once` (cost path B switch) | PASS | `id=7 ... REFUSED ... detail=no space in receiver inventory (forced by dev harness); item with giver at CARGO:TShirt_Black@no-identity`; `armed=0`; the next forged step 2 `id=8` refused `giver disconnected` again |
+| `hands-no-item-unregistered-refusal` | PASS | `id=9 ... state=REFUSED giver=none ... item=none detail=no item`; registry unchanged |
+| `harness-spawn-dummies`, `harness-item-in-hands`, `harness-item-in-cargo`, `harness-cleanup` | PASS | fixtures created, used, and deleted; registry 0 at the end |
+
+Online cases (`legs-unreadable-payload`, `legs-idx-9-angle-0`, `legs-flood-50-in-one-second`, `legs-request-aimed-at-another-player-from-identity`, `hands-stale-item-replaced` for HD-012, `hands-stale-receiver-replaced` for HD-014) need a connected identity and are NOT RUN. They start ten seconds after a player connects when `profiles\hands-p3\NimbyDevHarness\forge` contains the word `online`; hold an item for the two Hands cases, and connect L too so the receiver passes the party checks.
+
+### In-game rows (owed; two clients, Jeff on D and L)
+
+#### Setup notes (from the aborted start of October 21, 2026, 14:54 to 15:05)
+
+Server. The standing join password comes from `NIMBY_JOIN_PASSWORD`, so no `-JoinPassword`. Pass `-BuildPath` as an absolute path: the script hands the value to the server unchanged and the server's working directory is `D:\DayZServer`, so a relative `.\build\...` never loads the pack (see the finding below).
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath 'D:\DayZServer' -InstanceId 999 -BuildPath 'D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-20261021-143500' -ProfileName hands-p3
+```
+
+The `-Dev` companion is picked up from the build log as an absolute path (or pass `-DevPath 'D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-Dev-20261021-143500'`). The script runs the server in its own window and waits for Enter; Enter sends the RCON `#shutdown` and the stop path redacts the config password and the BattlEye config. Create `profiles\hands-p3\NimbyHands\debug` on the server (done on this machine) and `NimbyHands\debug` in both client profiles. For cost path B put the word `step2-refuse` in `profiles\hands-p3\NimbyDevHarness\forge` before the start; the next real transfer's step 2 is refused once. Read the server script log, not the RPT.
+
+Clients. The pack must come before the harness in `-mod=`: the harness's `config.cpp` requires `NimbyAutorun` and `NimbyHands`, and the engine loads `-mod=` folders in the order given, so a harness listed first (or a pack that fails to load) compiles the harness without the classes it extends. Both folders are copied from this worktree (D is this machine; on L use wherever they were copied). The launch parameter, with the pack first:
+
+```text
+-mod=D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-20261021-143500;D:\GitHub\nimby-badlands-server-wt\hands-p3\build\@NIMBY-Dev-20261021-143500
+```
+
+With the harness listed first the client showed two dialogs, quoted as Jeff reported them on October 21, 2026:
+
+- `Addon NimbyDevHarness requires addon NimbyAutorun`
+- `Bad type NimbyHandsWorldTransfer` at `nimbydevharness.c:223`
+
+Finding (server side, same class, NIMBY-T-017): the 14:54 start passed `-BuildPath .\build\@NIMBY-20261021-143500` and the server's command line carried `-mod=.\build\@NIMBY-20261021-143500;D:\...\@NIMBY-Dev-20261021-143500` verbatim (`logs\testserver-20261021-145443\testserver.log`, `SERVER START`). Relative to `D:\DayZServer` that folder does not exist, so only the harness loaded: RPT `DayZServer_x64_2026-10-21_14-54-43.RPT` lines 265 to 271, `SCRIPT (E): @"NimbyDevHarness/scripts/4_world/nimbydevharness.c,223": Bad type 'NimbyHandsWorldTransfer'` and `Can't compile "World" script module!` at 15:04:58, then `Failed to load entities script!` and an access violation at 15:05:15 (`crash_2026-10-21_14-54-43.log`). No client connected; nothing was written to `storage_999` by Hands. The script's stop path still ran: `STOP requested by server-exited`, `SERVER EXITED before stop code=-1073741819`, `CONFIG password redacted`, `BE CONFIG redacted` (the `RConPassword` line now holds an 8-character marker). `Start-NimbyTestServer.ps1` is orchestrator-owned; the fix to propose to Jeff is to resolve `-BuildPath`, `-ServerModPath`, and `-DevPath` to absolute paths (`Resolve-Path`) before building the `-mod=` argument, and to refuse a `-mod=` folder that does not exist from the server's working directory. The boot check in `Build-NimbyPack.ps1` is unaffected because it always passes absolute paths.
+
+| Row | Scenario | Acceptance | Result |
+| --- | --- | --- | --- |
+| HD-001, HD-002, HD-003 | Take, Give, Put In Pockets, each 20 times | Per id: `REQUESTED` (`detail=stage=CARGO:...@giver dst=CARGO:...@receiver`), `STAGED` (`detail=signal=EEItemLocationChanged dst=CARGO:...@giver`), `CONFIRMED` (`detail=signal=EEItemLocationChanged dst=CARGO:...@receiver`); item once in the receiver and gone from the giver on both clients; toast `Item handed over.` on the giver and `Item received.` on the receiver | NOT RUN |
+| P0-4c | Latency | `CONFIRMED` minus `REQUESTED` under 1,000 ms for every id; no `reconciled at timeout` | NOT RUN |
+| P0-4d | Receiver full before the action, all three verbs | No prompt (the conditions check receiver and giver cargo room); if a request still gets through, exactly one `REFUSED detail=no space in receiver inventory` and a toast | NOT RUN |
+| P0-4e | Backpack with nested items | One `EEItemLocationChanged` per step, one `CONFIRMED`, contents intact | NOT RUN |
+| HD-011 / HD-032 | Two takers on one offer | Server half PASS in the harness (above). With two clients only: record what the second press does after step 1 landed (expect no prompt because the item left the giver's hands) | NOT RUN (client half) |
+| Cost path A | Giver's cargo full, receiver has room | No prompt (the condition gained the giver check); a forged request ends `REFUSED detail=no space in giver inventory`, item stays in hands, toast to both | NOT RUN |
+| Cost path B | Receiver fills between the steps | Not reachable by hand. Covered by the `ClassifyStep2` self-test and the harness switch (above); run once in game with `step2-refuse` in the forge file: `REFUSED detail=no space in receiver inventory (forced by dev harness); item with giver at CARGO:...@giver`, item visible in the giver's cargo, giver toast ends `It is in your inventory.` | NOT RUN (in game) |
+| Capability regression | Rifle or a full backpack in hands, receiver has room | No prompt, because the giver cannot stage it in cargo; a forged request ends `REFUSED detail=no space in giver inventory`. Expected under H6, not a bug | NOT RUN |
+| HD-038 (P3) | Clothing item in hands with the giver's matching slot empty; a stack; a loaded magazine | No equip side effects on the giver (staging is cargo only); quantity, condition, contents preserved | NOT RUN |
+| HD-036 (P3) | Receiver knocked out, restrained, or walks away between the action start and step 2 | `REFUSED` with the state or `out of reach` detail; item in hands (step 1 refused) or in the giver's cargo (step 2 refused, detail ends `item with giver at ...`), never with the receiver | NOT RUN |
+| T-012 | Every terminal state, both players; `item in flight` and `no item` (requester only); a receiver who disconnected before the terminal line | Toast count equals terminal-line count per id; 0 `SCRIPT (E)` when a party has no identity (the server skips the toast for a null identity instead of broadcasting) | NOT RUN |
+| HD-015 | Whole session log | Run the check below and attach its output | NOT RUN |
+| Pockets | HD-019, HD-020, HD-022 respawn re-run; reconnect with a test-config `logoutTime` long enough to relog inside it | `pockets ... reason=` lines as before plus one `reason=reconnect`; a toggle inside 500 ms of the previous one writes no line | NOT RUN |
+
+HD-015 check (either shell; replace the log path):
+
+```powershell
+$log = 'profiles\hands-p3\script_<stamp>.log'
+$rows = Select-String -Path $log -Pattern '\[NIMBY\]\[Hands\] id=(\d+) .*? state=(REQUESTED|STAGED|CONFIRMED|REFUSED|UNCONFIRMED)' | ForEach-Object { [pscustomobject]@{ Id = [int]$_.Matches[0].Groups[1].Value; State = $_.Matches[0].Groups[2].Value; Line = $_.Line } }
+$rows | Group-Object Id | ForEach-Object { $terminal = @($_.Group | Where-Object { $_.State -in 'CONFIRMED', 'REFUSED', 'UNCONFIRMED' }).Count; $requested = @($_.Group | Where-Object { $_.State -eq 'REQUESTED' }).Count; "id=$($_.Name) requested=$requested terminal=$terminal" }
+$rows | Where-Object { $_.Line -notmatch 'giver=".*" \(\S+, \d{17}\) receiver=".*" \(\S+, \d{17}\)' } | ForEach-Object { "MISSING IDS: " + $_.Line }
+```
+
+Every `REQUESTED` id must show `terminal=1`, and the third command must print nothing for a session where both players had identities (`no-identity` is expected only on harness lines).

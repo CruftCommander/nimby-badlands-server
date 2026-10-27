@@ -37,7 +37,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1
 # Build and verify only, no server boot
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -SkipBootCheck
 
-# Qualification boot (storageAutoFix = 0) plus the dev harness under the separate nimby_dev key
+# Qualification boot (storageAutoFix = 0) plus the dev harness (mods\own\dev\NimbyDevHarness, forged requests
+# against the real Legs and Hands handlers; SELFTEST DevHarness in build.log) under the separate nimby_dev key
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -Dev -Qualification
 
 # Release artifact: only the named addons (pack.json untouched), booted against storage_998, the copy of
@@ -85,6 +86,7 @@ Read the verdict from `logs\build-<stamp>\build.log`, which ends in `SUMMARY PAS
 One signed client-and-server mod, published as one public Steam Workshop item, that carries every in-house addon. Each addon folder becomes one PBO.
 
 - `pack.json` drives everything: addon rows, `includePatterns`, the `bootCheck` and `testServer` settings, and the `dev` harness. To add an addon, add a row; the build script needs no change. A row with `"serverOnly": true` builds unsigned to `build\@NIMBY-Server-<stamp>\` and loads with `-servermod=`. It never enters the Workshop output, and no client script may reference a class defined in it.
+- The dev harness `mods/own/dev/NimbyDevHarness/` (the `dev` section of `pack.json`, built only with `-Dev`, signed with the separate `nimby_dev` key, never an `addons` row) runs forged requests against the real Legs and Hands server handlers: boot cases at mission start when `$profile:NimbyDevHarness\selftest` exists, and online cases ten seconds after a player connects when `$profile:NimbyDevHarness\forge` contains `online`. The word `step2-refuse` in that file arms one forced Hands step-2 refusal. The client output is byte-identical with and without `-Dev`; no client PBO may reference a harness class.
 - An addon can start on `main` as a stub: a `config.cpp` with no scripts, so the pack builds with the row already in place while the real body lands from that addon's `feat/*` worktree. `NimbyEarplugs`, `NimbyNotes`, and `NimbyTack` were stubs until their `feat/*` merges on October 17, 2026; all five addons on `main` are real now.
 - Addon code follows the DayZ script-module layers `3_game`, `4_world`, and `5_mission`, declared in each `config.cpp` under `CfgMods.defs`. Key bindings go in the addon's `Inputs.xml` so players can rebind them in Options > Controls.
 - Two addons are forks of third-party mods: `NimbyAutorun` (SchanaModAutorun, Apache-2.0) and `NimbyHands` (Give&Take, Workshop 2903112334; its permission capture is `PERMISSION.md`). Each addon's `NOTICE` records its origin and every change made. Keep `NOTICE` current; attribution is a release requirement.

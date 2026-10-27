@@ -1,11 +1,24 @@
 # Plan 2 - Hands (`NimbyHands`, formerly `NimbyGiveTake`)
 
-Draft v0.5, October 19, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/hands`, coordinated by the orchestrator. Status: Phase 1 and Phase 2 built in `@NIMBY-20261019-153354` (branch `feat/hands` at `8cc681b`, unreviewed until Jeff merges it); Phase 0 item 6 and Phase 3 await the two-client session.
+Draft v0.7, October 21, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `hands-p3` on `study/hands-t010`, coordinated by the orchestrator. Status: P3 built in `@NIMBY-20261021-143500` (boot check SUMMARY PASS with `storageAutoFix = 0`, Hands self-test 156 cases, dev harness 16 cases, 0 `SCRIPT (E)`), unreviewed until Jeff merges it; the two-client re-test of the P3 build is owed (test record, "P3 build, October 21, 2026").
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
-Hands lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's inventory (cargo or an eligible attachment slot), never their hands. It has never moved an item between two real players; proving that comes before the rename.
+Hands lets one player offer the item in their hands to another, request the item in another player's hands, and open their pockets so others can deposit items. Transfers land in the receiver's cargo, never a worn slot and never their hands (Jeff, October 21, 2026), and travel there in two server steps through the giver's own cargo (P3, ruling J2). The diagnostic of October 20, 2026 moved items between two real players on that path (ids 10 to 13); the P3 build's own two-client run is owed.
+
+Changes since v0.6 (October 21, 2026, `study/hands-t010`, build `@NIMBY-20261021-143500`):
+
+- P3 as built (H1, H3): `STAGED` joins the lifecycle between `REQUESTED` and the terminal states. Step 1 is the giver's own `ServerTakeToDst` from hands into a free cargo location of the giver's inventory (`FindFreeLocationFor` with `ANY_CARGO`, never a worn slot, never inside the moving item); its arrival is signal 1 and writes `STAGED`. Step 2 runs one tick later (`CallLater`, id lookup) after `RevalidateStep2`: consent snapshot, both parties, expected identities, reach, the exact staged location (type, parent, slot, cargo cell) with the giver as root, and the receiver destination recomputed then. It is the synchronous server move (`Inventory.c:1057-1066`); its signal writes `CONFIRMED` and its return value is read (`false` is `REFUSED` with the item's location). Cost path A (no staging room) refuses step 1 with `no space in giver inventory` and the item stays in hands; cost path B (receiver filled between the steps) refuses step 2 and the item stays in the giver's cargo. Nothing is retried, cloned, restored, or deleted.
+- Consent is a snapshot taken at the action's execute (H2); the server ending the giver's offer loop is not a withdrawal.
+- `REQUESTED -> CONFIRMED` stays a legal move for a direct delivery (H4); the reconcile at the timeout now also writes `REFUSED` when the item is provably still in the giver's inventory, and `UNCONFIRMED` only when it is not.
+- NIMBY-T-012 (J4, H5): `NotificationSystem.SendNotificationToPlayerExtended` from the two terminal writers only, to the giver and the receiver on every terminal state (the requester only for `no item` and `item in flight`), each guarded for a null player and a null identity (a null identity would broadcast). The text comes from the pure `NimbyHandsRules.ToastText(state, detail, role)`, covered by the self-test for every terminal state and refusal family; plain text, no string-table key.
+- Cargo only (H6, Jeff, October 21, 2026): `DestinationFlags()` is `ANY_CARGO` for all three verbs; an item that fits only a worn slot is a documented `REFUSED`; Put In Pockets can no longer equip a worn slot on the receiver (review item 1). `ReceiverHasSpace` joined the Put In Pockets condition and `GiverHasSpace` (staging room) joined all three conditions, so the prompt does not show for a transfer step 1 would refuse.
+- Review items 2, 3, 5, 6, 7, 11, 16: `NimbyHandsCCTManState` sets the two inherited `CCTMan` fields in its constructor; the pocket toggle has a per-player 500 ms server-side gate (silent refusal, `NimbyHandsRules.PocketToggleAllowed`); `DescribeLocation` names the owner with both ids; `Execute` reconciles overdue entries before refusing `item in flight`; `NimbyHandsSetState` marks dirty only on a change; the toggle calls `super.OnStartServer`; Give's `OnStartServer` guards a null target. `Move` refuses an unregistered transfer.
+- The dev harness `mods/own/dev/NimbyDevHarness/` exists (H7): 16 boot cases against the real handlers and six online cases that need a connected identity; its NOTICE lists them. The client output is byte-identical with and without `-Dev` (checked on `@NIMBY-20261021-143500` against `@NIMBY-20261021-143633`).
+- Self-test: 52 to 156 cases, every new `CanMove` cell, `ClassifyMove` from both open states, `ClassifyStep2`, `ClassifyTimeout`, the registry's staged cases, `CheckRequest` precedence for the 15 step 1 and 11 step 2 refusal details, the toggle gate, and `ToastText`. A deliberate flip of one cell failed the boot (`build-20261021-143655`) and was reverted.
+
+Changes since v0.5 (October 20, 2026, `study/hands-t010`): the first two-client run moved no item (NIMBY-T-010, open, release blocker) and showed players nothing when a request ends `UNCONFIRMED` or `REFUSED` (NIMBY-T-012, open); the feasibility study `docs/design/2026-10-20-hands-t010-feasibility.md` ranks the causes, compares the candidate dispatch paths, and proposes a diagnostic session for Jeff's ruling before any build.
 
 Changes since v0.4 (October 19, 2026, `feat/hands`):
 
@@ -58,9 +71,16 @@ The rows below describe `main` before Phase 1. On `feat/hands` the transfer rout
 | --- | --- | --- | --- |
 | G1 | Rename depth | Full rename to `NimbyHands`: folder, PBO, config classes, scripts, input actions, string keys, log prefix. Attribution stays first in `NOTICE` | Decided |
 | G2 | Pocket toggle key (T-002) | Unbound by default. Controls label "Hands: open or close pockets"; the pocket notification names the binding. Phase 0 still records whether `Shift+O` can exclude a plain `O` press; if it can, Jeff may revisit | Decided October 15, 2026 |
-| G3 | Pocket access default | Off; resets on reconnect and respawn; opening permits deposits only | Decided |
+| G3 | Pocket access default | Off; resets on reconnect and respawn; opening permits deposits only, into cargo only (H6) | Decided |
 | G4 | Pockets auto-close | Close on unconsciousness and on restraint. "Put in pockets" refuses an unconscious or restrained target. The toggle cannot be used while restrained | Decided October 15, 2026 |
 | G5 | In-flight transfer registry | Server-side, mission-lifetime singleton `NimbyHandsTransfers`: `map<EntityAI, ref NimbyHandsTransfer>` keyed by item, evicted on terminal state or after a bounded timeout (default 5,000 ms) once inventory state is reconciled. Nothing persisted | Decided (Claude default) |
+| H1 | Transfer path after NIMBY-T-010 (J2) | P3: two server steps through the giver's own cargo under one id, with `STAGED` between `REQUESTED` and the terminal states; `CanMove` allows `REQUESTED -> STAGED` and `STAGED -> CONFIRMED, REFUSED, UNCONFIRMED`, never back to `REQUESTED`. Step 2 bypasses the engine's live-player rule and 2.5 m anti-cheat, so `RevalidateStep2` is the only guard | Decided by Jeff, October 20, 2026; built October 21, 2026 |
+| H2 | Consent at step 2 | The snapshot taken at the action's execute; step 2 does not re-read it. The server ending the giver's offer loop for Take is not a withdrawal | Decided October 21, 2026 |
+| H3 | What the registry entry carries | `NimbyHandsWorldTransfer` holds reach, destination flags, the consent snapshot, the expected item and identities, the step 1 landing (type, parent, slot, cargo cell), and the giver as `PlayerBase`; the move object dies when the action returns | Decided October 21, 2026 |
+| H4 | Direct delivery cell | `REQUESTED -> CONFIRMED` stays legal: the reconcile can find the item with the receiver without a `STAGED` line, and a forbidden move there would leave the entry unevictable. The reconcile writes `REFUSED` when the item is provably in the giver's inventory and `UNCONFIRMED` only when it is not | Decided October 21, 2026 (session; the build brief listed the cell as absent) |
+| H5 | Toast (NIMBY-T-012, J4) | `SendNotificationToPlayerExtended` for 4 s with the title `Hands`, from `Advance` and `LogUnregisteredRefusal` only, to giver and receiver (requester only when unregistered), null player and null identity guarded; text from the pure `ToastText`, plain text | Decided by Jeff, October 20, 2026 (J4); built October 21, 2026 |
+| H6 | Destinations | Cargo only for Take, Give, and Put In Pockets (`FindInventoryLocationType.ANY_CARGO`); step 1's staging location is cargo only and never inside the moving item. Cost: an item that fits only a worn slot (a backpack with a full cargo, a rifle) is `REFUSED`, with `no space in giver inventory` when the giver cannot stage it; a documented capability loss, not a bug | Decided by Jeff, October 21, 2026 |
+| H7 | Dev harness | `mods/own/dev/NimbyDevHarness/`, built with `-Dev` under `nimby_dev`, never an `addons` row; boot cases at mission start with the `selftest` flag, online cases on connect when `$profile:NimbyDevHarness\forge` says `online`, and `step2-refuse` in that file arms one forced step-2 refusal (cost path B) | Decided by Jeff, October 21, 2026; built the same day |
 
 ## Phase 0 - prove the transfer path before renaming
 
@@ -87,7 +107,7 @@ Items 1-5, from the shared 1.30 reference (build `1.30.164078.38`, `scripts.pbo`
 | `ActionInteractBase`, `ActionInstantBase` | `UAC/Actions/ActionInteractBase.c:38`; `UAC/Actions/ActionInstantBase.c:1` | | Give, Take; pocket toggle |
 | `ActionConstructor` | `UAC/ActionConstructor.c:1`; `RegisterActions` `:27` | | All six actions registered |
 | `StandardActionInput`, `ContinuousDefaultActionInput` | `UAC/ActionInput.c:292`, `:627` (`ContinuousInteractActionInput` `:545`); `SetInput` `:77`; `AIT_SINGLE` `:4`, `AIT_CLICKCONTINUOUS` `:7` | | Offer/request input (click-continuous), toggle input (single) |
-| `FindFreeLocationFor` | `INV/Inventory.c:276` (`FindFreeLocationForEx` `:283`) | Native; returns a location, flip included | Destination at dispatch and in the action conditions (`ANY_CARGO | ATTACHMENT`) |
+| `FindFreeLocationFor` | `INV/Inventory.c:276` (`FindFreeLocationForEx` `:283`) | Native; returns a location, flip included | Destination at dispatch and in the action conditions (`ANY_CARGO` only since v0.7, H6; the giver's staging location is checked not to lie inside the moving item through `GetHierarchyParent`, `EntityAI.c:885`) |
 | `CanAddEntityInCargo` and the flip change | `INV/Inventory.c:154` (native); `CreateEntityInCargo` `:143`, `CreateEntityInCargoEx` `:150`; `CreateInInventory` `:876-894` passes `loc.GetFlip()` `:886` | No script in `3_Game` or `4_World` calls `CanAddEntityInCargo`; the 1.30 flip-condition check is engine-side and cannot be read in script. The research doc cited in the current-state table has no text on it. Hands creates no entity; it moves one to a location the engine itself returned | Covered in game by the Phase 3 "rotated items" row |
 | `ServerTakeToDst` | `S/3_Game/DayZ/Entities/Man.c:757-760` -> `TakeToDstImpl` `:762-768` -> `HumanInventory.TakeToDst` `INV/HumanInventory.c:243-251`; `EntityAI.ServerTakeToDst` `S/3_Game/DayZ/Entities/EntityAI.c:2063` | A dead holder skips the hand event and falls through to a direct inventory move (`HumanInventory.c:247-250`); Hands refuses a dead giver before dispatch | The transfer path |
 | `HumanInventory.RedirectToHandEvent` | `INV/HumanInventory.c:200-241` | With the source in hands it clears the item's user-reserved location, calls the holder's `HandEvent`, and returns true without looking at that call's result (`:228-229`). A `ServerTakeToDst` true is not proof of anything | |
@@ -141,10 +161,11 @@ Replace the fixed one-second holder check with correlated lifecycle records:
 
 | State | Meaning |
 | --- | --- |
-| `REQUESTED` | Submitted to the engine |
-| `CONFIRMED` | Completion signal observed (Phase 0 item 4), or a server observation of the expected delivery |
-| `REFUSED` | Validation or engine refusal before a transfer |
-| `UNCONFIRMED` | No evidence within the bounded observation period |
+| `REQUESTED` | Step 1 submitted to the engine (hands to the giver's own cargo) |
+| `STAGED` | Step 1 landed at the recorded location in the giver's cargo; step 2 scheduled one tick later (v0.7, H1). Not terminal |
+| `CONFIRMED` | The item arrived with the receiver: step 2's completion signal, or the reconcile found it there |
+| `REFUSED` | No delivery and the item's place is known: validation or engine refusal, the item left the giver or the staged location for somewhere other than the receiver, or the reconcile found it still in the giver's inventory |
+| `UNCONFIRMED` | No evidence within the bounded observation period and the item not in the giver's inventory |
 
 A recipient moving the item afterward must not turn `CONFIRMED` into a failure. Never automatically retry, clone, restore, or delete an item to compensate for an uncertain result.
 

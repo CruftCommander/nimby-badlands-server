@@ -52,11 +52,20 @@ class NimbyHandsActionTogglePockets extends ActionInstantBase
         return NimbyHandsTogglePocketsActionInput;
     }
 
+    // An instant action starts on every input press (ActionManagerServer accepts each start),
+    // so a modified client could flood the production pockets line and the net-sync. The
+    // server refuses a repeat inside POCKET_TOGGLE_MIN_MS silently (review item 3).
     override void OnStartServer( ActionData action_data )
     {
-        PlayerBase player = action_data.m_Player;
-        bool open = !player.NimbyHandsGetPocketsOpen();
+        super.OnStartServer( action_data );
 
+        PlayerBase player = action_data.m_Player;
+        if ( !player.NimbyHandsPocketToggleAllowed( GetGame().GetTime() ) )
+        {
+            return;
+        }
+
+        bool open = !player.NimbyHandsGetPocketsOpen();
         player.NimbyHandsSetPocketsOpen( open );
         NimbyHandsServer.LogPockets( player, open, "toggle" );
     }

@@ -24,6 +24,28 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 21, 2026 (Hands plan v0.7, P3, ruling J2 of October 20 and the rulings of October 21):
+  - A transfer is now two server moves under one id. Step 1 moves the item from the giver's
+    hands into a free cargo location of the giver's own inventory (never a worn slot, never
+    inside the item); its arrival is logged STAGED. Step 2, one tick later, revalidates and
+    moves it from that exact location to the receiver's cargo with the synchronous server
+    move and reads the result. A giver with no staging room is refused before step 1 and
+    keeps the item in hands; a receiver who fills up between the steps leaves the item in
+    the giver's cargo. Nothing is retried, cloned, restored, or deleted.
+  - Every terminal outcome sends an on-screen notification to the giver and the receiver
+    (NIMBY-T-012); a request refused before registration notifies the requester only.
+  - All three verbs deliver into cargo only (was cargo or an attachment slot); Put In
+    Pockets can no longer equip a worn slot on the receiver. The Put In Pockets prompt
+    now also needs room in the receiver's cargo, and every prompt needs staging room in
+    the giver's cargo.
+  - The target condition's distance and must-be-alive arguments now reach CCTMan; the
+    pocket toggle has a server-side 500 ms minimum interval per player (a repeat inside it
+    is refused silently); location text names the owning player with both ids; a stale
+    registry entry is reconciled before a request is refused as in flight; the offer and
+    request loops mark the player dirty only when the state changes.
+  - The reconcile at the 5-second timeout writes REFUSED when the item is still in the
+    giver's inventory and UNCONFIRMED only when it is not. The self-test grew from 52 to
+    156 cases.
 - October 20, 2026 (test finding NIMBY-T-007): Data/Inputs.xml declares the sorting group "nimby"
   (label NIMBY) inside <inputs>, where 1.30 reads it; both Hands bindings now appear under a NIMBY tab
   in Options > Controls instead of Unsorted. No input names or defaults changed.
