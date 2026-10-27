@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Greet key binding (shared rules 5, Greet plan G7, decided by Jeff October 25, 2026, Q2).
+  Default Insert: bin/constants.xml:586 declares kInsert; bin/preset_X1MouseKey.xml has 0 uses,
+  so a plain press is free in play. kF12 is free in game but is Steam's screenshot key.
+  Page keys (NIMBY-T-057, Jeff October 26, 2026): kPrior and kNext (constants.xml:580,585) page the
+  window's body; the menu reads them only while it is open. In play they are also UAZeroingUp and
+  UAZeroingDown (preset_X1MouseKey.xml:311,316), which the window force-disables while open (T-058).
+  Nesting follows the Ears precedent (NimbyEarplugs/Data/Inputs.xml): the <sorting> block sits
+  INSIDE <inputs>, beside <actions>; group "nimby" is declared in every NIMBY addon with the same
+  name and label.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyGreetOpen" loc="Greet: open server welcome" />
+            <input name="UANimbyGreetPageUp" loc="Greet: page the window up" />
+            <input name="UANimbyGreetPageDown" loc="Greet: page the window down" />
+        </actions>
+        <sorting name="nimby" loc="NIMBY">
+            <input name="UANimbyGreetOpen" />
+            <input name="UANimbyGreetPageUp" />
+            <input name="UANimbyGreetPageDown" />
+        </sorting>
+    </inputs>
+    <preset>
+        <input name="UANimbyGreetOpen">
+            <btn name="kInsert" />
+        </input>
+        <input name="UANimbyGreetPageUp">
+            <btn name="kPrior" />
+        </input>
+        <input name="UANimbyGreetPageDown">
+            <btn name="kNext" />
+        </input>
+    </preset>
+</modded_inputs>

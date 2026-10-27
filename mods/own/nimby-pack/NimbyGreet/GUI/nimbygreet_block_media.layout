@@ -1,0 +1,40 @@
+FrameWidgetClass BlockMedia {
+ ignorepointer 1
+ position 0 0
+ size 1 100
+ hexactpos 1
+ vexactpos 1
+ hexactsize 0
+ vexactsize 1
+ {
+  ImageWidgetClass BlockMedia_image {
+   ignorepointer 1
+   color 1 1 1 1
+   position 0 0
+   size 1 80
+   hexactpos 1
+   vexactpos 1
+   hexactsize 0
+   vexactsize 1
+   mode blend
+   "src alpha" 1
+   "no wrap" 1
+   filter 1
+  }
+  TextWidgetClass BlockMedia_alt {
+   ignorepointer 1
+   color 0.75 0.75 0.75 1
+   position 0 80
+   size 1 20
+   hexactpos 1
+   vexactpos 1
+   hexactsize 0
+   vexactsize 1
+   text ""
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 14
+   "text valign" center
+  }
+ }
+}

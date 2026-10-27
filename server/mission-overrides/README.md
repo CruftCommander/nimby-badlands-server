@@ -9,7 +9,7 @@ Files here are applied to the active mission folder on the server
 | `cfggameplay.patch.json` | `mpmissions/<mission>/cfggameplay.json` | Merge onto the stock file: set only the listed keys. Keep the map's own temperatures and other values. |
 | `db/types.scrawl.patch.xml` | `mpmissions/<mission>/db/types.xml` | DRAFT until Scrawl Phase 2. Replace the five `<type>` rows of the same name (Paper and the four pens); leave every other row. Back up `types.xml` first; apply at a scheduled restart. |
 | `db/types.tack.patch.xml` | `mpmissions/<mission>/db/types.xml` | DRAFT, not applied. Add the four `NimbyTack_PinnedNote_*` rows at Tack Phase 2, after Scrawl's `types.scrawl.patch.xml`, at a restart with the file backed up. |
-| `db/messages.nimby-mods.patch.xml` | `mpmissions/<mission>/db/messages.xml` | DRAFT, not applied. One on-connect how-to line per mod (Legs, Hands, Ears, Scrawl, Tack), 160 characters or fewer each. Copy a mod's `<message>` block into `db/messages.xml` at the restart that releases that mod, never before. |
+| `db/messages.nimby-mods.patch.xml` | `mpmissions/<mission>/db/messages.xml` | SUPERSEDED, kept for reference (Greet plan G8, October 26, 2026). One on-connect how-to line per mod (Legs, Hands, Ears, Scrawl, Tack). Not copied into `db/messages.xml`: Greet's Mods tab carries the how-to text, updated at each mod's release (release gate step 5). |
 
 ## cfggameplay decisions (2026-10-14, updated 2026-10-15)
 
@@ -20,7 +20,7 @@ Files here are applied to the active mission folder on the server
 | Hit direction indicator | off (`hitDirectionOverrideEnabled = true`, `hitDirectionBehaviour = 0`) | static splash | Locate fire by sound; the red-flash hit effect stays on |
 | `staminaWeightLimitThreshold` | `5000` (5 kg) | `6000` | Slightly harsher weight penalty |
 | `staminaKgToStaminaPercentPenalty` | `2.0` | `1.75` | At 15 kg carried: 80% max stamina vs 84.25% vanilla |
-| `disableIsCollidingAngleCheck`, `disableIsCollidingBBoxCheck` | `true` | `false` | More base-building spots; watch for glitch bases (rule 1) |
+| `disableIsCollidingAngleCheck`, `disableIsCollidingBBoxCheck` | `true` | `false` | More base-building spots. Building through walls, floors or terrain is an admin call under the one rule, not a written exception (Jeff, October 25, 2026) |
 
 Deferred: spawn-gear presets ship with theme drop 1 on Nasdara. Loot (`types.xml`) tuning
 starts at Nasdara launch from Nasdara's stock file.

@@ -1,11 +1,67 @@
 NimbyGreet (Greet) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
-Will modify the vanilla DayZ 1.30 MissionServer, MissionBase, PlayerBase, and InGameMenu
-classes (Bohemia Interactive) to fetch and show the server welcome text; no third-party
-mod code. Media shipped under Media/ is listed here with its source and license at each
-release (plan G15); none yet.
+Will modify the vanilla DayZ 1.30 MissionServer, MissionBase, MissionGameplay, PlayerBase, and
+InGameMenu classes (Bohemia Interactive) to fetch and show the server welcome text; no
+third-party mod code. Media shipped under Media/ is listed here with its source and license at
+each release (plan G15).
+
+Media: none. Release 1 ships no media (plan G15; Jeff, October 25, 2026). The Phase 0 probe
+files (probe.mp4 and its four re-encodings, probe.png, probe.edds; all generated with ffmpeg
+and DayZ Tools ImageToPAA, no third-party content) were deleted on October 26, 2026 at Phase 1
+step (a). Their record is docs/testing/2026-10-25-greet-phase0.md.
+
+Chrome strings (stringtable.csv): the window's labels (Close, Don't show this again, text size,
+animations, language, Open, Copy, the hint, the pause-menu button) are machine-written in the
+czech, german, russian, polish, hungarian, italian, spanish, french and portuguese columns and
+unreviewed by a speaker (plan G14); the chinese, japanese and chinesesimp columns carry the
+English text until a font with those glyphs is proven (plan v0.4, G14, NIMBY-T-040).
 
 Changes, newest first:
 
+- October 26, 2026, after the Phase 1 runs (unbuilt at the time of writing): the dropchunk debug
+  flag and a 20 s fetch give-up for G-21; self-review fixes: a cooldown retry dies with the
+  window and an Insert press cancels a pending one; the connection's automatic open is spent
+  when the window shows; a language with no section is not served and the body guards its
+  index; a greet.json with no servable language never replaces the served copy or the .lkg,
+  and "invalid" is logged on change only; the client language string is logged only when it
+  is a known column name; a table continued after a wide row is headerless and not a second
+  table; done.openDelaySeconds and openRetrySeconds are clamped on the client; 102 self-test
+  cases.
+- October 26, 2026, Phase 1 runs 1 to 4 (docs/testing/2026-10-26-greet-phase1.md): a cooldown
+  refusal is a bare done with the time left and the client retries once (NIMBY-T-049); chrome
+  strings fall back to English when the string table does not resolve (NIMBY-T-050); table
+  cells wrap and rows grow; the link-row label is a button; footer and link buttons have a
+  visible panel; tables get air above and below; the open wait polls at 250 ms.
+- October 26, 2026, Phase 1 step (c), plan v0.4: the window. Added 5_Mission nimbygreet_menu.c
+  (NimbyGreetMenu: section list, block body in a ScrollWidget, link rows, footer; the "menu"
+  input exclude on show and hide per NIMBY-T-039; frame-flip media per G15), the layouts under
+  GUI/ (window, section button, text, heading, rule, media, table row, link row, pause button),
+  nimbygreet_ingamemenu.c (the pause-menu "Server welcome" button, G7), the hit hooks in
+  PlayerBase (OnReceivedHit, EEHitByRemote) and the Hit invoker, the window open and close
+  bookkeeping in MissionGameplay (reasons player, hotkey, hit, unconscious, death; seen.json
+  per G4 and Q6), and the chrome strings in stringtable.csv.
+
+- October 26, 2026, Phase 1 step (a) and (b), plan v0.4: the Phase 0 probe is replaced.
+  Deleted nimbygreet_probepayload.c, nimbygreet_probemenu.c, GUI/nimbygreet_probe.layout,
+  Media/probe*, the [Probe] log level, and the probe title string. 3_Game is now
+  nimbygreet_rules.c (constants, caps, chunk math, dismissal, languages, links, ids),
+  nimbygreet_text.c (the JSON shapes and the G9 cap pass), nimbygreet_markdown.c (the G13
+  converter), nimbygreet_chunks.c (the done record and the validated fetch), nimbygreet_client.c
+  (the invokers), nimbygreet_clientfiles.c (seen.json and prefs.json), nimbygreet_selftest.c
+  (22 Phase 0 cases plus the converter, cap, rule and fetch cases). 4_World PlayerBase keeps the
+  RPC plumbing with the owner check; the server answer moved to 5_Mission MissionServer
+  (greet.json with .lkg and the default, re-read on request, per-identity cooldown, chunked
+  send). MissionGameplay fetches, validates, converts and schedules the open; the window itself
+  is step (c). The done record is one JSON string (Param3) instead of a Param6.
+- October 26, 2026, Phase 0 probe: config.cpp gains Data/Inputs.xml (UANimbyGreetOpen, default
+  Insert), the World dependency and 4_World module. Added nimbygreet_log.c, nimbygreet_client.c
+  (fetch state, 4_World to 5_Mission invokers), nimbygreet_probepayload.c, 4_World
+  nimbygreet_playerbase.c (RPC 6551101 to 6551103, OnPlayerLoaded hook), 5_Mission
+  nimbygreet_missiongameplay.c (fetch, open, hotkey, ceiling and race tests),
+  nimbygreet_missionserver.c (greet.json read, connect log), nimbygreet_probemenu.c and
+  GUI/nimbygreet_probe.layout (the probe window), stringtable.csv (language key and probe
+  title in all 14 vanilla columns; the probe title is machine-written, not translated). Rules
+  gained the UTF-8 safe chunk cut and byte-exact builders with 13 new self-test cases (22 total).
+  Probe code is replaced in Phase 1; see docs/testing/2026-10-25-greet-phase0.md.
 - October 25, 2026, stub: config.cpp, the rules constants (caps from plan G9, RPC ids
-  from G1 and G5, the file names), and one self-test case, so the pack.json row builds
+  from G1 and G5, the file names), and nine self-test cases, so the pack.json row builds
   and the boot check's self-test gate sees Greet (shared rules 8). No window yet.
