@@ -170,7 +170,7 @@ modded class PlayerBase extends ManBase
         PlayerIdentity owner = GetIdentity();
         if (!sender || !owner || sender.GetId() != owner.GetId())
         {
-            NimbyAutorunLogReject(sender, "sender does not own this player");
+            NimbyAutorunLogOwnershipRefusal(sender);
             return;
         }
         NimbyAutorunRememberIdentity(owner);
@@ -225,7 +225,7 @@ modded class PlayerBase extends ManBase
             return;
         }
 
-        int resolved = NimbyAutorunRules.ResolveServerIdx(movementIdx, CanSprint());
+        int resolved = NimbyAutorunRules.ResolveServerIdx(movementIdx, NimbyAutorunCanSprintNow());
         if (m_NimbyAutorunning && resolved == m_NimbyAutorunIdx)
         {
             return;
@@ -272,6 +272,23 @@ modded class PlayerBase extends ManBase
         {
             NimbyAutorunLog.Info("Throttled " + NimbyAutorunLog.Who(sender) + " count=" + throttle.TakeDropped().ToString());
         }
+    }
+
+    // A request aimed at this player by someone else. Its own line, naming both parties, through
+    // a gate keyed on the sender, so a probe cannot consume this player's own refusal line
+    // (review LEGS-R2-03). This is the production forgery signal the first-week watch reads.
+    protected void NimbyAutorunLogOwnershipRefusal(PlayerIdentity sender)
+    {
+        string key = "none";
+        if (sender)
+        {
+            key = sender.GetId();
+        }
+        if (!NimbyAutorunLog.AllowForSender(key, GetGame().GetTickTime()))
+        {
+            return;
+        }
+        NimbyAutorunLog.Info("Rejected request from " + NimbyAutorunLog.Ids(sender) + " aimed at " + NimbyAutorunWho() + ": sender does not own this player");
     }
 
     protected void NimbyAutorunLogReject(PlayerIdentity sender, string reason)
@@ -412,12 +429,30 @@ modded class PlayerBase extends ManBase
             NimbyAutorunForceClear(blocked, "tick");
             return;
         }
-        int resolved = NimbyAutorunRules.ResolveServerIdx(m_NimbyAutorunIdx, CanSprint());
+        int resolved = NimbyAutorunRules.ResolveServerIdx(m_NimbyAutorunIdx, NimbyAutorunCanSprintNow());
         if (resolved != m_NimbyAutorunIdx)
         {
             NimbyAutorunApply(true, resolved);
             NimbyAutorunLogToggle(GetIdentity(), "server", "cannot-sprint");
         }
+    }
+
+    // The same gate vanilla's sprint limiter applies every frame (PlayerBase.c:3477-3486):
+    // stamina as well as the posture and load tests of CanSprint. The client sends the same
+    // pair (nimbyautorun_missiongameplay.c), so a client that lies about stamina no longer
+    // leaves the server's idx at sprint (review LEGS-R2-05, prior item 17).
+    protected bool NimbyAutorunCanSprintNow()
+    {
+        return CanSprint() && CanConsumeStamina(EStaminaConsumers.SPRINT);
+    }
+
+    // Logout start (review LEGS-R2-01). OnDisconnect runs when the logout timer ends
+    // (missionServer.c:277-300, :690-703), 15 s after an ungraceful drop, and for those 15 s the
+    // body stood on the server with the override applied. MissionServer calls this from its
+    // OnClientDisconnectedEvent hook before vanilla queues the body.
+    void NimbyAutorunOnLogoutStart()
+    {
+        NimbyAutorunForceClear("logout", "hook");
     }
 
     // ---- client -------------------------------------------------------------------------
