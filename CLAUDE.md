@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Configuration, in-house mods, PowerShell tooling, and runbooks for **NIMBY | HARDCORE | BADLANDS | 1pp**, a public DayZ 1.30 server on the Nasdara (Badlands) map, hosted at HostHavoc (Chicago). Not part of the AFS platform. Owner: Jeff Fabish. In-game admin: Jay (Trendkill).
 
-The decision record is the Notion hub "DayZ Badlands Server - Project Hub". This repository holds the artifacts. `STATUS.md` and `NEXT.md` were last updated October 14, 2026, before the Nasdara switch and the mod plans, so the git log and `docs/plans/` are more current than they are.
+The decision record is the Notion hub "DayZ Badlands Server - Project Hub". This repository holds the artifacts. `STATUS.md` (current state) and `NEXT.md` (ordered actions) were rewritten October 27, 2026, after release 1; when they disagree with a dated doc under `docs/`, the newer file wins.
 
 ## Hard rules
 
