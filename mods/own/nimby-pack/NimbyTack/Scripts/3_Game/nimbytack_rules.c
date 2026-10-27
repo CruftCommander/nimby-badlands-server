@@ -467,6 +467,23 @@ class NimbyTackRules
         return ModelAllowance(config, model);
     }
 
+    // T28 (review TACK-R2-02): the door index a pin binds to comes from the client's action
+    // component, which a forged request can set to any door of the building. The server keeps
+    // the binding only when the door the client named sits where the server's own ray hit: its
+    // sound position within DOOR_HIT_MAX_METERS of the hit. A wide leaf is 3 to 4 m across and
+    // the sound position is near its middle, so the bound is generous for an honest aim and
+    // still refuses the back door of a house.
+    static const float DOOR_HIT_MAX_METERS = 2.5;
+
+    static bool DoorHitPlausible(float distanceFromHit)
+    {
+        if (distanceFromHit < 0)
+        {
+            return false;
+        }
+        return distanceFromHit <= DOOR_HIT_MAX_METERS;
+    }
+
     // T22: the store data of a door note is sane: no door, or a door index 0 to 63 with a pivot.
     static bool DoorDataValid(int doorIndex, int pivot)
     {
@@ -988,6 +1005,9 @@ class NimbyTackRules
         failures += Case(results, "door data with a door and a pivot is valid", DoorDataValid(2, 83886083));
         failures += Case(results, "a junk door index is invalid", !DoorDataValid(1065353216, 0));
         failures += Case(results, "a door without a pivot is invalid", !DoorDataValid(0, -1));
+        failures += Case(results, "a door hit under the bound is plausible", DoorHitPlausible(0.4) && DoorHitPlausible(DOOR_HIT_MAX_METERS));
+        failures += Case(results, "a door hit past the bound is a forged component", !DoorHitPlausible(DOOR_HIT_MAX_METERS + 0.01) && !DoorHitPlausible(9.0));
+        failures += Case(results, "a negative door distance is not plausible", !DoorHitPlausible(-1.0));
         failures += Case(results, "an unlisted model has no allowance", ModelAllowance(defaults, "Land_House_2B01") == 0.0);
         failures += Case(results, "a door leaf adds the door allowance", Math.AbsFloat(AllowanceFor(defaults, "Land_House_2B01", true) - defaults.doorAllowanceMeters) < 0.0001);
         NimbyTackConfig tuned = new NimbyTackConfig();

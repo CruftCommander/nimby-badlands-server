@@ -265,6 +265,23 @@ class NimbyTackWorld
             {
                 component = target.GetComponentIndex();
                 doorIndex = NimbyTackPlace.DoorIndexOf(wall, component);
+                // T28 (review TACK-R2-02): the component is client-supplied; keep the door only when
+                // it sits where this ray hit. A forged index for another door of the same building
+                // becomes a plain wall note instead of a note that orbits the far pivot.
+                if (doorIndex >= 0)
+                {
+                    Building doorBuilding = Building.Cast(wall);
+                    float doorDistance = vector.Distance(doorBuilding.GetDoorSoundPos(doorIndex), result.pos);
+                    if (!NimbyTackRules.DoorHitPlausible(doorDistance))
+                    {
+                        if (GetGame().IsServer())
+                        {
+                            NimbyTackLog.Info("pin door dropped: client door=" + doorIndex.ToString() + " is " + doorDistance.ToString() + " m from the hit on " + ClassOf(wall) + " " + PlayerTag(player));
+                        }
+                        component = -1;
+                        doorIndex = -1;
+                    }
+                }
             }
             // T24 (Jeff, October 25, 2026): a door leaf pins open or closed; T21b follows the leaf.
             hit = new NimbyTackHit();
@@ -522,13 +539,18 @@ class NimbyTackWorld
                 continue;
             }
             string name = SurfaceNameOf(result);
-            vector ray = result.dir;
-            ray.Normalize();
-            float gap = vector.Distance(result.pos, viewHit);
-            float depth = NimbyTackRules.SignedDepth(result.pos, viewHit, normal);
-            string line = "probe: fire-geometry surface=" + name + " component=" + result.component.ToString() + " ray=" + ray.ToString() + " " + PositionTag(result.pos);
-            line = line + " view-" + PositionTag(viewHit) + " gap=" + gap.ToString() + " depth=" + depth.ToString();
-            Trace(line);
+            // Built only under the flag: this runs on the client every frame a knife is aimed at a
+            // wall (review TACK-R2-07, the residual of the October 21 item 19).
+            if (NimbyTackLog.IsDebug())
+            {
+                vector ray = result.dir;
+                ray.Normalize();
+                float gap = vector.Distance(result.pos, viewHit);
+                float depth = NimbyTackRules.SignedDepth(result.pos, viewHit, normal);
+                string line = "probe: fire-geometry surface=" + name + " component=" + result.component.ToString() + " ray=" + ray.ToString() + " " + PositionTag(result.pos);
+                line = line + " view-" + PositionTag(viewHit) + " gap=" + gap.ToString() + " depth=" + depth.ToString();
+                Trace(line);
+            }
             return name;
         }
         Trace("probe: fire-geometry ray did not hit the wall object");

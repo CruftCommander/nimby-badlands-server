@@ -3,6 +3,19 @@ Defines four Paper subclasses and six user actions on the vanilla DayZ 1.30 acti
 (Bohemia Interactive); depends on NimbyNotes (Scrawl) from the same pack; no third-party mod code.
 
 Changes, newest first.
+- October 27, 2026 (Tack plan v0.18, release-1 patch 1, branch fix/release-1-patch-1, from the
+  October 27 review):
+  - T28: the door a note binds to is kept only when the door the client named sits within 2.5 m
+    of where the server's own ray hit (DoorHitPlausible); a forged component index now gives a
+    plain wall note and a production line "pin door dropped" (TACK-R2-02).
+  - EEDelete removes the two queued instance calls (NimbyTackFollowTick, NimbyTackRestoreDoor)
+    before the entity goes, as vanilla does for its own (TACK-R2-05).
+  - FireSurfaceName builds its probe line only under the debug flag (TACK-R2-07).
+  - A player build as the target shows the box "Notes pin on map buildings" instead of nothing;
+    the Workshop text and the pack README no longer say player builds pin (TACK-R2-04; Jeff,
+    October 27, 2026: the player-build round is its own round).
+  - The Scrawl RPC fix of the same patch closes TACK-R2-01 (a forged RPC_READ_NOTE rewriting a
+    pinned note); nothing in Tack changed for it.
 - October 21, 2026 (Tack plan v0.13, fix round after the Part B in-game run, branch study/tack-t013-t014):
   - TK-P10: the roughSurfaceOffsetMeters default moves from 0.06 to 0.08 (Jeff). No config version
     bump: a version 2 file keeps what it holds (a hand-set 0.06 and the old default cannot be told
