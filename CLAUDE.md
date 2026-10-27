@@ -40,6 +40,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -Ski
 # Qualification boot (storageAutoFix = 0) plus the dev harness under the separate nimby_dev key
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -Dev -Qualification
 
+# Release artifact: only the named addons (pack.json untouched), booted against storage_998, the copy of
+# live storage_1 that Sync-LiveReplica.ps1 makes (release gate decisions 1 and 2, October 26, 2026).
+# -ServerPath D:\DayZServer is required here: without it the script finds the Steam server install first
+# and boots that install's storage_998, not the replica's
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -ServerPath D:\DayZServer -Addons NimbyAutorun,NimbyEarplugs,NimbyNotes,NimbyGreet -BootInstanceId 998 -Qualification
+
 # Interactive in-game test server: newest SUMMARY PASS build, or a specific one
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -BuildPath .\build\@NIMBY-<stamp> -ProfileName <name>

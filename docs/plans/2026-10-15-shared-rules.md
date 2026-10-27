@@ -1,8 +1,8 @@
 # NIMBY pack shared rules
 
-Version 1.4. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
+Version 1.5. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.5 amendment (October 26, 2026: section 7.1, the CallLater rule from NIMBY-T-052, ruled by Jeff Fabish October 26, 2026; Greet added to the list below; one rule added); v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
 
-These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), and Ears (`NimbyEarplugs`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
+These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), Ears (`NimbyEarplugs`), and Greet (`NimbyGreet`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
 
 ## 1. Introduction
 
@@ -134,6 +134,14 @@ Decided by Jeff, October 15, 2026: content addons persist like other DayZ items.
 Before any session writes code, the orchestrator unpacks the 1.30 `scripts.pbo` (DayZ Tools or `D:\GitHub\DayZExtract`) to one read-only folder that all three sessions grep, and records the build number and archive hashes in `docs/baselines/`. No vanilla API is used without a file:line from that folder, and a declaration is not proof of behavior: each plan's Phase 0 exercises the API in game.
 
 Done October 15, 2026: the reference is `vendor/dayz-1.30-scripts/` (read-only, git-ignored), recorded in `docs/baselines/2026-10-15-dayz-1.30-scripts-reference.md` with build `1.30.164078.38` and the `scripts.pbo` hash. There is no `inputs.xml` in 1.30; where a plan says `inputs.xml`, read `bin/preset_X1MouseKey.xml` (PC default bindings) and `bin/constants.xml` (action and button names).
+
+### 7.1. Deferred calls and the 5_Mission module
+
+Added in v1.5 (NIMBY-T-052, ruled by Jeff Fabish, October 26, 2026):
+
+Never `CallLater` (or `Call`, `CallByName`) a function that lives in a 5_Mission script, instance method or static. The 5_Mission module is recompiled for every mission, the main menu included, so a queued call points into a discarded module once the player leaves and crashes the client (`Access violation`, NIMBY-T-052, three crashes on October 26, 2026). `ScriptCallQueue.Remove` on an instance method does not take the call off the queue. Queue a 4_World function instead and dispatch to the mission through a 4_World hook (the Greet `NimbyGreetDeferred.Fire` and `MissionBaseWorld.NimbyGreetDeferredCall` pattern, `mods/own/nimby-pack/NimbyGreet/Scripts/4_World/nimbygreet_deferred.c`; Hands' static `OnTimeout` in 4_World is the earlier precedent). Every addon audits its timers against this rule before its next release.
+
+Known open use: Greet's `FlipClip` clip timer (5_Mission) is still queued from the menu; no media ships in release 1, and it moves to the pattern before any does (Greet plan Phase 2).
 
 ## 8. Test tooling
 

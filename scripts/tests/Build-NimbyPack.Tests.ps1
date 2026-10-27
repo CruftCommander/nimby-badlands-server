@@ -1,5 +1,6 @@
 # Pester 5 tests for the verdict functions in scripts\Build-NimbyPack.ps1: the boot verdict, the
-# self-test gate, the signature verdict, and pack.json validation. No DayZ, Steam, or key needed.
+# self-test gate, the signature verdict, pack.json validation, and the -Addons selection and
+# -BootInstanceId parameters (release gate decisions 1 and 2). No DayZ, Steam, or key needed.
 
 BeforeDiscovery {
     # Discovery needs the lines for -ForEach; BeforeAll loads the same file for run time.
@@ -12,7 +13,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
     $repo = Get-TestRepoRoot
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
+    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Select-PackAddon', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
     $packPath = Join-Path $repo 'mods\own\nimby-pack\pack.json'
     $pack = Get-PackDefinition -Path $packPath
     $failurePatterns = @($pack.bootCheck.failurePatterns)
@@ -232,5 +233,68 @@ Describe 'pack.json' {
         $path = Join-Path $TestDrive 'pack-storage1.json'
         Set-Content -LiteralPath $path -Value ($broken | ConvertTo-Json -Depth 10) -Encoding utf8
         { Get-PackDefinition -Path $path } | Should -Throw -ExpectedMessage '*not a test instance*'
+    }
+}
+
+Describe 'Select-PackAddon (release gate decision 1: the artifact subset is a parameter)' {
+    BeforeAll {
+        $all = @($pack.addons | ForEach-Object { $_.pboName })
+    }
+
+    It 'returns every pack.json row, in pack.json order, when -Addons is omitted or empty' {
+        @(Select-PackAddon -Pack $pack -Names $null | ForEach-Object { $_.pboName }) | Should -Be $all
+        @(Select-PackAddon -Pack $pack -Names @() | ForEach-Object { $_.pboName }) | Should -Be $all
+    }
+
+    It 'returns the named rows in pack.json order, whatever order they were given in' {
+        $picked = @(Select-PackAddon -Pack $pack -Names @($all[2], $all[0]) | ForEach-Object { $_.pboName })
+        $picked | Should -Be @($all[0], $all[2])
+    }
+
+    It 'accepts one comma-separated string with spaces, as -File passes an array parameter' {
+        $picked = @(Select-PackAddon -Pack $pack -Names ("{0}, {1}" -f $all[1], $all[3]) | ForEach-Object { $_.pboName })
+        $picked | Should -Be @($all[1], $all[3])
+    }
+
+    It 'matches a name without regard to case and returns the pack.json spelling' {
+        $picked = @(Select-PackAddon -Pack $pack -Names $all[0].ToUpperInvariant() | ForEach-Object { $_.pboName })
+        $picked | Should -Be @($all[0])
+    }
+
+    It 'selects the release 1 artifact (Legs, Ears, Scrawl, Greet) and leaves Hands and Tack out' {
+        $picked = @(Select-PackAddon -Pack $pack -Names 'NimbyAutorun,NimbyEarplugs,NimbyNotes,NimbyGreet' | ForEach-Object { $_.pboName })
+        $picked | Should -Be @('NimbyAutorun', 'NimbyEarplugs', 'NimbyNotes', 'NimbyGreet')
+        $picked | Should -Not -Contain 'NimbyHands'
+        $picked | Should -Not -Contain 'NimbyTack'
+    }
+
+    It 'throws on a name pack.json does not list, naming it and the known names' {
+        { Select-PackAddon -Pack $pack -Names @($all[0], 'NimbyNothing') } | Should -Throw -ExpectedMessage "*'NimbyNothing'*Known: *"
+    }
+
+    It 'throws on a name given twice' {
+        { Select-PackAddon -Pack $pack -Names @($all[0], $all[0]) } | Should -Throw -ExpectedMessage '*twice*'
+    }
+
+    It 'throws on a list that is empty after trimming instead of silently building everything' {
+        { Select-PackAddon -Pack $pack -Names @(' ', ',') } | Should -Throw -ExpectedMessage '*-Addons is empty*'
+    }
+}
+
+Describe 'Build-NimbyPack.ps1 parameters (release gate decision 2: the boot instance is a parameter)' {
+    BeforeAll {
+        $command = Get-Command (Join-Path $repo 'scripts\Build-NimbyPack.ps1')
+    }
+
+    It 'declares -Addons as a string array' {
+        $command.Parameters['Addons'].ParameterType | Should -Be ([string[]])
+    }
+
+    It 'declares -BootInstanceId as an int limited to 998 and 999 (shared rules, section 8)' {
+        $parameter = $command.Parameters['BootInstanceId']
+        $parameter.ParameterType | Should -Be ([int])
+        $set = @($parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] })
+        $set.Count | Should -Be 1
+        @($set[0].ValidValues | Sort-Object) | Should -Be @('998', '999')
     }
 }

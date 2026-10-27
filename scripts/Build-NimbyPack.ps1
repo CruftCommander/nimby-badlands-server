@@ -5,7 +5,8 @@
     Builds, signs, verifies, and boot-tests the @NIMBY client-and-server mod.
 
 .DESCRIPTION
-    For each addon listed in mods\own\nimby-pack\pack.json:
+    For each addon listed in mods\own\nimby-pack\pack.json (every row, or only the rows named
+    by -Addons):
       1. Packs the files matching includePatterns into an uncompressed PBO with the pack's
          own packer (NimbyPbo.psm1), then signs it with DayZ Tools DSSignFile.
       2. Confirms the PBO checksum, the .bisign, the PBO prefix, and that every source file
@@ -43,8 +44,8 @@
     Writes  : <repo>\build\@NIMBY-<stamp>\ (and the -Server and -Dev siblings when produced),
               <repo>\logs\build-<stamp>\ (manifest, tool logs, server profile and logs), and the
               key pair(s) in -KeyDirectory on first run. The boot check writes the server's
-              persistence to <server>\mpmissions\<mission>\storage_<instanceId>; pack.json must
-              name instance 998 or 999 so storage_1 is never written.
+              persistence to <server>\mpmissions\<mission>\storage_<instanceId>; pack.json, or
+              -BootInstanceId, must name instance 998 or 999 so storage_1 is never written.
     Never   : copies a private key anywhere, deletes anything, or contacts a remote server.
 
     Exit codes: 0 = PASS, 1 = FAIL, 2 = UNKNOWN (built and verified, but the boot check was
@@ -75,8 +76,29 @@
     Boot with storageAutoFix = 0 so persistence corruption fails the check instead of being
     repaired. The default quick check boots with storageAutoFix = 1.
 
+.PARAMETER Addons
+    The pboName values from pack.json to pack, sign, verify, and boot, as one comma-separated
+    string or an array, in any order. Every other addon row stays out of this build and its
+    self-test is not expected; build.log records the selection as "ADDONS <names> source=parameter".
+    A name pack.json does not list, a name given twice, or an empty list stops the script before
+    any packing. Omitted, every addon row builds. Release gate decision 1 (October 26, 2026): a
+    release artifact carries only the qualified addons, named here; pack.json is not edited for
+    a release.
+
+.PARAMETER BootInstanceId
+    Override pack.json bootCheck.instanceId for this run's boot check. On the local replica built
+    by Sync-LiveReplica.ps1, 998 is the copy of the live world and 999 is the fresh world. Only 998
+    and 999 are accepted (shared rules, section 8); build.log records "BOOT INSTANCE <id> source=".
+    Release gate decision 2 (October 26, 2026): the release boot is -BootInstanceId 998 with
+    -Qualification, against the copy of live storage_1.
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Build-NimbyPack.ps1
+
+.EXAMPLE
+    pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Build-NimbyPack.ps1 -Addons NimbyAutorun,NimbyEarplugs,NimbyNotes,NimbyGreet -BootInstanceId 998 -Qualification
+
+    Release build: the four qualified addons only, booted against storage_998 with storageAutoFix = 0.
 
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Build-NimbyPack.ps1 -Dev -Qualification
@@ -87,6 +109,8 @@ param(
     [string]$KeyDirectory = 'D:\Keys\nimby',
     [string]$DayZToolsPath,
     [string]$ServerPath,
+    [string[]]$Addons,
+    [ValidateSet(998, 999)][int]$BootInstanceId,
     [switch]$SkipBootCheck,
     [switch]$Dev,
     [switch]$Qualification
@@ -176,6 +200,32 @@ function Get-PackDefinition {
         throw "bootCheck.instanceId $($pack.bootCheck.instanceId) is not a test instance; only 998 and 999 are allowed so storage_1 is never written."
     }
     return $pack
+}
+
+function Select-PackAddon {
+    # Returns the pack.json addon rows named in Names, in pack.json order, or every row when Names
+    # is omitted. Names may arrive as one comma-separated string (how -File passes an array
+    # parameter) or as an array; matching ignores case and returns the row's own pboName. A name
+    # pack.json does not list, a name given twice, or a list that is empty after trimming throws,
+    # so a wrong -Addons stops the build before any packing (release gate decision 1, October 26,
+    # 2026: the artifact subset is a parameter and pack.json is never edited for a release).
+    param(
+        [Parameter(Mandatory)][object]$Pack,
+        [AllowNull()][AllowEmptyCollection()][string[]]$Names
+    )
+
+    $rows = @($Pack.addons)
+    if ($null -eq $Names -or $Names.Count -eq 0) { return $rows }
+    $wanted = @($Names | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($wanted.Count -eq 0) { throw '-Addons is empty; name at least one pboName from pack.json, or omit -Addons to build every addon.' }
+    $known = @($rows | ForEach-Object { $_.pboName })
+    $seen = @{}
+    foreach ($name in $wanted) {
+        if ($known -notcontains $name) { throw ("-Addons names '{0}', which pack.json does not list. Known: {1}." -f $name, ($known -join ', ')) }
+        if ($seen.ContainsKey($name)) { throw "-Addons names '$name' twice." }
+        $seen[$name] = $true
+    }
+    return @($rows | Where-Object { $seen.ContainsKey($_.pboName) })
 }
 
 function Resolve-ToolPath {
@@ -548,13 +598,26 @@ $manifest = Join-Path $logDir 'build.log'
 $exitCode = 1
 
 try {
-    Write-Manifest -LogPath $manifest -Line ("START {0} RepoRoot={1} PS={2} Dev={3} Qualification={4}" -f (Get-Date -Format o), $RepoRoot, $PSVersionTable.PSVersion, [bool]$Dev, [bool]$Qualification)
+    Write-Manifest -LogPath $manifest -Line ("START {0} RepoRoot={1} PS={2} Dev={3} Qualification={4} Addons={5} BootInstanceId={6}" -f (Get-Date -Format o), $RepoRoot, $PSVersionTable.PSVersion, [bool]$Dev, [bool]$Qualification, $(if ($PSBoundParameters.ContainsKey('Addons')) { @($Addons) -join ',' } else { '(all)' }), $(if ($PSBoundParameters.ContainsKey('BootInstanceId')) { $BootInstanceId } else { '(pack.json)' }))
 
     $packRoot = Join-Path $RepoRoot 'mods\own\nimby-pack'
     $pack = Get-PackDefinition -Path (Join-Path $packRoot 'pack.json')
-    $clientAddons = @($pack.addons | Where-Object { -not (Test-AddonServerOnly -Addon $_) })
-    $serverAddons = @($pack.addons | Where-Object { Test-AddonServerOnly -Addon $_ })
-    if ($clientAddons.Count -eq 0) { throw 'pack.json lists no client addons; at least one is needed for the Workshop output.' }
+
+    # Release gate decisions 1 and 2 (October 26, 2026): the addon subset and the boot instance are
+    # parameters, never a pack.json edit. Both are settled and logged before any packing.
+    $selectedAddons = @(Select-PackAddon -Pack $pack -Names $Addons)
+    $addonSource = 'pack.json'
+    if ($PSBoundParameters.ContainsKey('Addons')) { $addonSource = 'parameter' }
+    Write-Manifest -LogPath $manifest -Line ("ADDONS {0} source={1} of={2}" -f (@($selectedAddons | ForEach-Object { $_.pboName }) -join ','), $addonSource, @($pack.addons).Count)
+    $bootInstanceId = [int]$pack.bootCheck.instanceId
+    $instanceSource = 'pack.json'
+    if ($PSBoundParameters.ContainsKey('BootInstanceId')) { $bootInstanceId = $BootInstanceId; $instanceSource = 'parameter' }
+    if (-not (Test-TestInstanceId -InstanceId $bootInstanceId)) { throw "Refusing boot instance $bootInstanceId; only 998 and 999 are test instances, so storage_1 is never written." }
+    Write-Manifest -LogPath $manifest -Line ("BOOT INSTANCE {0} source={1}" -f $bootInstanceId, $instanceSource)
+
+    $clientAddons = @($selectedAddons | Where-Object { -not (Test-AddonServerOnly -Addon $_) })
+    $serverAddons = @($selectedAddons | Where-Object { Test-AddonServerOnly -Addon $_ })
+    if ($clientAddons.Count -eq 0) { throw 'No client addon in this build (every pack.json row, or every -Addons name, is serverOnly); at least one is needed for the Workshop output.' }
     Write-Manifest -LogPath $manifest -Line ("PACK {0} client={1} server={2}" -f $pack.modFolderName, (@($clientAddons | ForEach-Object { $_.pboName }) -join ','), (@($serverAddons | ForEach-Object { $_.pboName }) -join ','))
 
     $devDefinition = $null
@@ -630,7 +693,7 @@ try {
         Write-Manifest -LogPath $manifest -Line "SERVERMOD $serverRoot"
     }
     else {
-        Write-Manifest -LogPath $manifest -Line 'SERVERMOD none (no serverOnly addon in pack.json)'
+        Write-Manifest -LogPath $manifest -Line 'SERVERMOD none (no serverOnly addon in this build)'
     }
 
     # Build: dev harness ----------------------------------------------------
@@ -701,8 +764,8 @@ try {
             $bootMode = 'quick'
             if ($Qualification) { $storageAutoFix = 0; $bootMode = 'qualification' }
             $bootConfig = Join-Path $logDir 'serverDZ.bootcheck.cfg'
-            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId ([int]$boot.instanceId) -StorageAutoFix $storageAutoFix
-            Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $boot.instanceId)))
+            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId $bootInstanceId -StorageAutoFix $storageAutoFix
+            Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $bootInstanceId)))
 
             # Every flagged addon is expected to report under its logPrefix (shared rules 8.2).
             $flags = @(Initialize-SelfTestFlag -ProfilePath $profileDir -Prefix $prefixes)
