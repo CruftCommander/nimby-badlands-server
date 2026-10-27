@@ -25,7 +25,7 @@ Credits. Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Giv
 
 ## Publisher steps (Jeff)
 
-1. Steam > DayZ Tools > Publisher. New item. Source folder: `D:\GitHub\nimby-badlands-server\build\@NIMBY-20261026-214828` (it must contain `addons\`, `keys\`, `mod.cpp`; nothing else).
+1. Steam > DayZ Tools > Publisher. New item. Source folder: `D:\GitHub\nimby-badlands-server\build\@NIMBY-20261026-214828` (it must contain `addons\`, `keys\`, `mod.cpp`; nothing else). Every update from release 1 patch 1 on also carries `meta.cpp` (`publishedid = 3828109139`), which the build writes from `pack.json` `workshopId`; without it the server reports Workshop id 0 and the launcher cannot download the pack (NIMBY-T-061).
 2. Title `NIMBY`, preview `D:\GitHub\nimby-badlands-server\mods\own\nimby-pack\preview.png`, description above, visibility Public, tags as above. Change note: `Release 1: Legs, Hands, Ears, Scrawl, Tack, Greet (build 2026-10-26-214828).`
 3. Publish. Record the item ID below and in the release-gate record (step 7).
 4. HostHavoc panel, service 246248: `Steam Workshop (installed)` > install the item by ID; confirm `@NIMBY\keys\nimby.bikey` was copied to the server `keys\` folder (`Non-Workshop Mods` or the File Manager shows it); if not, upload `build\@NIMBY-20261026-214828\keys\nimby.bikey` to `/keys/` over SFTP.

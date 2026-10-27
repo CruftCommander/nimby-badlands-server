@@ -39,6 +39,7 @@ Check these before reporting that a note "will not pin" or "went into the wall".
 ```
 @NIMBY/
   mod.cpp
+  meta.cpp      Workshop id from pack.json "workshopId"; the launcher reads it to offer the download
   addons/
     NimbyAutorun.pbo
     NimbyAutorun.pbo.nimby.bisign

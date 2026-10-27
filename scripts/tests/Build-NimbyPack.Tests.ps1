@@ -13,7 +13,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
     $repo = Get-TestRepoRoot
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Select-PackAddon', 'Resolve-BootInstance', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
+    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Write-MetaCpp', 'Select-PackAddon', 'Resolve-BootInstance', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
     $packPath = Join-Path $repo 'mods\own\nimby-pack\pack.json'
     $pack = Get-PackDefinition -Path $packPath
     $failurePatterns = @($pack.bootCheck.failurePatterns)
@@ -227,12 +227,51 @@ Describe 'pack.json' {
         { Get-PackDefinition -Path $path } | Should -Throw -ExpectedMessage '*Duplicate logPrefix*'
     }
 
+    It 'carries the published Workshop item id (NIMBY-T-061)' {
+        [string]$pack.workshopId | Should -Be '3828109139'
+    }
+
+    It 'rejects a pack.json without workshopId' {
+        $broken = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
+        $broken.PSObject.Properties.Remove('workshopId')
+        $path = Join-Path $TestDrive 'pack-no-workshopid.json'
+        Set-Content -LiteralPath $path -Value ($broken | ConvertTo-Json -Depth 10) -Encoding utf8
+        { Get-PackDefinition -Path $path } | Should -Throw -ExpectedMessage "*missing 'workshopId'*"
+    }
+
+    It 'rejects workshopId 0, the value the launcher cannot resolve' {
+        $broken = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
+        $broken.workshopId = '0'
+        $path = Join-Path $TestDrive 'pack-workshopid-zero.json'
+        Set-Content -LiteralPath $path -Value ($broken | ConvertTo-Json -Depth 10) -Encoding utf8
+        { Get-PackDefinition -Path $path } | Should -Throw -ExpectedMessage '*workshopId*'
+    }
+
     It 'refuses a boot-check instance that is not 998 or 999' {
         $broken = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
         $broken.bootCheck.instanceId = 1
         $path = Join-Path $TestDrive 'pack-storage1.json'
         Set-Content -LiteralPath $path -Value ($broken | ConvertTo-Json -Depth 10) -Encoding utf8
         { Get-PackDefinition -Path $path } | Should -Throw -ExpectedMessage '*not a test instance*'
+    }
+}
+
+Describe 'Write-MetaCpp (NIMBY-T-061: the launcher reads the Workshop id from meta.cpp)' {
+    It 'writes protocol, publishedid and timestamp, one per line, with no byte order mark' {
+        $root = Join-Path $TestDrive 'mod-meta'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        Write-MetaCpp -ModRoot $root -PublishedId '3828109139' -Timestamp 1793139728
+        $file = Join-Path $root 'meta.cpp'
+        @(Get-Content -LiteralPath $file) | Should -Be @('protocol = 1;', 'publishedid = 3828109139;', 'timestamp = 1793139728;')
+        [System.IO.File]::ReadAllBytes($file)[0] | Should -Be ([byte][char]'p')
+    }
+
+    It 'refuses publishedid 0' {
+        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '0' -Timestamp 1 } | Should -Throw -ExpectedMessage '*not 0*'
+    }
+
+    It 'refuses an id that is not digits' {
+        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '3828109139;x' -Timestamp 1 } | Should -Throw
     }
 }
 

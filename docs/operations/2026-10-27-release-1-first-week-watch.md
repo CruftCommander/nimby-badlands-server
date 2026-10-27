@@ -57,3 +57,28 @@ live check.
   vanilla server. `@NIMBY` is one more loaded directory. No addon references the file.
 - Newest crash file in the profile folder is `crash_2026-10-24_10-01-26.log`, before
   release 1.
+
+## 3. Findings
+
+### NIMBY-T-061 (high): the launcher cannot download the pack; the server reports Workshop id 0
+
+Reported by Jeff, October 27, 2026, 17:09 Central, with a launcher screenshot: players joining
+the live server get "Content required by server: NIMBY" with only Ignore, Find on Steam Workshop
+and Find on the web, instead of the automatic download. No new player can join.
+
+- Cause: the DZSA launcher's query of the live server (`104.192.227.46`, query port 2303) returns
+  `The mod 'NIMBY' has a Steam Workshop ID of '0'`. The server reads a mod's Workshop id from
+  `meta.cpp` in the mod folder (`publishedid`) and reports it to the launcher. The release-1
+  artifact `build\@NIMBY-20261026-214828` holds `addons\`, `keys\` and `mod.cpp` only;
+  `Build-NimbyPack.ps1` never wrote `meta.cpp`, so the Workshop item and the server's copy
+  installed from it have none.
+- Not the cause: the Workshop item. Item 3828109139 is public and subscribable, read October 27
+  signed out and as its author (owner controls shown, no removal notice). The page source holds
+  a hidden `bannedNotification` template on every item; it is not displayed.
+- Live fix (Jeff's approval, Jeff's password): upload a `meta.cpp` with `protocol = 1;`,
+  `publishedid = 3828109139;` and a `timestamp` to `/@NIMBY/meta.cpp` over SFTP, beside
+  `mod.cpp`; it takes effect at the next server start. Verify: the launcher query lists NIMBY
+  with id 3828109139, and a client with no subscription is offered the download.
+- Permanent fix: `pack.json` `workshopId` and `Write-MetaCpp` in `Build-NimbyPack.ps1` (branch
+  `fix/workshop-meta`), so every client build carries `meta.cpp` and the next Workshop update
+  ships it. The PBOs are unchanged by it.
