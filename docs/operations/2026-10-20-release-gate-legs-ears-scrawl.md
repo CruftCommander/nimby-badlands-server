@@ -9,7 +9,7 @@ Prepared October 20, 2026, after the two-client session (records committed at `1
 | Legs | `NimbyAutorun` | Ready after row G-1 | Two-client rows PASS; NIMBY-T-005 fixed. Row G-1 (ladder, solo) runs before the gate; P2-5 (vehicle) and P2-10, P2-11 (dev harness) are waived for release 1 as known gaps (Jeff, October 20, 2026; `docs/testing/2026-10-19-legs-phase1.md`) |
 | Ears | `NimbyEarplugs` | Ready | EP-002 PASS (`docs/testing/2026-10-16-ears-phase0.md`) |
 | Scrawl | `NimbyNotes` | Ready | Second-player read and Phase 2a rows PASS; SC-2a-6 not provable in vanilla (`docs/testing/2026-10-16-scrawl-phase0.md`) |
-| Greet | `NimbyGreet` | Ready after one fix build and the step 0 session (section 4) | Phase 1 closed October 26, 2026 (`docs/testing/2026-10-26-greet-phase1.md`); joins this release per Jeff's October 21, 2026 ruling (plan G2). Before step 5: Jeff reviews `server/profile-overrides/NimbyGreet/greet.json` (`version` 1, `forceShow` false) and `scripts/Test-GreetText.ps1` passes on it |
+| Greet | `NimbyGreet` | Ready after the step 0 session (section 4); the fix build landed October 26, 2026 (`33c53b6`, build `-172241`) | Phase 1 closed October 26, 2026 (`docs/testing/2026-10-26-greet-phase1.md`); joins this release per Jeff's October 21, 2026 ruling (plan G2). Before step 5: Jeff reviews `server/profile-overrides/NimbyGreet/greet.json` (`version` 1, `forceShow` false) and `scripts/Test-GreetText.ps1` passes on it |
 | Tack | `NimbyTack` | Held | NIMBY-T-013 and NIMBY-T-014: mud-brick rows TK-P1 to TK-P10 on `study/tack-t013-t014`. NIMBY-T-011 is closed on the replica; its four `types.xml` rows ship with Tack |
 | Hands | `NimbyHands` | Held | NIMBY-T-010 (high): no transfer completes; feasibility study brief `logs\brief-hands-t010-study-20261020.md` |
 
@@ -39,11 +39,11 @@ Prepared October 20, 2026, after the two-client session (records committed at `1
 
 ## 4. Greet column (plan `docs/plans/2026-10-21-greet-plan.md`, tests G-0 to G-30)
 
-Added October 26, 2026, when Greet Phase 1 closed (record `docs/testing/2026-10-26-greet-phase1.md`, Exit). Plan G2 (Jeff, October 21, 2026): Greet ships with Legs, Ears and Scrawl. Plan G8: its Mods tab replaces their on-connect chat lines (steps 5 and 9). The ids below are Greet's (plan test table), not the Legs row G-1 in section 1. Evidence ids are the Phase 1 record's G-P1 rows. Only G-P1-44 to G-P1-48 ran on build `-153558`, the first with the NIMBY-T-055 to T-058 fixes; that build packed all six addons and was not a `-Qualification` build, so step 2 repeats G-0 on the release artifact. Before step 0, one fix build (Jeff, October 26, 2026: before release 1) carries the five self-review items listed in the plan's Phase 2, with G-7 and G-9 repeated on it.
+Added October 26, 2026, when Greet Phase 1 closed (record `docs/testing/2026-10-26-greet-phase1.md`, Exit). Plan G2 (Jeff, October 21, 2026): Greet ships with Legs, Ears and Scrawl. Plan G8: its Mods tab replaces their on-connect chat lines (steps 5 and 9). The ids below are Greet's (plan test table), not the Legs row G-1 in section 1. Evidence ids are the Phase 1 record's G-P1 rows. Only G-P1-44 to G-P1-48 ran on build `-153558`, the first with the NIMBY-T-055 to T-058 fixes; that build packed all six addons and was not a `-Qualification` build, so step 2 repeats G-0 on the release artifact. Before step 0, one fix build (Jeff, October 26, 2026: before release 1) carries the five self-review items listed in the plan's Phase 2, with G-7 and G-9 repeated on it. Done the same evening: `33c53b6`, build `-172241` (Greet self-test 114 of 114, total 435); G-9 repeated as G-P1-49, G-7 in part as G-P1-50. NIMBY-T-059 (a long body renders about 1,100 characters on the client) was found on that run; it is open and not release-blocking because the release text's longest body is 871 characters.
 
 | Test | What | State | Evidence |
 | --- | --- | --- | --- |
-| G-0 | Self-test | PASS; repeats on the release artifact in step 2 | Build `-153558`: `Greet cases=113 pass=113` |
+| G-0 | Self-test | PASS; repeats on the release artifact in step 2 | Build `-172241`: `Greet cases=114 pass=114` (build `-153558`: 113 of 113) |
 | G-1 | Fresh spawn opens the window | PASS | G-P1-01, G-P1-21 |
 | G-2 | Dismissed: no window on relog | PASS | G-P1-08 |
 | G-3, G-3b | `version` raised with and without `forceShow` | PASS | G-P1-16, G-P1-17 (G-P1-14 void) |
@@ -52,9 +52,9 @@ Added October 26, 2026, when Greet Phase 1 closed (record `docs/testing/2026-10-
 | G-5b | Checkbox starts unticked | Covered, no row of its own | Run 6 spawn screenshots |
 | G-6, G-6b | Pause-menu button; Insert opens and closes | PASS | G-P1-06, G-P1-05, G-P1-12, G-P1-22, G-P1-43 |
 | G-6c | Rebind the hotkey | In part; waived for release 1 (Jeff, October 26, 2026) | G-P0-47 (Phase 0 probe): unbound, Insert did nothing; rebound to Insert, it opened. A different key was not tried |
-| G-7 | Malformed `greet.json` (test server only) | PASS on a running server; boot in part, waived for release 1 (Jeff, October 26, 2026); repeated after the fix build | G-P1-48 (one engine error, NIMBY-T-056 fixed); G-P1-37 (boot serves the `.lkg`, but on the build before the fix, two engine errors); the boot was not repeated after the fix |
+| G-7 | Malformed `greet.json` (test server only) | PASS on a running server (repeated in part on the fix build); boot in part, waived for release 1 (Jeff, October 26, 2026) | G-P1-48 (one engine error, NIMBY-T-056 fixed); G-P1-50 on build `-172241` (one re-read: one engine error, one `invalid` line, one fallback line, served from memory); G-P1-37 (boot serves the `.lkg`, on the build before NIMBY-T-056, two engine errors); the boot, with a good and with a bad `.lkg`, was not repeated on the fix build |
 | G-8 | Waits behind another menu | In part; waived for release 1 (Jeff, October 26, 2026) | G-P1-15 (behind the pause menu), G-P1-43 (through the respawn menus). The connecting-dialogue scenario and a give-up at `openRetrySeconds` on current code were not run (the run 5 give-up was the NIMBY-T-051 defect) |
-| G-9 | Oversized text | PASS; repeated after the fix build | G-P1-45 (NIMBY-T-055 fixed) |
+| G-9 | Oversized text | PASS on the server (caps, log lines, serve); repeated on the fix build. The client shows about 1,100 characters of a 4,000-character body, NIMBY-T-059, open and not release-blocking (the release text's longest body is 871 characters) | G-P1-45 (NIMBY-T-055 fixed), G-P1-49 (build `-172241`: one load, no re-cap on the re-read, `.lkg` rewritten from the parsed text) |
 | G-10 | Boot without Greet on storage that ran with it | Owed: runs in step 2a | - |
 | G-11, G-12 | Discord Open and Copy | PASS | G-P1-04 |
 | G-13 | Sixteen sections, a 4,000-character body, wheel and trigger scroll | PASS for the wheel; triggers owed with G-17b | G-P1-45 (16 tabs, Long body cut to 4,000), G-P1-46 (Page keys) |
