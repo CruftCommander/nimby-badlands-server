@@ -3,6 +3,7 @@
     "modName": "NIMBY",
     "author": "Jeff Fabish",
     "keyAuthority": "nimby",
+    "workshopId": "3828109139",
     "includePatterns": [
         "*.c",
         "*.cpp",

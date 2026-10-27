@@ -13,8 +13,10 @@
          is inside the PBO.
     DayZ Tools Addon Builder is not used: its DayZ build ignores command-line arguments and
     opens its window (observed October 14, 2026).
-    Then copies the public key into @NIMBY\keys, writes mod.cpp, and verifies every signature with
-    DayZ Tools DSCheckSignatures. The checker is calibrated on each run against a copy of a PBO
+    Then copies the public key into @NIMBY\keys, writes mod.cpp and meta.cpp, and verifies every
+    signature with DayZ Tools DSCheckSignatures. meta.cpp carries pack.json "workshopId": the
+    server reports it to the DayZ launcher, which then offers players the download; without it
+    the server reports 0 and the launcher only offers "Find on Steam Workshop" (NIMBY-T-061). The checker is calibrated on each run against a copy of a PBO
     with no signature: if it does not flag that copy, its verdict on the real build is not trusted
     and the result is UNKNOWN. Then (unless -SkipBootCheck)
     starts a local DayZ server with @NIMBY, scans its logs for script errors, and stops it.
@@ -159,11 +161,14 @@ function Get-PackDefinition {
     if (-not (Test-Path -LiteralPath $Path)) { throw "pack.json not found at '$Path'." }
     $pack = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json
 
-    foreach ($field in 'modFolderName', 'modName', 'author', 'keyAuthority', 'includePatterns', 'addons', 'bootCheck') {
+    foreach ($field in 'modFolderName', 'modName', 'author', 'keyAuthority', 'workshopId', 'includePatterns', 'addons', 'bootCheck') {
         if ($null -eq $pack.PSObject.Properties[$field]) { throw "pack.json is missing '$field'." }
     }
     if (@($pack.addons).Count -eq 0) { throw 'pack.json lists no addons.' }
     if ($pack.keyAuthority -notmatch '^[A-Za-z0-9_]+$') { throw "keyAuthority '$($pack.keyAuthority)' must be letters, digits, or underscore." }
+    # workshopId is the published Workshop item the client output is uploaded to; meta.cpp carries
+    # it (NIMBY-T-061). A string, so no JSON number type can round or reformat it.
+    if ([string]$pack.workshopId -notmatch '^[1-9][0-9]{0,19}$') { throw "workshopId '$($pack.workshopId)' must be the published Workshop item id: digits, not 0." }
 
     # logPrefix is the <name> in the addon's "[NIMBY][<name>]" log lines; the self-test gate maps
     # each flagged code prefix to it, so it must be present and unique.
@@ -578,6 +583,28 @@ function Write-ModCpp {
     Set-Content -LiteralPath (Join-Path $ModRoot 'mod.cpp') -Value $modCpp -Encoding ascii
 }
 
+function Write-MetaCpp {
+    # meta.cpp names the Workshop item a mod folder belongs to. The server reads it at start and
+    # reports publishedid to the DayZ launcher, which subscribes the player to that item. A server
+    # folder without it reports 0, and the launcher only offers "Find on Steam Workshop"
+    # (NIMBY-T-061, October 27, 2026). Written into the client output only: the Workshop item
+    # carries it, and the server's copy is installed from the Workshop item.
+    param(
+        [Parameter(Mandatory)][string]$ModRoot,
+        [Parameter(Mandatory)][string]$PublishedId,
+        [Parameter(Mandatory)][long]$Timestamp
+    )
+
+    if ($PublishedId -notmatch '^[1-9][0-9]{0,19}$') { throw "Workshop id '$PublishedId' must be digits, not 0." }
+    $metaCpp = @(
+        'protocol = 1;',
+        "publishedid = $PublishedId;",
+        "timestamp = $Timestamp;"
+    )
+    # ascii for the same reason as mod.cpp: no BOM under 5.1.
+    Set-Content -LiteralPath (Join-Path $ModRoot 'meta.cpp') -Value $metaCpp -Encoding ascii
+}
+
 function Invoke-SignatureCheck {
     # Runs DSCheckSignatures on one output and the unsigned control, and returns the verdict.
     param(
@@ -694,7 +721,10 @@ try {
     }
     Copy-Item -LiteralPath $releaseKey.PublicKey -Destination $keysOut
     Write-ModCpp -ModRoot $modRoot -Name $pack.modName -Author $pack.author -Overview "$($pack.modName) server pack"
+    $metaTimestamp = ([DateTimeOffset](Get-Date)).ToUnixTimeSeconds()
+    Write-MetaCpp -ModRoot $modRoot -PublishedId ([string]$pack.workshopId) -Timestamp $metaTimestamp
     Write-Manifest -LogPath $manifest -Line "MOD $modRoot"
+    Write-Manifest -LogPath $manifest -Line ("META publishedid={0}" -f $pack.workshopId)
 
     # Build: server-only output (shared rules 8.1) ---------------------------
     $serverRoot = $null
