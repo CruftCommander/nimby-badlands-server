@@ -77,6 +77,20 @@ class NimbyEarplugsLevel
         return savedLevel;
     }
 
+    // E15: the baseline is the value DayZGame.DeferredInit cached once per client process
+    // (g_Game.m_volume_sound, DayZGame.c:1147), the same value vanilla writes back on respawn
+    // and on waking. The live channel is the fallback for a cache that reads 0: the channel
+    // is 0 after a death-screen or unconscious exit in the same process (review row 21), so
+    // reading it first would start a rejoin on the E13 path with a reduced baseline.
+    static float PickBaseline(float cached, float scene)
+    {
+        if (cached > 0)
+        {
+            return cached;
+        }
+        return scene;
+    }
+
     // The saved level Ears works from (E13, E14). The populated saved field, the launch value
     // of the channel read once in OnInit, wins. When it reads 0
     // the scene level stands in: captured while earplugs are out and held while they are in,
@@ -227,6 +241,10 @@ class NimbyEarplugsLevel
         float zeroApplied = z.PutIn(zeroOut);
         float zeroIn = z.ResolveSaved(0, 0);
         failures += SelfTestCase(results, "legitimate zero stays zero", Near(zeroOut, 0) && Near(zeroApplied, 0) && Near(zeroIn, 0));
+
+        // E15: the cached launch value wins over a channel that death left at 0; a cache of 0 falls back to the channel.
+        failures += SelfTestCase(results, "cached launch value wins over a silenced channel", Near(PickBaseline(1.0, 0), 1.0) && Near(PickBaseline(0.8, 0.12), 0.8));
+        failures += SelfTestCase(results, "zero cache falls back to the channel", Near(PickBaseline(0, 0.6), 0.6) && Near(PickBaseline(0, 0), 0));
 
         // E12 and E7: the press gates. Menu ids: chat input 17, inventory 11 (constants.c:192, :186).
         failures += SelfTestCase(results, "press blocked while a menu is open", !PressAllowed(17) && !PressAllowed(11) && !PressAllowed(0));
