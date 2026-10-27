@@ -72,6 +72,11 @@ and Find on the web, instead of the automatic download. No new player can join.
   artifact `build\@NIMBY-20261026-214828` holds `addons\`, `keys\` and `mod.cpp` only;
   `Build-NimbyPack.ps1` never wrote `meta.cpp`, so the Workshop item and the server's copy
   installed from it have none.
+- Correction found during the fix: the server's `@NIMBY` folder did hold a `meta.cpp` (84 bytes,
+  written by the panel's Manual Workshop Installer at the release-1 install) reading
+  `protocol = 1;`, `publishedid = 0;`, `name = "NIMBY";`, `timestamp = 5250972744356698013;`.
+  The installer writes id 0 when the Workshop content carries no `meta.cpp`; the launcher reads
+  that 0.
 - Not the cause: the Workshop item. Item 3828109139 is public and subscribable, read October 27
   signed out and as its author (owner controls shown, no removal notice). The page source holds
   a hidden `bannedNotification` template on every item; it is not displayed.
@@ -79,6 +84,21 @@ and Find on the web, instead of the automatic download. No new player can join.
   `publishedid = 3828109139;` and a `timestamp` to `/@NIMBY/meta.cpp` over SFTP, beside
   `mod.cpp`; it takes effect at the next server start. Verify: the launcher query lists NIMBY
   with id 3828109139, and a client with no subscription is offered the download.
-- Permanent fix: `pack.json` `workshopId` and `Write-MetaCpp` in `Build-NimbyPack.ps1` (branch
-  `fix/workshop-meta`), so every client build carries `meta.cpp` and the next Workshop update
-  ships it. The PBOs are unchanged by it.
+- Permanent fix: `pack.json` `workshopId` and `Write-MetaCpp` in `Build-NimbyPack.ps1` (PR #2,
+  merged October 27 as d1a40b1), so every client build carries `meta.cpp` and the next Workshop
+  update ships it. The PBOs are unchanged by it.
+- **Applied live, October 27, 2026** (Jeff's approval; Jeff typed the password). The running
+  server holds `meta.cpp` open: a delete over SFTP failed with `I/O error` and an overwrite with
+  `File is already exclusively open.` at 18:40 to 18:44 Central. With 0 of 80 players online,
+  the panel's Stop at 18:45 (a kill, by Jeff's ruling), the upload at 18:46:38
+  (`logs\upload-meta-20261027.ps1`; the old file backed up in
+  `logs\live-meta-backup-20261027-184631\`; read back identical: `protocol = 1;`,
+  `publishedid = 3828109139;`, `name = "NIMBY";`, `timestamp = 1793139728;`), Start at 18:47:00.
+  Down about 2 minutes.
+- **Verified 18:49 Central:** the DZSA launcher query returns `status 0`, `nasdara`, `0/80`,
+  version 1.30.164200, mods `NIMBY` with `steamWorkshopId 3828109139`.
+- Follow-ups: (1) after the patch-1 Workshop update, re-run the launcher query: if the installer
+  writes id 0 again despite the shipped `meta.cpp`, repeat the stop-upload-start; (2)
+  `Write-MetaCpp` writes no `name` line while the installer's file has one; add it in the next
+  tooling change; (3) changing `meta.cpp` needs the server stopped, so a live fix is a panel
+  Stop and Start, not an upload alone.
