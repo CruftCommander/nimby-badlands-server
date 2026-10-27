@@ -1,0 +1,57 @@
+# Release 1 first-week watch
+
+Started October 27, 2026. Covers the week after release 1 went live (October 26, 2026,
+23:57:31 Central; see `docs/operations/2026-10-20-release-gate-legs-ears-scrawl.md`, step 9
+and the post-release restart check).
+
+## 1. Scope
+
+After each 12-hour restart (the panel's 12:00 AM and 12:00 PM Central tasks; the panel clock
+is 2 hours behind Central), pull the live profile folder with
+`scripts\Get-ServerLogs.ps1` (Jeff runs it; it prompts for the panel password) and read every
+boot since the previous pull for:
+
+| Check | Where | Pattern | Clean means |
+| --- | --- | --- | --- |
+| Script errors | `script_*.log`, `*.RPT` | `SCRIPT (E)` | 0 |
+| Hands refusals | `script_*.log` | `[NIMBY][Hands] ... state=REFUSED` | 0, or every refusal explained by its `detail=` |
+| Greet text problems | `script_*.log` | `[NIMBY][Greet] ... invalid` | 0; each connect shows one `serve ... manual=false` |
+| Tack note persistence | `script_*.log` | `[NIMBY][Tack] door load result=` | `restored` or `found` for every note pinned before the restart; no `no-building` or `invalid-cleared` |
+| Storage | `*.RPT` | `Scripted variables corrupted`, failed storage items | 0 / 0 |
+| Badlands noise baseline | `*.RPT` | `[CE][LoadPrototype]` 7 lines, spawn-point 6 lines | Same counts as every boot since October 26 |
+
+A pull is read-only: nothing on the server changes. Each pull gets its own
+`logs\server-<stamp>\` folder (git-ignored).
+
+Hands NIMBY-T-010 (two-client transfer never run in a test) and the Scrawl live write are
+the open items this watch exists to catch. A first live report of a failed hand-over goes to
+T-010; the first Scrawl note written on live and read after a restart closes the Scrawl
+live check.
+
+## 2. Pulls
+
+| # | Pull (Central) | Boots covered (panel clock) | `SCRIPT (E)` | Hands REFUSED | Greet invalid / serves | Tack door load | Storage | Players | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | October 27, 2026, 10:28 (`logs\server-20261027-102800\`, 223 files, 223 OK) | 21:57:31, 21:59:36, 22:01:18, 22:15:40 (the 22:15:40 boot still running, 10 h up; the noon restart had not fired) | 0 / 0 / 0 / 0 | 0 (no transfer attempted) | 0 / 0, 0, 2, 3 | 22:15:40: 1 `restored` (`NimbyTack_PinnedNote_Tape`, door 3, `Land_Workshop5`); no new pins | 0 / 0 | One connection since 23:57: `Road Dog` 22:31:01 to about 22:33 (panel), 598 of 600 one-minute samples `Players: 0` | Clean, idle. Hands, Scrawl and the loot changes have had no exposure |
+
+### Pull 1 notes, October 27, 2026
+
+- Overnight boot 22:15:40 (panel): `Used memory` 3,583,548 KB at 22:17, 4,126,548 KB at
+  23:56, 4,134,153 KB at 8:16; flat after the first 100 minutes. `Average server FPS`
+  about 3,600 idle (the 0.05 sample at 22:17:18 is the first measurement after
+  `Player connect enabled`, on every boot).
+- Greet serves on the overnight boot: `serve ... manual=false` 22:31:03 (on connect),
+  `manual=true` 22:31:48 and 22:32:34 (reopened), all `asked=english served=english
+  version=1 chunks=5 bytes=4778`.
+- `error_*.log` for the four release boots is `ENTITY (W)` lines on `dz\structures_takistan\`
+  and `dz\structures_bliss\` models (`config class missing`, `Unknown object class`) plus
+  the `ENTITY (E)` `LargeTentClutterCutter`, `ManType` and `Inventory_BaseType` inheritance
+  lines; every `(E)` text also appears in the pre-release boot `error_2026-10-26_10-01-25.log`.
+  Badlands engine noise, not NIMBY.
+- Checked and dismissed: `ANIMATION (E): Can't load @NIMBY/Anims/cfg/skeletons.anim.xml`
+  at 22:15:52 on every release boot. The engine probes every loaded mod and DLC directory
+  for that file; the same boot logs the same line for `nasdara/` and `sakhal/`, and
+  `docs/baselines/2026-10-14-vanilla-server-logs.md` records the `sakhal` line on the
+  vanilla server. `@NIMBY` is one more loaded directory. No addon references the file.
+- Newest crash file in the profile folder is `crash_2026-10-24_10-01-26.log`, before
+  release 1.
