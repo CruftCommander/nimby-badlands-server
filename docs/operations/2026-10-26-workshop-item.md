@@ -19,7 +19,7 @@ Server pack for NIMBY | HARDCORE | BADLANDS | 1PP (Nasdara). Required to join th
 
 No client-side settings to edit; no other items required.
 
-Source is public: https://github.com/CruftCommander/nimby-badlands-server (MIT). Issues and ideas: the NIMBY Discord, https://discord.gg/bQDNepCRF.
+Source is public: https://github.com/CruftCommander/nimby-badlands-server (MIT). Issues and ideas: the NIMBY Discord, https://discord.gg/kH3eJ5mdEv (the invite in the reviewed Greet text; the panel hostname shows discord.gg/bQDNepCRF, Jeff confirms which is current).
 
 Credits. Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Give&Take by affenb3rt (Workshop 2903112334), repacked and modified with the author's stated permission; each fork's NOTICE in the repository lists every change. Everything else is written for this server.
 
