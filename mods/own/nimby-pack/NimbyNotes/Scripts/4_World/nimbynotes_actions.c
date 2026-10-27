@@ -341,14 +341,14 @@ modded class ActionWritePaper
     // any sheet in its bubble as the target (review SCRAWL-R2-01).
     protected bool NimbyNotesTargetInReach(PlayerBase player, ActionTarget target)
     {
-        Object obj = target.GetObject();
-        if (!obj)
+        ItemBase item = ItemBase.Cast(target.GetObject());
+        if (!item)
         {
             return false;
         }
-        bool held = obj.GetHierarchyRootPlayer() == player;
-        float fromFeet = vector.Distance(obj.GetPosition(), player.GetPosition());
-        float fromHead = vector.Distance(obj.GetPosition(), MiscGameplayFunctions.GetPlayerHeadPosition(player));
+        bool held = item.GetHierarchyRootPlayer() == player;
+        float fromFeet = vector.Distance(item.GetPosition(), player.GetPosition());
+        float fromHead = vector.Distance(item.GetPosition(), MiscGameplayFunctions.GetPlayerHeadPosition(player));
         return NimbyNotesRules.WriteTargetInReach(held, fromFeet, fromHead);
     }
 
