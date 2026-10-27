@@ -1,6 +1,6 @@
 # Give&Take permission capture
 
-**Status: captured October 26, 2026, from the live Workshop page; awaiting Jeff's approval below (shared rules 9.3; Hands plan Phase 2, CR-007). Jeff ruled on October 26, 2026 that the capture precedes the first Workshop release even though Hands is not in it.**
+**Status: captured October 26, 2026, from the live Workshop page and approved by Jeff the same evening (shared rules 9.3; Hands plan Phase 2, CR-007 closed). Jeff ruled on October 26, 2026 that the capture precedes the first Workshop release even though Hands is not in it.**
 
 | Field | Value |
 | --- | --- |
@@ -10,7 +10,7 @@
 | Page dates shown | Posted Dec 17, 2022 @ 12:41pm; Updated Apr 1, 2023 @ 10:40am |
 | Capture date | October 26, 2026 (evening, Central) |
 | Captured by | Claude (Cowork session, Claude in Chrome on Jeff's machine), text read from the page's description |
-| Approved by Jeff Fabish | PENDING |
+| Approved by Jeff Fabish | YES, October 26, 2026 (Cowork session; capture read back to Jeff and accepted) |
 
 ## Permission text (verbatim from the Workshop description)
 
