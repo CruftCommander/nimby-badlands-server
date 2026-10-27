@@ -1,1 +1,1 @@
-Copied 2026-10-16T00:04:14.2722328-05:00 from D:\HostHavoc\NIMBY Badlands\104.192.227.46_2302 (mission dayzOffline.nasdara) by Sync-LiveReplica.ps1. Live loot reference; edit types.xml in the HostHavoc panel, not here.
+Copied 2026-10-26T21:20:51.5779065-05:00 from D:\HostHavoc\NIMBY Badlands\104.192.227.46_2302 (mission dayzOffline.nasdara) by Sync-LiveReplica.ps1. Live loot reference; edit types.xml in the HostHavoc panel, not here.

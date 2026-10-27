@@ -228,6 +228,25 @@ function Select-PackAddon {
     return @($rows | Where-Object { $seen.ContainsKey($_.pboName) })
 }
 
+function Resolve-BootInstance {
+    # Returns the boot-check instance as an object with Id and Source ('parameter' when an override
+    # was given, else 'pack.json'). Throws unless the result is a test instance (998 or 999), so
+    # storage_1 is never written (shared rules, section 8). Override is $null when -BootInstanceId
+    # was not passed. The caller stores the result under a name that is not the parameter's:
+    # PowerShell variable names ignore case, so a local $bootInstanceId IS $BootInstanceId, and on
+    # October 26, 2026 that collision made -BootInstanceId 998 boot instance 999 (NIMBY-T-060).
+    param(
+        [Parameter(Mandatory)][object]$Pack,
+        [AllowNull()][Nullable[int]]$Override
+    )
+
+    $id = [int]$Pack.bootCheck.instanceId
+    $source = 'pack.json'
+    if ($null -ne $Override) { $id = [int]$Override; $source = 'parameter' }
+    if (-not (Test-TestInstanceId -InstanceId $id)) { throw "Refusing boot instance $id; only 998 and 999 are test instances, so storage_1 is never written." }
+    return [PSCustomObject]@{ Id = $id; Source = $source }
+}
+
 function Resolve-ToolPath {
     # Returns the first existing candidate path, or $null.
     param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Candidates)
@@ -609,11 +628,10 @@ try {
     $addonSource = 'pack.json'
     if ($PSBoundParameters.ContainsKey('Addons')) { $addonSource = 'parameter' }
     Write-Manifest -LogPath $manifest -Line ("ADDONS {0} source={1} of={2}" -f (@($selectedAddons | ForEach-Object { $_.pboName }) -join ','), $addonSource, @($pack.addons).Count)
-    $bootInstanceId = [int]$pack.bootCheck.instanceId
-    $instanceSource = 'pack.json'
-    if ($PSBoundParameters.ContainsKey('BootInstanceId')) { $bootInstanceId = $BootInstanceId; $instanceSource = 'parameter' }
-    if (-not (Test-TestInstanceId -InstanceId $bootInstanceId)) { throw "Refusing boot instance $bootInstanceId; only 998 and 999 are test instances, so storage_1 is never written." }
-    Write-Manifest -LogPath $manifest -Line ("BOOT INSTANCE {0} source={1}" -f $bootInstanceId, $instanceSource)
+    $instanceOverride = $null
+    if ($PSBoundParameters.ContainsKey('BootInstanceId')) { $instanceOverride = $BootInstanceId }
+    $bootInstance = Resolve-BootInstance -Pack $pack -Override $instanceOverride
+    Write-Manifest -LogPath $manifest -Line ("BOOT INSTANCE {0} source={1}" -f $bootInstance.Id, $bootInstance.Source)
 
     $clientAddons = @($selectedAddons | Where-Object { -not (Test-AddonServerOnly -Addon $_) })
     $serverAddons = @($selectedAddons | Where-Object { Test-AddonServerOnly -Addon $_ })
@@ -764,8 +782,8 @@ try {
             $bootMode = 'quick'
             if ($Qualification) { $storageAutoFix = 0; $bootMode = 'qualification' }
             $bootConfig = Join-Path $logDir 'serverDZ.bootcheck.cfg'
-            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId $bootInstanceId -StorageAutoFix $storageAutoFix
-            Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $bootInstanceId)))
+            Write-BootConfig -Path $bootConfig -Mission $boot.mission -InstanceId $bootInstance.Id -StorageAutoFix $storageAutoFix
+            Write-Manifest -LogPath $manifest -Line ("BOOT MODE {0} storageAutoFix={1} storage={2}" -f $bootMode, $storageAutoFix, (Join-Path $ServerPath ("mpmissions\{0}\storage_{1}" -f $boot.mission, $bootInstance.Id)))
 
             # Every flagged addon is expected to report under its logPrefix (shared rules 8.2).
             $flags = @(Initialize-SelfTestFlag -ProfilePath $profileDir -Prefix $prefixes)

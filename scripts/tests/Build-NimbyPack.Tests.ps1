@@ -13,7 +13,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
     $repo = Get-TestRepoRoot
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Select-PackAddon', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
+    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Select-PackAddon', 'Resolve-BootInstance', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
     $packPath = Join-Path $repo 'mods\own\nimby-pack\pack.json'
     $pack = Get-PackDefinition -Path $packPath
     $failurePatterns = @($pack.bootCheck.failurePatterns)
@@ -278,6 +278,38 @@ Describe 'Select-PackAddon (release gate decision 1: the artifact subset is a pa
 
     It 'throws on a list that is empty after trimming instead of silently building everything' {
         { Select-PackAddon -Pack $pack -Names @(' ', ',') } | Should -Throw -ExpectedMessage '*-Addons is empty*'
+    }
+}
+
+Describe 'Resolve-BootInstance (release gate decision 2: the boot instance is a parameter)' {
+    It 'uses pack.json bootCheck.instanceId when no override is given' {
+        $result = Resolve-BootInstance -Pack $pack -Override $null
+        $result.Id | Should -Be ([int]$pack.bootCheck.instanceId)
+        $result.Source | Should -Be 'pack.json'
+    }
+
+    It 'lets -BootInstanceId 998 override a pack.json value of 999 (NIMBY-T-060: the first cut booted 999 on a 998 request)' {
+        $copy = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
+        $copy.bootCheck.instanceId = 999
+        $result = Resolve-BootInstance -Pack $copy -Override 998
+        $result.Id | Should -Be 998
+        $result.Source | Should -Be 'parameter'
+    }
+
+    It 'lets -BootInstanceId 999 override a pack.json value of 998' {
+        $copy = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
+        $copy.bootCheck.instanceId = 998
+        (Resolve-BootInstance -Pack $copy -Override 999).Id | Should -Be 999
+    }
+
+    It 'refuses an override that is not a test instance' {
+        { Resolve-BootInstance -Pack $pack -Override 1 } | Should -Throw -ExpectedMessage '*only 998 and 999*'
+    }
+
+    It 'never stores the result under the parameter name (PowerShell variable names ignore case)' {
+        $text = Get-Content -LiteralPath (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Raw
+        $assignments = [regex]::Matches($text, '(?im)^\s*\$bootinstanceid\s*=')
+        $assignments.Count | Should -Be 0 -Because 'a local $bootInstanceId is the same variable as the $BootInstanceId parameter'
     }
 }
 
