@@ -45,3 +45,5 @@ Order in game: S6-01 to S6-03 on join, then Legs and Ears, Scrawl, Tack, Hands, 
 Build `@NIMBY-20261026-214828` SUMMARY PASS with 480 self-test cases. In game, solo (Jeff, D), 21:50 to 22:02, then two boots without a player. Server-side: 0 `SCRIPT (E)`, 0 `Scripted variables corrupted` across the session boot, the artifact reboot, and the vanilla boot of the same storage. Evidenced PASS: Greet S6-01, S6-02; Legs S6-04, S6-05; Ears S6-06, S6-07; Tack S6-13, S6-15 (in part), S6-17; the two boots S6-24, S6-25 on their RPT criteria. NOT RUN: Greet S6-03; Scrawl S6-08 to S6-11 (no pen); Tack S6-12, S6-14, S6-16, S6-18, S6-19; Hands S6-20 to S6-23 (one player).
 
 Jeff's declaration, 22:06: the six addons work together; each mod's own record carries its individual evidence; he calls the collective session a pass. Recorded as his ruling. Claude's note for the scope decision: Hands has no transfer evidence on this build and NIMBY-T-010 (high, no transfer completes) is open; the other five have evidence tonight or in their records.
+
+Release 1 shipped on this artifact October 27, 2026, 00:01 Central (gate record steps 5 to 9).
