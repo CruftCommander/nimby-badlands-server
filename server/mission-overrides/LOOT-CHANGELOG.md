@@ -6,7 +6,7 @@ Status values: DRAFT (written, not on live), APPLIED <date, restart> (on live), 
 
 ## Release 1 batch (ruled October 26, 2026; target: the release restart)
 
-Ruled by: Jeff Fabish. Drafted by: Claude (this session), from the live files mirrored October 26, 2026, 21:18. Status: DRAFT. Reference: `docs/operations/2026-10-26-release-1-loot-update.md`.
+Ruled by: Jeff Fabish. Drafted by: Claude (this session), from the live files mirrored October 26, 2026, 21:18. Status: **APPLIED October 26, 2026, 23:47, release 1 restart (server started 23:57)**, by Jeff (SFTP upload with Posh-SSH) from the staged set `D:\DayZServer\_release1-upload\` built by Claude; backups: panel `manual-backup-2026-10-26_21-03.zip` and mirror zip `D:\DayZServer\_backups\live-pre-release1-20261026-2318.zip`. The `server/live/` reference copies move forward at the next `Sync-LiveReplica.ps1` run. Reference: `docs/operations/2026-10-26-release-1-loot-update.md`.
 
 | File | Entry | Before (live) | After | Why |
 | --- | --- | --- | --- | --- |

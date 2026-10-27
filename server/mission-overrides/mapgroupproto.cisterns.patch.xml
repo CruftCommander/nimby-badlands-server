@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
-  Cistern (water) truck wrecks, release 1 (Jeff, October 26, 2026, 22:38). DRAFT - not applied.
+  Cistern (water) truck wrecks, release 1 (Jeff, October 26, 2026, 22:38). APPLIED October 26, 2026, 23:47 (release 1 restart); was DRAFT - not applied.
   In mpmissions/dayzOffline.nasdara/mapgroupproto.xml, for the two groups named below, ADD the
   two <usage> lines and the two <category> lines marked "added"; keep every <point>, the dispatch
   block and the Industrial usage. Live (mirrored October 26, 2026, 21:18): usage Industrial only;

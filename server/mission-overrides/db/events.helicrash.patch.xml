@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
-  Helicopter crash sites, release 1 (Jeff, October 26, 2026, 22:38: levers 1 and 2). DRAFT - not
+  Helicopter crash sites, release 1 (Jeff, October 26, 2026, 22:38: levers 1 and 2). APPLIED October 26, 2026, 23:47 (release 1 restart); was DRAFT - not
   applied. REPLACES the StaticHeliCrash event in mpmissions/dayzOffline.nasdara/db/events.xml at
   the release restart. Live (mirrored October 26, 2026, 21:18): two wreck children, each min 2
   max 6, lootmin 10 lootmax 15, so 4 to 12 sites at once with 10 to 15 items each. Patched: each

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
   Release 1 loot rows (Jeff's rulings, October 26, 2026, 22:27 and the /decide pass at 22:38;
-  docs/operations/2026-10-26-release-1-loot-update.md). DRAFT - not applied to the live server.
+  docs/operations/2026-10-26-release-1-loot-update.md). APPLIED October 26, 2026, 23:47 (release 1 restart); was DRAFT - not applied to the live server.
   Applies at the release restart (gate step 5) together with types.scrawl.patch.xml and
   types.tack.patch.xml, with the live types.xml backed up first. Each <type> below REPLACES the
   row of the same name in mpmissions/dayzOffline.nasdara/db/types.xml; only nominal and min
