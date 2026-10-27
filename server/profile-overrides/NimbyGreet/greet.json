@@ -117,16 +117,18 @@
           "body": [
             "# Mods",
             "",
-            "Everything comes in one Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls under the NIMBY tab.",
+            "One Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls, NIMBY tab.",
             "",
             "| Mod | What it does |",
             "| --- | --- |",
-            "| Legs | Autorun. Double-tap Left Shift to start; any movement, fire, or raise input stops it. Keeps swimming until you take control back |",
-            "| Ears | Earplugs. Press N to lower effect volume, press again to restore. Voice chat is unaffected |",
-            "| Scrawl | Notes. Paper stacks to 5. With a pen in your hands, drop a sheet on it (or the pen on the sheet) and hold the action key to write; hold left mouse to read. Untouched notes despawn after 30 days |",
+            "| Legs | Autorun. Double-tap Left Shift; any move, fire, or raise input stops it |",
+            "| Ears | Earplugs. N lowers effect volume, N again restores. Voice chat unaffected |",
+            "| Scrawl | Notes. Pen in hands, drop a sheet on it, hold the action key to write; hold left mouse to read. Paper stacks to 5; untouched notes last 30 days |",
             "| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |",
+            "| Hands | Hold an item, press O to offer it; they take it from your hands. Empty hands and O asks for theirs. Bind Hands: open or close pockets to let others put items in your pockets |",
+            "| Tack | Pin a sheet to a wall: hammer in hands with a nail in inventory, or tape, epoxy, or a knife in hands; look at the wall, hold the action key. Take down returns the sheet worn; the third ruins it |",
             "",
-            "Coming later: Hands (hand an item to another player; O to offer), Tack (pin notes to walls), and the admin tool. The Discord mod-roadmap channel has the current list."
+            "Coming later: the admin tool; see the Discord mod-roadmap channel."
           ]
         },
         {

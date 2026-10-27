@@ -1,6 +1,6 @@
 # Release 1 loot update (October 26, 2026)
 
-Jeff's ruling, October 26, 2026, 22:27: the first release bundles a loot-economy update, applied in one edit at the release restart (gate step 5, `docs/operations/2026-10-20-release-gate-legs-ears-scrawl.md`). Live values below were read from `server/live/db/types.xml`, `server/live/db/events.xml` and the replica's `mapgroupproto.xml`, all mirrored from live on October 26, 2026, 21:18. Proposed numbers are Claude's arithmetic on Jeff's percentages, rounded to the nearest whole number; Jeff rules each row before the panel edit. Nothing here is applied yet.
+Jeff's ruling, October 26, 2026, 22:27: the first release bundles a loot-economy update, applied in one edit at the release restart (gate step 5, `docs/operations/2026-10-20-release-gate-legs-ears-scrawl.md`). Live values below were read from `server/live/db/types.xml`, `server/live/db/events.xml` and the replica's `mapgroupproto.xml`, all mirrored from live on October 26, 2026, 21:18. Proposed numbers are Claude's arithmetic on Jeff's percentages, rounded to the nearest whole number. **Ruled by Jeff, October 26, 2026, 22:38 to 22:45 (`/decide`):** Paper 30 / 15 with the 30-day lifetime; the Luger magazine takes the same -33% as the pistol; the 10rnd MAG-C is `Mag_CMAG_10Rnd`; helicopter crashes take all three levers; cistern trucks gain `Village` and `Farm`. Patch files: `server/mission-overrides/db/types.release1-loot.patch.xml`, `server/mission-overrides/db/events.helicrash.patch.xml`, `server/mission-overrides/mapgroupproto.cisterns.patch.xml`, plus the existing `types.scrawl.patch.xml` and `types.tack.patch.xml`. Nothing is applied to live yet.
 
 ## 1. `types.xml` rows (HostHavoc panel, `mpmissions/dayzOffline.nasdara/db/types.xml`)
 
@@ -23,7 +23,7 @@ Jeff's ruling, October 26, 2026, 22:27: the first release bundles a loot-economy
 
 ## 3. Water (cistern) trucks: `mapgroupproto.xml`, not `types.xml`
 
-The water trucks are the proto groups `Land_Wreck_Truck01_Aban1_Cistern_DE` (4 points, one container, lootmax 4 and 2) and `Land_Wreck_Truck01_Aban2_Cistern_DE` (5 points, lootmax 5 and 2), usage `Industrial` only. Clothes, bottles and food come from `Town`, `Village` and `Farm` usage, so the change is to add `<usage name="Village"/>` (and `Farm` if food is wanted) to those two groups' containers in `mapgroupproto.xml`. This file is re-applied on every map change, so it goes into `server/mission-overrides/` as a patch and into the panel edit. Placement count: the groups did not match by name in `mapgrouppos.xml`; count them before the edit (`mapgroupcluster*.xml` or a case-insensitive search) so the effect size is known.
+The water trucks are the proto groups `Land_Wreck_Truck01_Aban1_Cistern_DE` (4 points, one container, lootmax 4 and 2) and `Land_Wreck_Truck01_Aban2_Cistern_DE` (5 points, lootmax 5 and 2), usage `Industrial` only. Clothes, bottles and food come from `Town`, `Village` and `Farm` usage, so the change (ruled: Village and Farm) adds `<usage name="Village"/>` and `<usage name="Farm"/>` to the two groups and the `containers` and `food` categories to their `loot` container, so bottles and food can actually be rolled there; `mapgroupproto.cisterns.patch.xml` shows the exact lines. This file is re-applied on every map change, so it goes into `server/mission-overrides/` as a patch and into the panel edit. Placement count: the groups did not match by name in `mapgrouppos.xml`; count them before the edit (`mapgroupcluster*.xml` or a case-insensitive search) so the effect size is known.
 
 ## 4. Military helicopter crash loot
 
@@ -35,7 +35,7 @@ Three levers, in order of bluntness; Jeff picks:
 2. Thinner sites: lootmin 10 lootmax 15, to lootmin 5 lootmax 8. Each crash stays worth a walk, never a full kit.
 3. Trim the pool: lower the rifle and magazine rows in the `deloot` set (for example `AKM`, `AugShort`, `FAMAS`, `M16A2` from 4 / 2 to 2 / 1; the large magazines by a third) and leave the NBC and gas-mask rows, which are the crash sites' distinctive loot.
 
-Recommendation: 1 and 2 together for release 1, 3 held until a week of play shows whether sites are still "too profitable".
+Ruled (Jeff, October 26, 2026): all three. Lever 3 as applied: `AKM`, `AugShort`, `FAMAS`, `M16A2` 4/2 to 2/1; `Mag_AK74_45Rnd` 6/4 to 4/3; `Mag_Aug_30Rnd` 6/4 to 4/3; `Mag_FAMAS_25Rnd` 8/6 to 5/4; `Mag_PP19_64Rnd` 8/6 to 5/4; `Mag_CMAG_30Rnd` 4/2 to 3/1; `Mag_AKM_Drum75Rnd` 2/1 to 1/1 (never below 1). `GasMask`, the NBC set, `PP19`, the ammo boxes and optics untouched.
 
 ## 5. Discord
 

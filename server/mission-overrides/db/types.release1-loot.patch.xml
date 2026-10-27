@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Release 1 loot rows (Jeff's rulings, October 26, 2026, 22:27 and the /decide pass at 22:38;
+  docs/operations/2026-10-26-release-1-loot-update.md). DRAFT - not applied to the live server.
+  Applies at the release restart (gate step 5) together with types.scrawl.patch.xml and
+  types.tack.patch.xml, with the live types.xml backed up first. Each <type> below REPLACES the
+  row of the same name in mpmissions/dayzOffline.nasdara/db/types.xml; only nominal and min
+  change, every other field is the live row as mirrored on October 26, 2026, 21:18. Everything
+  not listed here is unchanged.
+
+  Rows: Whetstone +15%; the four Barrel_* -25%; Mag_CMAG_10Rnd -33%; Luger and Mag_Luger_8Rnd
+  -33%; the crash-site (deloot="1") rifles AKM, AugShort, FAMAS, M16A2 from 4/2 to 2/1 and the
+  six crash-site magazines -33% (heli-crash lever 3; levers 1 and 2 are events.helicrash.patch.xml).
+  Rounding: nearest whole number, never below 1 where the live row was above 0.
+-->
+<types>
+    <!-- Whetstone: sharpening stones +15%; live 70/65 -->
+    <type name="Whetstone">
+    <nominal>81</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>75</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="tools"/>
+    <tag name="shelves"/>
+    <usage name="Farm"/>
+    <usage name="Town"/>
+    <usage name="Village"/>
+    <usage name="Hunting"/>
+    </type>
+    <!-- Barrel_Blue: barrels -25%; live 26/13 -->
+    <type name="Barrel_Blue">
+    <nominal>20</nominal>
+    <lifetime>3888000</lifetime>
+    <restock>0</restock>
+    <min>10</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="1" count_in_hoarder="0" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+    <category name="tools"/>
+    <tag name="floor"/>
+    <usage name="Industrial"/>
+    <usage name="Farm"/>
+    </type>
+    <!-- Barrel_Green: barrels -25%; live 26/13 -->
+    <type name="Barrel_Green">
+    <nominal>20</nominal>
+    <lifetime>3888000</lifetime>
+    <restock>0</restock>
+    <min>10</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="1" count_in_hoarder="0" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+    <category name="tools"/>
+    <tag name="floor"/>
+    <usage name="Industrial"/>
+    <usage name="Farm"/>
+    </type>
+    <!-- Barrel_Red: barrels -25%; live 26/13 -->
+    <type name="Barrel_Red">
+    <nominal>20</nominal>
+    <lifetime>3888000</lifetime>
+    <restock>0</restock>
+    <min>10</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="1" count_in_hoarder="0" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+    <category name="tools"/>
+    <tag name="floor"/>
+    <usage name="Industrial"/>
+    <usage name="Farm"/>
+    </type>
+    <!-- Barrel_Yellow: barrels -25%; live 26/13 -->
+    <type name="Barrel_Yellow">
+    <nominal>20</nominal>
+    <lifetime>3888000</lifetime>
+    <restock>0</restock>
+    <min>10</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="1" count_in_hoarder="0" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+    <category name="tools"/>
+    <tag name="floor"/>
+    <usage name="Industrial"/>
+    <usage name="Farm"/>
+    </type>
+    <!-- Mag_CMAG_10Rnd: 10rnd C-MAG -33%; live 20/17 -->
+    <type name="Mag_CMAG_10Rnd">
+    <nominal>13</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>11</min>
+    <quantmin>10</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- Luger: Luger P08 -33%; live 55/50 -->
+    <type name="Luger">
+    <nominal>37</nominal>
+    <lifetime>14400</lifetime>
+    <restock>0</restock>
+    <min>34</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="weapons"/>
+    <usage name="Military"/>
+    <value name="Tier1"/>
+    <value name="Tier2"/>
+    </type>
+    <!-- Mag_Luger_8Rnd: Luger magazine -33%; live 75/65 -->
+    <type name="Mag_Luger_8Rnd">
+    <nominal>50</nominal>
+    <lifetime>14400</lifetime>
+    <restock>0</restock>
+    <min>44</min>
+    <quantmin>30</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="weapons"/>
+    <usage name="Military"/>
+    <value name="Tier1"/>
+    <value name="Tier2"/>
+    </type>
+    <!-- AKM: crash-site rifle 4/2 to 2/1 (deloot pool); live 4/2 -->
+    <type name="AKM">
+    <nominal>2</nominal>
+    <lifetime>7200</lifetime>
+    <restock>3600</restock>
+    <min>1</min>
+    <quantmin>30</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="Military"/>
+    </type>
+    <!-- AugShort: crash-site rifle 4/2 to 2/1 (deloot pool); live 4/2 -->
+    <type name="AugShort">
+    <nominal>2</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>1</min>
+    <quantmin>30</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- FAMAS: crash-site rifle 4/2 to 2/1 (deloot pool); live 4/2 -->
+    <type name="FAMAS">
+    <nominal>2</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>1</min>
+    <quantmin>30</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- M16A2: crash-site rifle 4/2 to 2/1 (deloot pool); live 4/2 -->
+    <type name="M16A2">
+    <nominal>2</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>1</min>
+    <quantmin>30</quantmin>
+    <quantmax>80</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- Mag_AK74_45Rnd: crash-site magazine -33%; live 6/4 -->
+    <type name="Mag_AK74_45Rnd">
+    <nominal>4</nominal>
+    <lifetime>5400</lifetime>
+    <restock>1800</restock>
+    <min>3</min>
+    <quantmin>10</quantmin>
+    <quantmax>50</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="Military"/>
+    <value name="Tier2"/>
+    <value name="Tier3"/>
+    </type>
+    <!-- Mag_AKM_Drum75Rnd: crash-site magazine -33%; live 2/1 -->
+    <type name="Mag_AKM_Drum75Rnd">
+    <nominal>1</nominal>
+    <lifetime>28800</lifetime>
+    <restock>1800</restock>
+    <min>1</min>
+    <quantmin>5</quantmin>
+    <quantmax>40</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="Military"/>
+    <value name="Tier3"/>
+    </type>
+    <!-- Mag_Aug_30Rnd: crash-site magazine -33%; live 6/4 -->
+    <type name="Mag_Aug_30Rnd">
+    <nominal>4</nominal>
+    <lifetime>28800</lifetime>
+    <restock>1800</restock>
+    <min>3</min>
+    <quantmin>10</quantmin>
+    <quantmax>50</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- Mag_CMAG_30Rnd: crash-site magazine -33%; live 4/2 -->
+    <type name="Mag_CMAG_30Rnd">
+    <nominal>3</nominal>
+    <lifetime>28800</lifetime>
+    <restock>0</restock>
+    <min>1</min>
+    <quantmin>5</quantmin>
+    <quantmax>50</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- Mag_FAMAS_25Rnd: crash-site magazine -33%; live 8/6 -->
+    <type name="Mag_FAMAS_25Rnd">
+    <nominal>5</nominal>
+    <lifetime>28800</lifetime>
+    <restock>1800</restock>
+    <min>4</min>
+    <quantmin>10</quantmin>
+    <quantmax>50</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="MilitaryWest"/>
+    </type>
+    <!-- Mag_PP19_64Rnd: crash-site magazine -33%; live 8/6 -->
+    <type name="Mag_PP19_64Rnd">
+    <nominal>5</nominal>
+    <lifetime>28800</lifetime>
+    <restock>3600</restock>
+    <min>4</min>
+    <quantmin>10</quantmin>
+    <quantmax>50</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="1"/>
+    <category name="weapons"/>
+    <usage name="Police"/>
+    <value name="Tier3"/>
+    </type>
+</types>
