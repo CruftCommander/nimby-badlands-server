@@ -31,4 +31,13 @@ Credits. Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Giv
 4. HostHavoc panel, service 246248: `Steam Workshop (installed)` > install the item by ID; confirm `@NIMBY\keys\nimby.bikey` was copied to the server `keys\` folder (`Non-Workshop Mods` or the File Manager shows it); if not, upload `build\@NIMBY-20261026-214828\keys\nimby.bikey` to `/keys/` over SFTP.
 5. Launch line (`Commandline Manager`): `-mod=@NIMBY` (today the line is `-servermod="" -mod=""`). Applies at the step 8 restart.
 
+### Every Workshop update, added October 27, 2026 (NIMBY-T-061)
+
+The launcher downloads the pack only if the server reports the item id, which it reads from `/@NIMBY/meta.cpp`. Release 1 went out without it and no new player could join for about 19 hours (`docs/operations/2026-10-27-incident-launcher-workshop-id.md`).
+
+6. Before publishing: the source folder is a `Build-NimbyPack.ps1` build from `main` at or after d1a40b1, and its `meta.cpp` reads `publishedid = 3828109139;`.
+7. After the server install: `/@NIMBY/meta.cpp` on the server (panel File Manager or SFTP) reads `publishedid = 3828109139;`. The panel's installer has written `publishedid = 0;` before; if it does, stop the server, upload the right file over SFTP (the running server locks it), start the server.
+8. After the restart: `https://dayzsalauncher.com/api/v1/query/104.192.227.46/2303` returns `status 0` and lists `NIMBY` with `steamWorkshopId 3828109139`.
+9. Before announcing: join through the DayZ launcher from the test Steam account with NIMBY unsubscribed; the launcher offers the download and the join completes.
+
 Item ID: **3828109139** (https://steamcommunity.com/sharedfiles/filedetails/?id=3828109139). Published October 26, 2026, 23:36 Central, by Claude driving DayZ Tools Publisher at Jeff's request: Public, tags Equipment and Mechanics, content 711.4 KB (Publisher) / 728.5 KB (Workshop page), "all signed". Verified from outside at 23:38: title, author Road Dog, description and preview visible to an anonymous visitor.
