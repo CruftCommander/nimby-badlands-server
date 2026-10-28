@@ -54,3 +54,16 @@ The sling is a persistent item (it has health and sits in an attachment slot tha
 | RS4 | Removal rule (R4) | (a) stays until next moved |
 | RS5 | Recipe | Two `Rope` with a knife in hands |
 | RS6 | HUD notice | Yes, one line on refusal |
+
+## Jeff's requirements, October 27, 2026
+
+Stated by Jeff on October 27, 2026, 20:37 Central, after this study. They take precedence over the recommendations above where they differ; nothing is built yet and the plan is not written.
+
+| # | Requirement (Jeff's words, lightly edited) | Effect on this study |
+| --- | --- | --- |
+| SR1 | A rifle goes on your back only with a sling attached, and you can craft your own sling. "Initially at least, you should be able to make a sling out of 1 rope." | Replaces the RS5 recommendation (two `Rope` with a knife). A vanilla `RecipeBase` combines two items, so a one-rope sling is most likely a single-item action on the rope ("Make sling") rather than a recipe; settle it in the plan. "Initially" leaves room to change the cost later |
+| SR2 | The first phase "must support attaching a long rifle to your backpack", but only rifles that are not very long. Examples Jeff gave: Mosins, MP5s, sawn-offs | New scope, not in R1 to R7: a rifle carried on a backpack (an attachment slot on backpacks), limited by a length rule. Claude's reading, to be confirmed by Jeff: very long rifles such as the Mosin are excluded, short long guns such as the MP5 and sawn-off shotguns are allowed. Feasibility to study: which backpacks get the slot, how "very long" is decided (a list, or the weapon's inventory size), and whether the backpack slot also needs a sling |
+| SR3 | A slung rifle in the primary slot goes across your chest | New scope. Assumed mapping: "primary" is the vanilla shoulder slot (`InventorySlots.SHOULDER`). Vanilla draws both back slots on the back, so a chest position needs a different attachment point on the character, which may be model or proxy work; this study's verdict said that kind of work is out of scope, so SR3 needs its own feasibility check before the plan |
+| SR4 | A slung rifle in the secondary slot goes across your back | Assumed mapping: "secondary" is the vanilla second back slot (`InventorySlots.MELEE`), which vanilla already draws on the back; likely no visual change beyond the sling rule |
+
+Open questions for Jeff: SR2's reading of the Mosin (excluded or allowed); whether the backpack carry in SR2 also requires a sling; whether the one-rope sling needs a knife; and whether "primary" and "secondary" mean the vanilla shoulder and second back slots.
