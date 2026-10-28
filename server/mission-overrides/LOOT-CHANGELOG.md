@@ -35,9 +35,9 @@ Ruled by: Jeff Fabish. Drafted by: Claude (this session), from the live files mi
 
 When applied, add a line here: `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>`, and move the values in `server/live/` forward with the next `Sync-LiveReplica.ps1` run so the mirror shows the new state.
 
-## Helicopter crashes -33% (ruled October 27, 2026; target: a scheduled restart)
+## Helicopter crashes -33% (ruled October 27, 2026; target: the first scheduled restart after the PR merges)
 
-Ruled by: Jeff Fabish, October 27, 2026, 22:36 Central (/decide 2 of 8, after first proposing it at 21:25). Drafted by: Claude (this session). Status: **DRAFT** (not on live).
+Ruled by: Jeff Fabish, October 27, 2026, 22:36 Central (/decide 2 of 8, after first proposing it at 21:25). Drafted by: Claude (this session). Status: **DRAFT** (not on live). Backup for this change: panel `manual-backup-2026-10-28_11-01.zip` (panel clock; taken 13:01 Central, October 28, 2026, server running, 0 players). The noon restart of October 28 passed before the PR merged.
 
 | File | Entry | Before (live) | After | Why |
 | --- | --- | --- | --- | --- |
