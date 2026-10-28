@@ -62,6 +62,9 @@ live check.
 
 ### NIMBY-T-061 (high): the launcher cannot download the pack; the server reports Workshop id 0
 
+Closed October 27, 2026, 19:02 Central. Full write-up with the prevention steps:
+`docs/operations/2026-10-27-incident-launcher-workshop-id.md`.
+
 Reported by Jeff, October 27, 2026, 17:09 Central, with a launcher screenshot: players joining
 the live server get "Content required by server: NIMBY" with only Ignore, Find on Steam Workshop
 and Find on the web, instead of the automatic download. No new player can join.
@@ -96,7 +99,9 @@ and Find on the web, instead of the automatic download. No new player can join.
   `publishedid = 3828109139;`, `name = "NIMBY";`, `timestamp = 1793139728;`), Start at 18:47:00.
   Down about 2 minutes.
 - **Verified 18:49 Central:** the DZSA launcher query returns `status 0`, `nasdara`, `0/80`,
-  version 1.30.164200, mods `NIMBY` with `steamWorkshopId 3828109139`.
+  version 1.30.164200, mods `NIMBY` with `steamWorkshopId 3828109139`. Confirmed by Jeff at
+  19:02: the launcher downloads and joins on the G15 laptop from a dedicated test Steam account,
+  and on his desktop.
 - Follow-ups: (1) after the patch-1 Workshop update, re-run the launcher query: if the installer
   writes id 0 again despite the shipped `meta.cpp`, repeat the stop-upload-start; (2)
   `Write-MetaCpp` writes no `name` line while the installer's file has one; add it in the next
