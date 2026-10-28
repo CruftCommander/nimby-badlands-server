@@ -1,6 +1,6 @@
 # NIMBY pack shared rules
 
-Version 1.5. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.5 amendment (October 26, 2026: section 7.1, the CallLater rule from NIMBY-T-052, ruled by Jeff Fabish October 26, 2026; Greet added to the list below; one rule added); v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
+Version 1.6. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.6 amendment (October 27, 2026, drafted for Jeff's review in a pull request: section 2.2, `main` changes only through a pull request with the four `static-gate` checks, and cross-addon `fix/*` branches, from the CI ruling of October 27; section 9.2 step 6, the launcher check, from NIMBY-T-061, ruled by Jeff Fabish October 27, 2026; section 5 and the registry, the Menu addon dropped as obsolete, ruled by Jeff Fabish October 27, 2026); v1.5 amendment (October 26, 2026: section 7.1, the CallLater rule from NIMBY-T-052, ruled by Jeff Fabish October 26, 2026; Greet added to the list below; one rule added); v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
 
 These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), Ears (`NimbyEarplugs`), and Greet (`NimbyGreet`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
 
@@ -47,8 +47,10 @@ Decided by Jeff, October 15, 2026.
 
 - An implementation session MAY commit and push on its own `feat/*` branch. Commits MUST be small, described, and limited to that mod's folder plus its docs.
 - A pushed `feat/*` branch is unreviewed work. Nothing on it is released, referenced in the Notion hub, or described as done until Jeff merges it.
-- Jeff runs every merge to `main` and every push of `main`. Sessions MUST NOT merge, rebase onto, or push `main`.
-- Changes to orchestrator-owned files (section 3) land on `main` through Jeff's commit, never on a `feat/*` branch.
+- Jeff runs every merge to `main`. Sessions MUST NOT merge, rebase onto, or push `main`.
+- `main` takes changes only through a pull request whose four `static-gate` checks are green (ruleset `main: PR and static gate`, Jeff, October 27, 2026); nobody pushes `main` directly, Jeff included.
+- A fix that spans addons MAY use one `fix/*` branch in one worktree for all of them (release 1 patch 1, October 27, 2026); the `feat/*` rules above apply to it.
+- Changes to orchestrator-owned files (section 3) land on `main` through a pull request that Jeff reviews and merges, never on a `feat/*` branch.
 
 ## 3. Shared files
 
@@ -80,7 +82,7 @@ Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `te
 | Tack | Tack | `NimbyTack` | `[NIMBY][Tack]` | `65509xx` (reserved; action framework) |
 | Ears | Ears (Hush until October 16, 2026) | `NimbyEarplugs` | `[NIMBY][Earplugs]` | `65507xx` (reserved; client only) |
 | Greet | Greet | `NimbyGreet` | `[NIMBY][Greet]` | `65511xx` (`6551101` request, client to server; `6551102` chunk and `6551103` done, server to the owning client; plan G5) |
-| Menu | Menu | `NimbyMenu` | `[NIMBY][Menu]` | `65510xx` (reserved; not planned yet, see section 5) |
+| Menu (dropped) | Menu | `NimbyMenu` | `[NIMBY][Menu]` | `65510xx` (retired, not reused; Menu dropped as obsolete, Jeff, October 27, 2026) |
 
 A display name changes only `mod.cpp`, Workshop text, string tables, and menu titles. Code prefixes, log prefixes, and RPC ids MUST NOT change for a display-name decision.
 
@@ -104,7 +106,7 @@ Enforce Script has no runtime log level. Each addon MUST read one flag file at m
 | Puff, Buzz, Sprout, Scrawl, Tack | None; action-menu entries only | Decided |
 | Greet open window | Insert (`kInsert`); `bin/constants.xml:586`; 0 uses in `bin/preset_X1MouseKey.xml`, so a plain press is free. `kF12` is free in game but is Steam's screenshot key and is excluded | Decided by Jeff (G7, Q2), October 25, 2026 |
 
-Every NIMBY key binding is player-configurable in game (decided by Jeff, October 16, 2026). Now: every binding is declared in the addon's `Data/Inputs.xml` with a NIMBY group name so it appears in the vanilla Options > Controls page and the player rebinds it there; no script reads a hardcoded key, and every plan's test table has a rebind case (Ears EP-005 is the first proof). Later: a shared `NimbyMenu` addon (display name Menu, RPC block `65510xx`) hosts one NIMBY options page for bindings and other player preferences; addons register their settings with it, and nothing depends on it until it exists.
+Every NIMBY key binding is player-configurable in game (decided by Jeff, October 16, 2026). Now: every binding is declared in the addon's `Data/Inputs.xml` with a NIMBY group name so it appears in the vanilla Options > Controls page and the player rebinds it there; no script reads a hardcoded key, and every plan's test table has a rebind case (Ears EP-005 is the first proof). The planned shared `NimbyMenu` addon (one NIMBY options page) was dropped as obsolete by Jeff on October 27, 2026: the vanilla Controls page under the NIMBY tab already covers every binding. Its RPC block `65510xx` stays retired.
 
 No two mods share a default binding, and none shadows a vanilla 1.30 default. A double-tap event on a key that vanilla uses as a hold (`kLShift` is `UATurbo`, `preset_X1MouseKey.xml:21-22`) does not shadow the hold; vanilla itself does this with `UAWalkRunToggle` on `kLControl` (`:27-31`). "Verified free" means checked against the unpacked 1.30 `bin/preset_X1MouseKey.xml` (there is no `inputs.xml` in 1.30, see section 7), with the file:line recorded in the plan.
 
@@ -195,6 +197,7 @@ Decided by Jeff, October 15, 2026: independent, gated. Each mod ships on its own
 3. Back up live mission storage and every `$profile:Nimby*` folder together.
 4. Deploy at a scheduled restart. A launch-line change restarts the server, so it lands in the restart window.
 5. Retain the previous package and the pre-release backup, and document how clients obtain the matching rollback version.
+6. After the release restart, the DayZ launcher's view of the server lists every Workshop item with its real id (the DZSA query of the server's query port returns each mod with a nonzero `steamWorkshopId`), and a client with no subscription is offered the download and joins. Added October 27, 2026 after NIMBY-T-061, when release 1 reported id 0 and no new player could join for about 19 hours; the procedure is `docs/operations/2026-10-26-workshop-item.md` steps 6 to 9.
 
 ### 9.3. Distribution
 
