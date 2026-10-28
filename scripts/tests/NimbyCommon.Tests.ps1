@@ -134,6 +134,55 @@ Describe 'Get-NimbyLocalSetting' {
     }
 }
 
+Describe 'Get-NimbySftpCredentialPath and Read-NimbySftpCredential' {
+    BeforeEach {
+        $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path (Join-Path $root 'scripts') -Force | Out-Null
+        $file = Join-Path $root 'scripts\testserver.local.json'
+        $saved = Join-Path $root 'saved.credential.xml'
+    }
+
+    It 'defaults to %LOCALAPPDATA%\Nimby, outside the repository' {
+        $path = Get-NimbySftpCredentialPath -RepoRoot $root
+        $path | Should -Be (Join-Path $env:LOCALAPPDATA 'Nimby\hosthavoc-sftp.credential.xml')
+        Test-PathInside -Candidate $path -Root $repo | Should -BeFalse
+    }
+
+    It 'uses sftpCredentialFile from testserver.local.json when set' {
+        Set-Content -LiteralPath $file -Value ('{ "sftpCredentialFile": "' + $saved.Replace('\', '\\') + '" }') -Encoding ascii
+        Get-NimbySftpCredentialPath -RepoRoot $root | Should -Be $saved
+    }
+
+    It 'returns nothing for a missing file or an empty path' {
+        Read-NimbySftpCredential -Path $saved -UserName 'jeff1' | Should -BeNullOrEmpty
+        Read-NimbySftpCredential -Path '' -UserName 'jeff1' | Should -BeNullOrEmpty
+    }
+
+    It 'reads back a saved credential for the same account' {
+        $secret = New-Object System.Security.SecureString
+        foreach ($character in 'secretDummy1'.ToCharArray()) { $secret.AppendChar($character) }
+        New-Object System.Management.Automation.PSCredential ('jeff1', $secret) | Export-Clixml -LiteralPath $saved
+        $credential = Read-NimbySftpCredential -Path $saved -UserName 'jeff1'
+        $credential.UserName | Should -Be 'jeff1'
+        $credential.GetNetworkCredential().Password | Should -Be 'secretDummy1'
+    }
+
+    It 'refuses a credential saved for another account and warns without the content' {
+        $secret = New-Object System.Security.SecureString
+        foreach ($character in 'secretDummy1'.ToCharArray()) { $secret.AppendChar($character) }
+        New-Object System.Management.Automation.PSCredential ('someoneelse', $secret) | Export-Clixml -LiteralPath $saved
+        $credential = Read-NimbySftpCredential -Path $saved -UserName 'jeff1' -WarningVariable warned -WarningAction SilentlyContinue 3>$null
+        $credential | Should -BeNullOrEmpty
+        ($warned -join ' ') | Should -Match 'different account'
+        ($warned -join ' ') | Should -Not -Match 'secretDummy1'
+    }
+
+    It 'refuses a file that holds something other than a credential' {
+        'not a credential' | Export-Clixml -LiteralPath $saved
+        Read-NimbySftpCredential -Path $saved -UserName 'jeff1' -WarningAction SilentlyContinue 3>$null | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'testserver.local.json stays out of git' {
     It 'is matched by a .gitignore rule' {
         $rules = Get-Content -LiteralPath (Join-Path $repo '.gitignore')

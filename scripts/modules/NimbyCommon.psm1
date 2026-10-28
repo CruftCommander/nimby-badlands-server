@@ -186,4 +186,45 @@ function Get-NimbyLocalSetting {
     return $property.Value
 }
 
-Export-ModuleMember -Function Write-Manifest, Test-TestInstanceId, Get-ServerArgument, Read-ServerLogText, Test-PathInside, Get-RunningServerProcess, Get-RunningServerMessage, Get-NimbyRandomString, Get-NimbyLocalSettingPath, Get-NimbyLocalSetting
+function Get-NimbySftpCredentialPath {
+    # Where the saved HostHavoc SFTP credential lives: testserver.local.json "sftpCredentialFile",
+    # else %LOCALAPPDATA%\Nimby\hosthavoc-sftp.credential.xml, outside the repository. The file is
+    # an Export-Clixml of a PSCredential, so Windows DPAPI encrypts the password and only the
+    # Windows account that saved it, on that machine, can read it (Jeff, October 27, 2026).
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $configured = Get-NimbyLocalSetting -RepoRoot $RepoRoot -Name 'sftpCredentialFile'
+    if ($null -ne $configured) { return [string]$configured }
+    if (-not $env:LOCALAPPDATA) { return $null }
+    return (Join-Path $env:LOCALAPPDATA 'Nimby\hosthavoc-sftp.credential.xml')
+}
+
+function Read-NimbySftpCredential {
+    # The saved credential when the file exists, decrypts for this account, and names UserName;
+    # otherwise $null, with a warning that names the file (never its content), so the caller
+    # falls back to a prompt.
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Path,
+        [Parameter(Mandatory)][string]$UserName
+    )
+
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $saved = $null
+    try { $saved = Import-Clixml -LiteralPath $Path }
+    catch {
+        Write-Warning ("Ignoring {0}: this Windows account cannot read or decrypt it." -f $Path)
+        return $null
+    }
+    if ($saved -isnot [System.Management.Automation.PSCredential]) {
+        Write-Warning ("Ignoring {0}: it does not hold a saved credential." -f $Path)
+        return $null
+    }
+    if ($saved.UserName -ne $UserName) {
+        Write-Warning ("Ignoring {0}: it was saved for a different account." -f $Path)
+        return $null
+    }
+    return $saved
+}
+
+Export-ModuleMember -Function Write-Manifest, Test-TestInstanceId, Get-ServerArgument, Read-ServerLogText, Test-PathInside, Get-RunningServerProcess, Get-RunningServerMessage, Get-NimbyRandomString, Get-NimbyLocalSettingPath, Get-NimbyLocalSetting, Get-NimbySftpCredentialPath, Read-NimbySftpCredential
