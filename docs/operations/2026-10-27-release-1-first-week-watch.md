@@ -107,3 +107,16 @@ and Find on the web, instead of the automatic download. No new player can join.
   `Write-MetaCpp` writes no `name` line while the installer's file has one; add it in the next
   tooling change; (3) changing `meta.cpp` needs the server stopped, so a live fix is a panel
   Stop and Start, not an upload alone.
+
+### NIMBY-T-062 (high): Hands transfers fail on live; pockets look closed to the other player
+
+Reported by Jeff, October 27, 2026, 21:19 Central, from play on the live server with Jay in the hour before (about 20:19 to 21:19 Central). Logged only; no fix is started from this entry.
+
+- What they saw: (1) an offer shows on the other client and the Take animation plays, but no item moves; (2) Jeff opened his pockets and Jay could not view them.
+- Build on live: release 1, `@NIMBY-20261026-214828`. Its Hands code is the pre-P3 transfer, which ended every two-client transfer `UNCONFIRMED` after 5,000 ms in the October 20 tests (NIMBY-T-010; audit TGA-035). The fix Jeff refers to ("we experienced this in testing and fixed it") is the P3 two-step transfer, merged to `main` on October 27 (669ff12) and shipped in patch 1 (38b10b5), which is not yet on live. Item (1) is therefore most likely NIMBY-T-010 seen on live; the logs confirm or refute it.
+- Item (2) against the plan: Hands G3 says opening pockets permits deposits only, into cargo only; another player is never shown the pocket contents. "Cannot view" is the designed behavior. A defect would be Jay seeing no "Put In Pockets" prompt while holding an item near Jeff, or a deposit that does not arrive (the same transfer path as item 1). Open question for Jeff and Jay: did Jay try Put In Pockets with an item in hands?
+- Evidence to pull (read-only): the live profile folder with `scripts\Get-ServerLogs.ps1` (a new `logs\server-<stamp>\` folder), then in the `script_*.log` of the boot running since 18:47:00 Central (16:47 on the panel clock):
+  - `[NIMBY][Hands] id=<n> ... state=REQUESTED` lines and each id's terminal state. Expected on release 1: `state=UNCONFIRMED` 5,000 ms after `REQUESTED`, no `CONFIRMED`, and no toast.
+  - `[NIMBY][Hands] pockets player=... open=true reason=toggle` for Jeff, and any `state=REQUESTED` from Jay with action `ActionPutInPockets`.
+  - Both players' identities on each line (shared rules 4.2), and 0 `SCRIPT (E)`.
+- Path to closure: the patch-1 rows S6-30 to S6-33 (two-client Take, Give, Put In Pockets, consent withdrawn) on `@NIMBY-20261027-124130` tonight, then the patch-1 Workshop update under the every-row gate Jeff ruled at 21:11. Until then, the Greet text and Discord can tell players that trading is coming in the next update.
