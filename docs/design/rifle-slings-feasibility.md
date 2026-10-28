@@ -66,4 +66,10 @@ Stated by Jeff on October 27, 2026, 20:37 Central, after this study. They take p
 | SR3 | A slung rifle in the primary slot goes across your chest | New scope. Assumed mapping: "primary" is the vanilla shoulder slot (`InventorySlots.SHOULDER`). Vanilla draws both back slots on the back, so a chest position needs a different attachment point on the character, which may be model or proxy work; this study's verdict said that kind of work is out of scope, so SR3 needs its own feasibility check before the plan |
 | SR4 | A slung rifle in the secondary slot goes across your back | Assumed mapping: "secondary" is the vanilla second back slot (`InventorySlots.MELEE`), which vanilla already draws on the back; likely no visual change beyond the sling rule |
 
-Open questions for Jeff: whether the backpack carry in SR2 also requires a sling; whether the one-rope sling needs a knife; and whether "primary" and "secondary" mean the vanilla shoulder and second back slots.
+Rulings, Jeff, October 27, 2026, 21:11 Central:
+
+- SR2: the backpack carry also requires a sling on the rifle. One rule everywhere: no sling, no rifle carried outside the hands or cargo.
+- SR1: the sling is made from one `Rope` with no tool ("Make sling" on the rope). This replaces RS5.
+- SR3 and SR4: "primary" is the vanilla shoulder slot (`InventorySlots.SHOULDER`), drawn across the chest; "secondary" is the vanilla second back slot (`InventorySlots.MELEE`), drawn across the back. No third slot is added. The chest position still needs its own feasibility check before the plan.
+
+Still open from the study: RS1 (name), RS2 (order), RS3 (revolvers), RS4 (removal rule), RS6 (HUD notice).
