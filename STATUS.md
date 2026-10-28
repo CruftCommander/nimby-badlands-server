@@ -39,7 +39,7 @@ the decision record is the Notion hub "DayZ Badlands Server - Project Hub".
 | Greet NIMBY-T-059 | Open, not release-blocking | The client renders about 1,100 characters of a long body; a diagnostic build is owed. The release text is under the cap |
 | Scrawl on live | Not run | No in-game write and restart read yet. Pens spawn on live now |
 | `server/live/` reference copies | Stale | Still show pre-release-1 values until the next WinSCP pull plus `scripts\Sync-LiveReplica.ps1` |
-| Discord invite | Open | Greet text has `discord.gg/kH3eJ5mdEv`; the panel hostname has `discord.gg/bQDNepCRF`. One of them is wrong |
+| Discord invite | Done October 28, 2026 | Jeff ruled `discord.gg/kH3eJ5mdEv` (never expires; `bQDNepCRF` expires November 14, 2026). The panel hostname was changed by Claude from the panel (stop with 0 players, one-line edit of `serverDZ_By_HostHavoc.cfg`, start at 14:08 Central); the DZSA launcher shows the new name; Greet and `messages.xml` already used it |
 | Halloween overlay | Declined (recommended), not ruled | Bohemia ships no Nasdara Halloween mission; a hand-made overlay would be about 25 rows |
 
 ## Not yet built

@@ -11,9 +11,9 @@ Updated October 27, 2026.
    `pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Sync-LiveReplica.ps1`
    so `server/live/` shows the applied loot values. Expect the `eol` static check to flag the
    LF copies again.
-3. Jeff: rule the Discord invite (`discord.gg/kH3eJ5mdEv` in Greet vs `discord.gg/bQDNepCRF`
-   in the panel hostname). If Greet is wrong, the fix is a `greet.json` edit with `version`
-   raised to 2 and an upload at a restart; no pack rebuild.
+3. Done October 28, 2026: Jeff ruled the Discord invite `discord.gg/kH3eJ5mdEv` (Greet was
+   right; `bQDNepCRF` expires November 14, 2026). The panel hostname now carries it (server
+   started 14:08 Central); `server/serverDZ.cfg` records the live hostname.
 4. Scrawl live check: with a pen on live, write a note, pin it with Tack, restart, read it
    back (S6-08 to S6-11 on live). Record in the six-addon session doc.
 5. Greet NIMBY-T-059 diagnostic build (client render cap on long bodies).
