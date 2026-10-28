@@ -40,7 +40,7 @@ Changes since v0.2: shared rules moved to their own file; current-state and deci
 ## What this is not
 
 - Not a trading system. No currency, prices, or trader.
-- Not a way to take items without consent. Request and pocket access both need the other player's action or opt-in.
+- Not a way to take items without consent. Request and pocket access both need the other player's action or opt-in. From the G3 change of October 27, 2026, opening your pockets is that opt-in for taking as well as depositing.
 - Not a hands-to-hands transfer.
 - Not a persistence change. No custom entity serialization and no persistent entity classes.
 
@@ -71,7 +71,7 @@ The rows below describe `main` before Phase 1. On `feat/hands` the transfer rout
 | --- | --- | --- | --- |
 | G1 | Rename depth | Full rename to `NimbyHands`: folder, PBO, config classes, scripts, input actions, string keys, log prefix. Attribution stays first in `NOTICE` | Decided |
 | G2 | Pocket toggle key (T-002) | Unbound by default. Controls label "Hands: open or close pockets"; the pocket notification names the binding. Phase 0 still records whether `Shift+O` can exclude a plain `O` press; if it can, Jeff may revisit | Decided October 15, 2026 |
-| G3 | Pocket access default | Off; resets on reconnect and respawn; opening permits deposits only, into cargo only (H6) | Decided |
+| G3 | Pocket access default | Off; resets on reconnect and respawn. Opening permits deposits only, into cargo only (H6), on the code that exists. **Changed by Jeff, October 27, 2026 (NIMBY-T-062):** opening your pockets invites nearby players to view, deposit and take; how they view, which containers count, reach, feedback and logging are settled in the next Hands plan round; not in release 1 patch 1 | Decided; change ruled, not built |
 | G4 | Pockets auto-close | Close on unconsciousness and on restraint. "Put in pockets" refuses an unconscious or restrained target. The toggle cannot be used while restrained | Decided October 15, 2026 |
 | G5 | In-flight transfer registry | Server-side, mission-lifetime singleton `NimbyHandsTransfers`: `map<EntityAI, ref NimbyHandsTransfer>` keyed by item, evicted on terminal state or after a bounded timeout (default 5,000 ms) once inventory state is reconciled. Nothing persisted | Decided (Claude default) |
 | H1 | Transfer path after NIMBY-T-010 (J2) | P3: two server steps through the giver's own cargo under one id, with `STAGED` between `REQUESTED` and the terminal states; `CanMove` allows `REQUESTED -> STAGED` and `STAGED -> CONFIRMED, REFUSED, UNCONFIRMED`, never back to `REQUESTED`. Step 2 bypasses the engine's live-player rule and 2.5 m anti-cheat, so `RevalidateStep2` is the only guard | Decided by Jeff, October 20, 2026; built October 21, 2026 |
