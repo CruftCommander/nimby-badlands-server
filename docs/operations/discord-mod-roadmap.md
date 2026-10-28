@@ -2,7 +2,7 @@
 
 Source of the pinned roadmap post in the NIMBY Discord #mod-roadmap channel. Jeff posts it by hand; edit here first, then paste. Keep it under 4,000 characters (the Nitro message limit; 2,000 without Nitro).
 
-Revision of October 27, 2026 (Jeff's rulings, 22:36 Central): Patching stage added (Hands); priorities set by Jeff (High: Hands fix, Central Scrutinizer; Medium: smoke shop, Shoulder, Bikes, Tweaker, Cassettes; Low: Splash, Payload, Face paint, Eyes until Central Scrutinizer ships, small ideas; Very low: Beards); Menu dropped; Shoulder (was Slings), Bikes, Cassettes, Face paint, well rope and waterboarding added; water barrel removed (vanilla already does it). Character count of the post below: 3956.
+Revision of October 27, 2026 (Jeff's rulings, 22:36 Central): Patching stage added (Hands); priorities set by Jeff (High: Hands fix, Central Scrutinizer; Medium: smoke shop, Shoulder, Bikes, Tweaker, Cassettes; Low: Splash, Payload, Face paint, Eyes until Central Scrutinizer ships, small ideas; Very low: Beards); Menu dropped; Shoulder (was Slings), Bikes, Cassettes, Face paint, well rope and waterboarding added; water barrel removed (vanilla already does it). Character count of the post below: 3951 (channel mentions counted as typed). Revision of October 27, 22:55 Central: the channel is announcements only (members can react, not post), so the footer points to #server-suggestions, #faq-and-help and #report-server-issues by channel id.
 
 ````markdown
 # :tools: NIMBY Mod Roadmap
@@ -10,7 +10,7 @@ Revision of October 27, 2026 (Jeff's rulings, 22:36 Central): Patching stage add
 
 **The first wave is live.** `@NIMBY` is required to join: <https://steamcommunity.com/sharedfiles/filedetails/?id=3828109139>. Subscribe once; the launcher keeps it current. Every NIMBY keybinding can be rebound under the **NIMBY** tab in Controls. New mods go live only after testing on a private copy of the live server. Source is public: <https://github.com/CruftCommander/nimby-badlands-server>
 
-**Why build our own?** When Badlands dropped, the usual Workshop mods had no 1.30 builds. In-house, we fix things ourselves after every update, everything fits the hardcore "vanilla-plus, never easier" style, and you subscribe to one item.
+**Why build our own?** When Badlands dropped, the usual Workshop mods had no 1.30 builds. In-house, we fix things ourselves, everything fits the hardcore "vanilla-plus, never easier" style, and you subscribe to one item.
 
 **Stages:** Planning → Feasibility → Planned → Building → Built → Testing → Tested → Live
 -# Feasibility is a short study against the 1.30 engine before building; some ideas stop there. **Patching** means a live mod has a known fault and its fix is in testing. **Priority** (High, Medium, Low, Very low) is what gets worked on first.
@@ -38,7 +38,6 @@ Right now hand-offs don't complete: the animation plays, nothing moves, nothing 
 **Buzz**: What smoking does to you. Effects stack and wear off; expect coughing and laughing.
 **Sprout**: Grow tobacco and cannabis, dry it, and cook hash over a fire.
 `▰▰▰▱▱▱▱▱` Planned · Priority: Medium
--# Three mods, so an update that breaks the effects leaves the items and crops working.
 
 ## :mag: Studied (feasible, not yet planned)
 **Shoulder**: A rifle rides on your back only with a sling; make one from a rope. Short rifles can strap to a backpack. Medium
@@ -56,5 +55,5 @@ Right now hand-offs don't complete: the animation plays, nothing moves, nothing 
 **Small ideas**: Cut the rope on a dug well; waterboarding a restrained player. Low
 `▰▱▱▱▱▱▱▱` Planning
 
--# Order can change. Got a question or an idea? Drop it here.
+-# Announcements only; reactions welcome. Ideas go in <#1561758532301492274>, questions in <#933890402078031962>, bugs in <#1562081423870009345>. Order can change.
 ````
