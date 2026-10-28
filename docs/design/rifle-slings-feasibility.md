@@ -72,4 +72,10 @@ Rulings, Jeff, October 27, 2026, 21:11 Central:
 - SR1: the sling is made from one `Rope` with no tool ("Make sling" on the rope). This replaces RS5.
 - SR3 and SR4: "primary" is the vanilla shoulder slot (`InventorySlots.SHOULDER`), drawn across the chest; "secondary" is the vanilla second back slot (`InventorySlots.MELEE`), drawn across the back. No third slot is added. The chest position still needs its own feasibility check before the plan.
 
-Still open from the study: RS1 (name), RS2 (order), RS3 (revolvers), RS4 (removal rule), RS6 (HUD notice).
+Rulings, Jeff, October 27, 2026, about 22:45 Central:
+
+- RS1: the display name is **Shoulder**. The code prefix stays `NimbySlings` until the plan is written; a display name never changes prefixes (shared rules 4.1).
+- RS2: priority Medium on the roadmap (no board order yet).
+- RS3: revolvers are handguns; `Magnum_Base` gets no sling slot and the rule does not apply to it.
+- RS4: (a), a rifle whose sling is cut or ruined stays where it is until the player next moves it; it cannot go back on the back or backpack without a new sling.
+- RS6: yes, a one-line toast on refusal: "This rifle needs a sling to go on your back".
