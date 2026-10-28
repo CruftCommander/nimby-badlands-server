@@ -35,6 +35,17 @@ Ruled by: Jeff Fabish. Drafted by: Claude (this session), from the live files mi
 
 When applied, add a line here: `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>`, and move the values in `server/live/` forward with the next `Sync-LiveReplica.ps1` run so the mirror shows the new state.
 
+## Helicopter crashes -33% (ruled October 27, 2026; target: the first scheduled restart after the PR merges)
+
+Ruled by: Jeff Fabish, October 27, 2026, 22:36 Central (/decide 2 of 8, after first proposing it at 21:25). Drafted by: Claude (this session). Status: **DRAFT** (not on live). Backup for this change: panel `manual-backup-2026-10-28_11-01.zip` (panel clock; taken 13:01 Central, October 28, 2026, server running, 0 players). The noon restart of October 28 passed before the PR merged.
+
+| File | Entry | Before (live) | After | Why |
+| --- | --- | --- | --- | --- |
+| `events.helicrash.patch.xml` | `StaticHeliCrash child StaticObj_Wreck_Mi24_TK_DE` | min 1, max 3, lootmin 5, lootmax 8 | min 1, max 2, lootmin 5, lootmax 8 | Helicopter crashes still too common after release 1: another 33% off the site count (up to 4 sites map-wide instead of 6), loot per site unchanged (Jeff, October 27, 2026) |
+| `events.helicrash.patch.xml` | `StaticHeliCrash child Wreck_Mi8_Crashed` | min 1, max 3, lootmin 5, lootmax 8 | min 1, max 2, lootmin 5, lootmax 8 | As above |
+
+Before (live) is the release-1 value from the batch above (applied October 26, 2026, 23:47); confirm it against the live `events.xml` when the file is pulled for the upload. When applied, add a line here: `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>`.
+
 ## Earlier changes
 
 Changes made in the HostHavoc panel before this log existed (the October 15, 2026 wipe and map switch, CF removal, `lightingConfig`, the hardcore profile) are recorded in `docs/operations/` and the Notion hub, not here.
