@@ -12,20 +12,21 @@ Status: rows written 2026-10-27 15:40 Central, before the session. Result and Ev
 
 ## Setup
 
-1. Replica test kit (replica only; `Sync-LiveReplica.ps1` overwrites `init.c` from the mirror). The replica `types.xml` has `Paper` and every `Pen_*` at nominal 0, so without the kit there is no pen, as on October 26 (S6-08). `init.c.range-candidate-8` tops up every connecting player with three Paper, four pens, Hammer, Nail, DuctTape, EpoxyPutty, CombatKnife, Matchbox, Wrench, Screwdriver, Handcuffs and keys, and a TaloonBag_Blue; a new character spawns in the Kirov Dam power-plant yard by the dam water. The range and the motorbike stay off (their flag files are absent).
+1. Replica test kit (replica only; `Sync-LiveReplica.ps1` overwrites `init.c` from the mirror). The replica `types.xml` has `Paper` and every `Pen_*` at nominal 0, so without the kit there is no pen, as on October 26 (S6-08). `init.c.range-candidate-9` (candidate 8 plus a tent, written October 27, 2026) tops up every connecting player with exactly one pen (extra pens are removed), Paper as two singles plus stacks of 5 up to 22 sheets, Hammer, Nail, DuctTape, EpoxyPutty, CombatKnife, Matchbox, Wrench, Screwdriver, Handcuffs and keys, and a TaloonBag_Blue (Rag and CanOpener inside); with the `NimbyTestKit\tent` flag it also drops a packed MediumTent 5 m behind the player unless a tent stands within 50 m (row S6-51). A new character spawns in the Kirov Dam power-plant yard by the dam water. The range (instance 999 only) and the motorbike stay off.
 
    ```powershell
    Copy-Item -LiteralPath 'D:\DayZServer\mpmissions\dayzOffline.nasdara\init.c' -Destination 'D:\DayZServer\_backups\init.c.stock-20261027'
-   Copy-Item -LiteralPath 'D:\DayZServer\_backups\init.c.range-candidate-8' -Destination 'D:\DayZServer\mpmissions\dayzOffline.nasdara\init.c' -Force
+   Copy-Item -LiteralPath 'D:\DayZServer\_backups\init.c.range-candidate-9' -Destination 'D:\DayZServer\mpmissions\dayzOffline.nasdara\init.c' -Force
    ```
 
-2. Server profile `patch-1` with the six debug flags and the release `greet.json`:
+2. Server profile `patch-1` with the six debug flags, the test-kit tent flag, and the release `greet.json`:
 
    ```powershell
    $serverProfile = 'D:\GitHub\nimby-badlands-server\profiles\patch-1'
    foreach ($prefix in 'NimbyAutorun', 'NimbyHands', 'NimbyEarplugs', 'NimbyNotes', 'NimbyTack', 'NimbyGreet') {
        New-Item -ItemType File -Path (Join-Path $serverProfile "$prefix\debug") -Force | Out-Null
    }
+   New-Item -ItemType File -Path (Join-Path $serverProfile 'NimbyTestKit\tent') -Force | Out-Null
    Copy-Item -LiteralPath 'D:\GitHub\nimby-badlands-server\profiles\release-1\NimbyGreet\greet.json' -Destination (Join-Path $serverProfile 'NimbyGreet\greet.json')
    ```
 
@@ -88,7 +89,7 @@ Order: Greet and Ears on join, Hands, Legs, Scrawl, Tack, the Ears death and reb
 | S6-48 | Scrawl SC-T1 (S6-11) | Take down a written note pinned with a nail | | `takedown fastener=nail sheet=inventory ...`; the sheet reads its text |
 | S6-49 | Scrawl A5 step 1 | Combine three kit sheets into a stack; drop the stack, one blank sheet and one written note in the dam yard | | Stack quantity 3 on pickup; the written note does not combine (`combine refused: a sheet carries text`) |
 | S6-50 | Tack T28 door (S6-18) | Pin a tape note on a door leaf; open and close the door | | `pin ... door=` line, no `pin door dropped`; the note follows the leaf |
-| S6-51 | Tack T29 player builds | Try to pin a note on a player-built wall or a pitched tent (if one is found or built) | | Notice "Notes pin on map buildings" / "Player-built walls and tents are not supported yet."; nothing consumed. NOT RUN if no player build is at hand |
+| S6-51 | Tack T29 player builds | Pitch the test-kit MediumTent (dropped 5 m behind D on connect, server line `[NIMBY][TestKit] MediumTent (packed) -> ground`); with tape and a written sheet, try to pin a note on the pitched tent | | Notice "Notes pin on map buildings" / "Player-built walls and tents are not supported yet."; no `pin` line on the server; tape quantity and the sheet unchanged |
 | S6-52 | Ears E15, death-screen rejoin (TGA-045) | L kills D with the kit knife; D picks Main menu on the death screen and rejoins without closing the client; 3 s after spawn, N in, N out | | Client `loaded; ... launch_from=cache`, `launch_sound=1`; the take-out line `target=1` |
 | S6-53 | Ears mid-fade put-in (TGA-045) | On the next respawn, N in within 1 s of the character appearing, then N out | | Take-out `target=1`, not a mid-fade value |
 | S6-54 | Ears EP-005 rebind (TGA-045) | Controls > NIMBY: rebind Earplugs, Apply; press the new key, then the old one; no relog | | A toggle line for the new key only; 0 `SCRIPT (E)` |
@@ -135,4 +136,4 @@ None yet.
 
 ## Exit
 
-Proposed for Jeff's ruling, not a standing gate: the Workshop update with patch 1 goes ahead when S6-30 to S6-32 show CONFIRMED with 0 UNCONFIRMED, S6-26 and S6-27, S6-38, S6-42 to S6-45, and S6-57 pass, and every boot shows 0 `SCRIPT (E)` and 0 `Scripted variables corrupted`; then gate 9.2 (storage and `$profile:Nimby*` backup first) at a scheduled restart. The Workshop update is published from a build made after `fix/workshop-meta` merges, so the item carries `meta.cpp` (NIMBY-T-061); the PBOs are byte-identical to `-124130`, so these rows stand for it.
+Ruled by Jeff, October 27, 2026, 21:11 Central: the Workshop update with patch 1 goes ahead only when **every row in this record passes**, S6-26 to S6-60 including the dev-harness segment, and every boot shows 0 `SCRIPT (E)` and 0 `Scripted variables corrupted`. A row that proves unreachable in vanilla play (S6-47 may be: vanilla may offer no write with the pen on the ground) is recorded with the evidence and goes back to Jeff, who rules then whether it blocks. Then Workshop procedure steps 6 to 9 (NIMBY-T-061) and gate 9.2 (storage and `$profile:Nimby*` backup first) at a scheduled restart. The Workshop update is published from a build made after `fix/workshop-meta` merges, so the item carries `meta.cpp` (NIMBY-T-061); the PBOs are byte-identical to `-124130`, so these rows stand for it.
