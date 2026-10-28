@@ -35,16 +35,19 @@ Ruled by: Jeff Fabish. Drafted by: Claude (this session), from the live files mi
 
 When applied, add a line here: `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>`, and move the values in `server/live/` forward with the next `Sync-LiveReplica.ps1` run so the mirror shows the new state.
 
-## Helicopter crashes -33% (ruled October 27, 2026; target: the first scheduled restart after the PR merges)
+## Helicopter crashes -33% (ruled October 27 and 28, 2026; applied October 28, 2026, 13:38 Central)
 
-Ruled by: Jeff Fabish, October 27, 2026, 22:36 Central (/decide 2 of 8, after first proposing it at 21:25). Drafted by: Claude (this session). Status: **DRAFT** (not on live). Backup for this change: panel `manual-backup-2026-10-28_11-01.zip` (panel clock; taken 13:01 Central, October 28, 2026, server running, 0 players). The noon restart of October 28 passed before the PR merged.
+Ruled by: Jeff Fabish, October 27, 2026, 22:36 Central (/decide 2 of 8, after first proposing it at 21:25), for the Mi-24 and Mi-8 rows; Jeff Fabish, October 28, 2026 ("Cut Chinooks by a third too"), for the Chinook row. Drafted by: Claude (this session). Status: **APPLIED October 28, 2026, 13:38 Central (panel Restart, 0 players on the panel before it)**, by Jeff (SFTP upload of the patched `events.xml` with `logs/upload-heli-20261028.ps1`, 13:29 Central; server copy hash-identical to the patched file) and Claude (panel Restart, after Jeff logged out). Backup for this change: panel `manual-backup-2026-10-28_11-01.zip` (panel clock; taken 13:01 Central, October 28, 2026, server running, 0 players). The noon restart of October 28 passed before the PR merged.
 
 | File | Entry | Before (live) | After | Why |
 | --- | --- | --- | --- | --- |
 | `events.helicrash.patch.xml` | `StaticHeliCrash child StaticObj_Wreck_Mi24_TK_DE` | min 1, max 3, lootmin 5, lootmax 8 | min 1, max 2, lootmin 5, lootmax 8 | Helicopter crashes still too common after release 1: another 33% off the site count (up to 4 sites map-wide instead of 6), loot per site unchanged (Jeff, October 27, 2026) |
 | `events.helicrash.patch.xml` | `StaticHeliCrash child Wreck_Mi8_Crashed` | min 1, max 3, lootmin 5, lootmax 8 | min 1, max 2, lootmin 5, lootmax 8 | As above |
+| `events.helicrash.patch.xml` | `StaticHeliCrashBig child StaticObj_Wreck_Chinook_DE` | min 6, max 6, lootmin 10, lootmax 15 | min 4, max 4, lootmin 10, lootmax 15 | Chinook crashes cut by a third as well (Jeff, October 28, 2026); loot per site unchanged |
 
-Before (live) is the release-1 value from the batch above (applied October 26, 2026, 23:47); confirm it against the live `events.xml` when the file is pulled for the upload. When applied, add a line here: `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>`.
+Before (live) was confirmed against the live `events.xml` pulled at 13:29 Central on October 28, 2026: the upload script refuses to patch unless each tag reads exactly the Before value. The pulled and patched copies are kept in the git-ignored `logs/heli-20261028-132908/` (`live/`, `patched/`, `readback/`).
+
+APPLIED October 28, 2026, 13:38 Central (panel Restart), by Jeff (upload) and Claude (restart), from backup panel `manual-backup-2026-10-28_11-01.zip`. After the restart the panel query and the DZSA launcher API both answered: map `nasdara`, 0/80, version 1.30.164200, @NIMBY 3828109139 offered. The `server/live/` copy of `events.xml` moves forward at the next `Sync-LiveReplica.ps1` run.
 
 ## Earlier changes
 
