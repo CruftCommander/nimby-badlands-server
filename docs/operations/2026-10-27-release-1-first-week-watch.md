@@ -119,4 +119,10 @@ Reported by Jeff, October 27, 2026, 21:19 Central, from play on the live server 
   - `[NIMBY][Hands] id=<n> ... state=REQUESTED` lines and each id's terminal state. Expected on release 1: `state=UNCONFIRMED` 5,000 ms after `REQUESTED`, no `CONFIRMED`, and no toast.
   - `[NIMBY][Hands] pockets player=... open=true reason=toggle` for Jeff, and any `state=REQUESTED` from Jay with action `ActionPutInPockets`.
   - Both players' identities on each line (shared rules 4.2), and 0 `SCRIPT (E)`.
+- Evidence, read October 27, 2026, 21:30 Central from pull `logs\server-20261027-212221\` (232 files, 232 OK), boot `script_2026-10-27_16-47-00.log` (panel clock; the 18:47 Central start), log times on the panel clock, 2 h behind Central:
+  - Four Take attempts, all `NimbyHandsActionTakeItem`, each `state=REQUESTED` then `state=UNCONFIRMED ... detail=no completion signal within 5000 ms; item at HANDS:` on the giver, exactly 5,000 ms later: ids 1, 3 and 4 (Jeff gives `VitaminBottle #028148` to Jay, 19:11:58 to 19:12:26 panel) and id 5 (Jay gives `Paper #037083` to Jeff, 19:13:29 to 19:13:34). Every `REQUESTED` named a cargo destination (`CARGO:Attack2Bag_Ttsko`, `CARGO:AliceBag_Green`). No `CONFIRMED` line.
+  - Ids 2, 6 and 7: repeat presses while a request was open, `state=REFUSED detail=item in flight (id=<n>)`, as designed.
+  - Pockets: Jeff `open=true reason=toggle` 19:12:42, `open=false` 19:12:53, `open=true` 19:12:54. No `ActionPutInPockets` request from Jay at all, so no deposit was attempted.
+  - Both identities on every line; 0 `SCRIPT (E)` in the boot; no item lost or duplicated (each item stayed in the giver's hands).
+  - Verdict: item (1) is NIMBY-T-010 on the release-1 build, exactly its October 20 signature. Item (2) shows the toggle working; whether Jay was offered Put In Pockets is untested.
 - Path to closure: the patch-1 rows S6-30 to S6-33 (two-client Take, Give, Put In Pockets, consent withdrawn) on `@NIMBY-20261027-124130` tonight, then the patch-1 Workshop update under the every-row gate Jeff ruled at 21:11. Until then, the Greet text and Discord can tell players that trading is coming in the next update.
