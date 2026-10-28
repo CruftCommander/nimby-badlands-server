@@ -308,6 +308,106 @@ class NimbyHandsServer
         return transfer.giver.ServerTakeToDst(src, dst);
     }
 
+    // ---- the step 1 wait (NIMBY-T-063) ------------------------------------------
+    // Step 1 is a hand event on the giver, and the giver's hand state machine drops it
+    // while the giver is inside an action command (feasibility study H-B); every request
+    // dispatched from inside Take, Give or Put In Pockets ended UNCONFIRMED with the item
+    // still in hands (S6-30, October 28, 2026). The October 20 diagnostic's V3, the only
+    // P3 that confirmed in game, ended both consent loops the way vanilla ends a continuous
+    // action on the server (ActionManagerServer.RequestInterruptAction), then waited until
+    // both players were free before dispatching. This is that wait, bounded by
+    // NimbyHandsConstants.WAIT_CAP_MS. The request stays PENDING in the registry meanwhile,
+    // so a second request for the item is refused in flight.
+    protected static ref array<ref NimbyHandsMoveItemToPlayer> s_Waiting;
+    protected static bool s_Ticking;
+
+    static void Defer(NimbyHandsMoveItemToPlayer move, NimbyHandsWorldTransfer transfer)
+    {
+        if (!s_Waiting)
+        {
+            s_Waiting = new array<ref NimbyHandsMoveItemToPlayer>;
+        }
+        s_Waiting.Insert(move);
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait start");
+        EndConsentLoop(transfer.giver, transfer.id);
+        EndConsentLoop(transfer.receiver, transfer.id);
+        if (!s_Ticking)
+        {
+            s_Ticking = true;
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.Tick, NimbyHandsConstants.WAIT_TICK_MS, true);
+        }
+    }
+
+    // Ends the offer or request loop (CAContinuousTime(-1), which never ends on its own) so
+    // the player becomes free. Consent was read when the request was made.
+    protected static void EndConsentLoop(PlayerBase player, int id)
+    {
+        if (!player || !player.GetActionManager())
+        {
+            return;
+        }
+        ActionBase action = player.GetActionManager().GetRunningAction();
+        if (!action)
+        {
+            return;
+        }
+        if (!NimbyHandsActionOfferItem.Cast(action) && !NimbyHandsActionRequestItem.Cast(action))
+        {
+            return;
+        }
+        player.GetActionManager().RequestInterruptAction();
+        NimbyHandsLog.Debug("id=" + id.ToString() + " interrupt player=" + DescribePlayer(player) + " action=" + action.ClassName());
+    }
+
+    static void Tick()
+    {
+        int nowMs = GetGame().GetTime();
+        if (s_Waiting)
+        {
+            for (int i = s_Waiting.Count() - 1; i >= 0; i--)
+            {
+                NimbyHandsMoveItemToPlayer move = s_Waiting.Get(i);
+                if (!move || move.Poll(nowMs))
+                {
+                    s_Waiting.RemoveOrdered(i);
+                }
+            }
+        }
+        if (!s_Waiting || s_Waiting.Count() == 0)
+        {
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(NimbyHandsServer.Tick);
+            s_Ticking = false;
+        }
+    }
+
+    // No running action; for the holder also no action command and an idle hand inventory.
+    // A missing player counts as free: the revalidation refuses it with its own detail.
+    static bool IsFree(PlayerBase player, bool holder)
+    {
+        if (!player)
+        {
+            return true;
+        }
+        if (player.GetActionManager() && player.GetActionManager().GetRunningAction())
+        {
+            return false;
+        }
+        if (!holder)
+        {
+            return true;
+        }
+        if (player.GetCommand_Action() != null || player.GetCommandModifier_Action() != null)
+        {
+            return false;
+        }
+        DayZPlayerInventory inventory = DayZPlayerInventory.Cast(player.GetInventory());
+        if (inventory && inventory.IsProcessing())
+        {
+            return false;
+        }
+        return true;
+    }
+
     static void ScheduleTimeout(NimbyHandsWorldTransfer transfer)
     {
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnTimeout, Registry().TimeoutMs(), false, transfer.id);

@@ -26,6 +26,15 @@
 // in hands; step 2 refused (receiver filled between the steps) leaves it in the
 // giver's cargo. Jeff ruled on October 21, 2026 that all three verbs deliver into
 // cargo only, so an item that fits only a worn slot is a documented REFUSED.
+//
+// NIMBY-T-063, October 28, 2026: step 1 is not dispatched from inside the action.
+// The request is registered (PENDING), NimbyHandsServer ends both consent loops and
+// polls Poll until both players are free (cap NimbyHandsConstants.WAIT_CAP_MS), and
+// only then Submit revalidates, writes REQUESTED and dispatches. The October 21
+// production dispatched at once, from inside Take, Give or Put In Pockets, and the
+// giver's hand state machine dropped every hand event (feasibility study H-B): 12 of
+// 12 transfers UNCONFIRMED with the item still in hands. The October 20 diagnostic's
+// V3 waited, and confirmed.
 // -----------------------------------------------------------------------------
 
 class NimbyHandsMoveItemToPlayer
@@ -48,6 +57,9 @@ class NimbyHandsMoveItemToPlayer
     protected EntityAI m_ExpectedItem;
     protected string m_ExpectedGiverId;
     protected string m_ExpectedReceiverId;
+    // NIMBY-T-063: the registered request while it waits, and when the wait began.
+    protected ref NimbyHandsWorldTransfer m_Transfer;
+    protected int m_WaitStartMs;
 
     // requester is the player whose action made the request (the taker for Take, the
     // holder for Give and Put In Pockets); dst_player is the receiver.
@@ -185,6 +197,57 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
+        // NIMBY-T-063: nothing is validated or dispatched inside the action. The request holds
+        // until both players are free; Poll revalidates and dispatches then.
+        m_Transfer = transfer;
+        m_WaitStartMs = GetGame().GetTime();
+        NimbyHandsServer.Defer(this, transfer);
+        return true;
+    }
+
+    // Polled every NimbyHandsConstants.WAIT_TICK_MS while the request waits. Returns true when
+    // the wait is over: dispatched or refused.
+    bool Poll(int nowMs)
+    {
+        NimbyHandsWorldTransfer transfer = m_Transfer;
+        if (!transfer || transfer.state != NimbyHandsState.PENDING)
+        {
+            return true;
+        }
+        int waited = nowMs - m_WaitStartMs;
+        int capMs = NimbyHandsConstants.WAIT_CAP_MS;
+        bool giverFree = NimbyHandsServer.IsFree(transfer.giver, true);
+        bool receiverFree = NimbyHandsServer.IsFree(m_DstPlayer, false);
+        int verdict = NimbyHandsRules.WaitVerdict(giverFree, receiverFree, waited, capMs);
+        if (verdict == NimbyHandsRules.WAIT_HOLD)
+        {
+            return false;
+        }
+        if (verdict == NimbyHandsRules.WAIT_CAP)
+        {
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait cap waited=" + waited.ToString() + " giverFree=" + NimbyHandsLog.Bool(giverFree) + " receiverFree=" + NimbyHandsLog.Bool(receiverFree));
+            NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, NimbyHandsRules.WaitCapDetail(capMs));
+            return true;
+        }
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait free waited=" + waited.ToString());
+        // Consent was read when the request was made and the loop that carried it has ended;
+        // open pockets are a standing state, so they are read again.
+        if (m_ActionName == "NimbyHandsActionPutInPockets")
+        {
+            bool open = false;
+            if (m_DstPlayer)
+            {
+                open = m_DstPlayer.NimbyHandsGetPocketsOpen();
+            }
+            SetConsent(open, "receiver's pockets are closed");
+        }
+        return Submit(transfer, waited);
+    }
+
+    // Revalidates, writes REQUESTED, dispatches step 1, and schedules the timeout. The
+    // observation period starts here, not at registration.
+    protected bool Submit(NimbyHandsWorldTransfer transfer, int waitedMs)
+    {
         InventoryLocation src = new InventoryLocation;
         InventoryLocation stage = new InventoryLocation;
         InventoryLocation dst = new InventoryLocation;
@@ -196,7 +259,8 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
-        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst);
+        transfer.startedMs = GetGame().GetTime();
+        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString();
         NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, requested);
         bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
         // A server hand event is deferred to the holder's next inventory update

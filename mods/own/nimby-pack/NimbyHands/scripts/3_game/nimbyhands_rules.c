@@ -505,6 +505,31 @@ class NimbyHandsRules
         return NimbyHandsState.UNCONFIRMED;
     }
 
+    // NIMBY-T-063: what the step 1 wait does on each poll. Both players free dispatches at
+    // once, however long the wait has been; otherwise the request holds until the cap, then
+    // refuses. A capped request is logged as the giver being busy.
+    static const int WAIT_HOLD = 0;
+    static const int WAIT_DISPATCH = 1;
+    static const int WAIT_CAP = 2;
+
+    static int WaitVerdict(bool giverFree, bool receiverFree, int waitedMs, int capMs)
+    {
+        if (giverFree && receiverFree)
+        {
+            return WAIT_DISPATCH;
+        }
+        if (waitedMs < capMs)
+        {
+            return WAIT_HOLD;
+        }
+        return WAIT_CAP;
+    }
+
+    static string WaitCapDetail(int capMs)
+    {
+        return "giver inventory busy; players did not become free within " + capMs.ToString() + " ms";
+    }
+
     // The server-side minimum interval between two pocket toggles of one player (review item
     // 3). A clock that moved backwards (a new mission) opens the gate.
     static bool PocketToggleAllowed(int lastMs, int nowMs, int minMs)
@@ -903,6 +928,14 @@ class NimbyHandsRules
         failures += Case(results, "timeout with the item elsewhere is unconfirmed", ClassifyTimeout(true, false, false) == UNCONFIRMED);
         failures += Case(results, "timeout with the item gone is unconfirmed", ClassifyTimeout(false, false, false) == UNCONFIRMED);
         failures += Case(results, "timeout with the item gone never refuses on a stale flag", ClassifyTimeout(false, false, true) == UNCONFIRMED);
+
+        failures += Case(results, "wait: both players free dispatches", WaitVerdict(true, true, 0, 3000) == WAIT_DISPATCH);
+        failures += Case(results, "wait: busy giver holds inside the cap", WaitVerdict(false, true, 2999, 3000) == WAIT_HOLD);
+        failures += Case(results, "wait: busy receiver holds inside the cap", WaitVerdict(true, false, 10, 3000) == WAIT_HOLD);
+        failures += Case(results, "wait: still busy at the cap refuses", WaitVerdict(false, false, 3000, 3000) == WAIT_CAP);
+        failures += Case(results, "wait: free at the cap still dispatches", WaitVerdict(true, true, 4000, 3000) == WAIT_DISPATCH);
+        failures += Case(results, "wait: cap detail is the busy family", RefusalFamily(WaitCapDetail(3000)) == FAMILY_GIVER_BUSY);
+        failures += Case(results, "wait: cap detail names the cap", WaitCapDetail(3000) == "giver inventory busy; players did not become free within 3000 ms");
 
         failures += Case(results, "first pocket toggle is allowed", PocketToggleAllowed(-500, 0, 500));
         failures += Case(results, "pocket toggle inside the interval is refused", !PocketToggleAllowed(1000, 1300, 500));

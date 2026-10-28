@@ -10,6 +10,12 @@ class NimbyHandsConstants
     // that reaches this point is logged CONFIRMED only when the item is with the receiver.
     static const int TRANSFER_TIMEOUT_MS = 5000;
 
+    // NIMBY-T-063: step 1 waits until both players have left their actions before the hand
+    // event is dispatched (the holder's hand state machine drops it inside an action command).
+    // Polled every WAIT_TICK_MS; refused when the wait passes WAIT_CAP_MS.
+    static const int WAIT_TICK_MS = 50;
+    static const int WAIT_CAP_MS = 3000;
+
     // Meters added to an action's own reach when the server revalidates proximity at dispatch,
     // so a receiver who drifts during the animation is not refused for a few centimeters.
     static const float PROXIMITY_TOLERANCE = 0.5;
