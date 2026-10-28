@@ -592,13 +592,16 @@ function Write-MetaCpp {
     param(
         [Parameter(Mandatory)][string]$ModRoot,
         [Parameter(Mandatory)][string]$PublishedId,
+        [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][long]$Timestamp
     )
 
     if ($PublishedId -notmatch '^[1-9][0-9]{0,19}$') { throw "Workshop id '$PublishedId' must be digits, not 0." }
+    # The same four lines, in the same order, as the meta.cpp the HostHavoc installer writes.
     $metaCpp = @(
         'protocol = 1;',
         "publishedid = $PublishedId;",
+        "name = `"$Name`";",
         "timestamp = $Timestamp;"
     )
     # ascii for the same reason as mod.cpp: no BOM under 5.1.
@@ -722,7 +725,7 @@ try {
     Copy-Item -LiteralPath $releaseKey.PublicKey -Destination $keysOut
     Write-ModCpp -ModRoot $modRoot -Name $pack.modName -Author $pack.author -Overview "$($pack.modName) server pack"
     $metaTimestamp = ([DateTimeOffset](Get-Date)).ToUnixTimeSeconds()
-    Write-MetaCpp -ModRoot $modRoot -PublishedId ([string]$pack.workshopId) -Timestamp $metaTimestamp
+    Write-MetaCpp -ModRoot $modRoot -PublishedId ([string]$pack.workshopId) -Name $pack.modName -Timestamp $metaTimestamp
     Write-Manifest -LogPath $manifest -Line "MOD $modRoot"
     Write-Manifest -LogPath $manifest -Line ("META publishedid={0}" -f $pack.workshopId)
 

@@ -6,8 +6,10 @@
     locally (baselines, incidents, mod readiness checks).
 
 .DESCRIPTION
-    1. Opens one SFTP session to the HostHavoc service (Posh-SSH). You type the panel
-       password once; it is never written anywhere.
+    1. Opens one SFTP session to the HostHavoc service (Posh-SSH). The credential comes from
+       the DPAPI-encrypted file scripts\Save-NimbySftpCredential.ps1 writes (only your Windows
+       account on this machine can decrypt it); without that file you type the panel password
+       once, and it is not written anywhere.
     2. Uses -RemoteProfileDir (default: the path the first run discovered). If that folder
        is gone or holds no DayZServer_x64_*.RPT, walks the SFTP tree to find it again and
        prints the new path. Pass -RemoteProfileDir '' to force the search.
@@ -17,10 +19,11 @@
 
     Reads   : the remote profile folder (read only; nothing on the server is changed), and
               <repo>\scripts\testserver.local.json (git-ignored by *.local.json) for the
-              connection: "sftpHost", "sftpPort", "sftpUser", and optionally "sftpProfileDir".
+              connection: "sftpHost", "sftpPort", "sftpUser", and optionally "sftpProfileDir"
+              and "sftpCredentialFile"; the saved credential file when it exists.
     Writes  : <repo>\logs\server-<stamp>\ (git-ignored). Each run gets its own folder, so a
               re-run never overwrites an earlier pull.
-    Never   : uploads, renames or deletes anything on the server; stores the password.
+    Never   : uploads, renames or deletes anything on the server; writes the password.
 
     Needs the Posh-SSH module once per user:
         Install-Module Posh-SSH -Scope CurrentUser
@@ -187,7 +190,14 @@ New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $manifest = Join-Path $outDir 'manifest.log'
 Write-Manifest -LogPath $manifest -Line "Get-ServerLogs $stamp host=${ComputerName}:$Port user=$UserName"
 
-$credential = Get-Credential -UserName $UserName -Message "HostHavoc panel password for $UserName (SFTP ${ComputerName}:$Port)"
+$credential = Read-NimbySftpCredential -Path (Get-NimbySftpCredentialPath -RepoRoot $RepoRoot) -UserName $UserName
+if ($null -eq $credential) {
+    Write-Manifest -LogPath $manifest -Line 'CREDENTIAL prompt'
+    $credential = Get-Credential -UserName $UserName -Message "HostHavoc panel password for $UserName (SFTP ${ComputerName}:$Port)"
+}
+else {
+    Write-Manifest -LogPath $manifest -Line 'CREDENTIAL saved file'
+}
 $session = $null
 $results = [System.Collections.Generic.List[string]]::new()
 try {

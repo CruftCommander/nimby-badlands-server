@@ -257,21 +257,21 @@ Describe 'pack.json' {
 }
 
 Describe 'Write-MetaCpp (NIMBY-T-061: the launcher reads the Workshop id from meta.cpp)' {
-    It 'writes protocol, publishedid and timestamp, one per line, with no byte order mark' {
+    It 'writes protocol, publishedid, name and timestamp, one per line, with no byte order mark' {
         $root = Join-Path $TestDrive 'mod-meta'
         New-Item -ItemType Directory -Path $root -Force | Out-Null
-        Write-MetaCpp -ModRoot $root -PublishedId '3828109139' -Timestamp 1793139728
+        Write-MetaCpp -ModRoot $root -PublishedId '3828109139' -Name 'NIMBY' -Timestamp 1793139728
         $file = Join-Path $root 'meta.cpp'
-        @(Get-Content -LiteralPath $file) | Should -Be @('protocol = 1;', 'publishedid = 3828109139;', 'timestamp = 1793139728;')
+        @(Get-Content -LiteralPath $file) | Should -Be @('protocol = 1;', 'publishedid = 3828109139;', 'name = "NIMBY";', 'timestamp = 1793139728;')
         [System.IO.File]::ReadAllBytes($file)[0] | Should -Be ([byte][char]'p')
     }
 
     It 'refuses publishedid 0' {
-        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '0' -Timestamp 1 } | Should -Throw -ExpectedMessage '*not 0*'
+        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '0' -Name 'NIMBY' -Timestamp 1 } | Should -Throw -ExpectedMessage '*not 0*'
     }
 
     It 'refuses an id that is not digits' {
-        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '3828109139;x' -Timestamp 1 } | Should -Throw
+        { Write-MetaCpp -ModRoot $TestDrive -PublishedId '3828109139;x' -Name 'NIMBY' -Timestamp 1 } | Should -Throw
     }
 }
 
