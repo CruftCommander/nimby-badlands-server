@@ -38,6 +38,8 @@
     The boot check fails on any FAIL line, and also when a flagged addon stayed silent: no
     complete line, cases=0 or no cases=N, no PASS line, or PASS plus FAIL not equal to cases.
     build.log gets one "SELFTEST <logPrefix> ran=yes|no cases=N pass=N fail=M" line per addon.
+    -DebugAddons also creates <profile>\<Prefix>\debug for the named addons, so their debug lines
+    appear in the boot check's script log (build.log records "DEBUG FLAGS <prefixes>").
 
     Reads   : pack.json, the addon folders, DayZ Tools (DsUtils), a local DayZ Server install,
               the private key(s) in -KeyDirectory, HKCU:\Software\Valve\Steam,
@@ -87,6 +89,12 @@
     release artifact carries only the qualified addons, named here; pack.json is not edited for
     a release.
 
+.PARAMETER DebugAddons
+    Addons whose debug flag the boot check creates (<profile>\<Prefix>\debug), as pboName values
+    from pack.json, one comma-separated string or an array. Each must also be built in this run.
+    Omitted, no debug flag is written. Added October 29, 2026, so the NIMBY-T-063 bot case in the
+    dev harness boots with the Hands step 2 lines on.
+
 .PARAMETER BootInstanceId
     Override pack.json bootCheck.instanceId for this run's boot check. On the local replica built
     by Sync-LiveReplica.ps1, 998 is the copy of the live world and 999 is the fresh world. Only 998
@@ -113,6 +121,7 @@ param(
     [string]$ServerPath,
     [string[]]$Addons,
     [ValidateSet(998, 999)][int]$BootInstanceId,
+    [string[]]$DebugAddons,
     [switch]$SkipBootCheck,
     [switch]$Dev,
     [switch]$Qualification
@@ -231,6 +240,51 @@ function Select-PackAddon {
         $seen[$name] = $true
     }
     return @($rows | Where-Object { $seen.ContainsKey($_.pboName) })
+}
+
+function Select-DebugAddon {
+    # Returns the code prefixes (flag folders) of the built addons named in Names, or an empty
+    # array when Names is omitted. Names may arrive as one comma-separated string or an array and
+    # are matched to pboName, ignoring case. A name that is not among the built addons, or a name
+    # given twice, throws, so a wrong -DebugAddons stops the build before any packing.
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$BuiltAddons,
+        [AllowNull()][AllowEmptyCollection()][string[]]$Names
+    )
+
+    if ($null -eq $Names -or $Names.Count -eq 0) { return @() }
+    $wanted = @($Names | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($wanted.Count -eq 0) { throw '-DebugAddons is empty; name at least one built pboName, or omit it.' }
+    $known = @($BuiltAddons | ForEach-Object { $_.pboName })
+    $seen = @{}
+    $prefixes = @()
+    foreach ($name in $wanted) {
+        $row = @($BuiltAddons | Where-Object { $_.pboName -ieq $name })
+        if ($row.Count -eq 0) { throw ("-DebugAddons names '{0}', which this build does not include. Built: {1}." -f $name, ($known -join ', ')) }
+        if ($seen.ContainsKey($row[0].pboName)) { throw "-DebugAddons names '$name' twice." }
+        $seen[$row[0].pboName] = $true
+        $prefixes += $row[0].prefix
+    }
+    return $prefixes
+}
+
+function Initialize-DebugFlag {
+    # Creates <profile>\<Prefix>\debug for each prefix, so that addon writes its debug lines in the
+    # boot check. Returns the flag paths.
+    param(
+        [Parameter(Mandatory)][string]$ProfilePath,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Prefix
+    )
+
+    $flags = @()
+    foreach ($p in $Prefix) {
+        $dir = Join-Path $ProfilePath $p
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $flag = Join-Path $dir 'debug'
+        Set-Content -LiteralPath $flag -Value '' -Encoding ascii
+        $flags += $flag
+    }
+    return $flags
 }
 
 function Resolve-BootInstance {
@@ -665,6 +719,7 @@ try {
 
     $clientAddons = @($selectedAddons | Where-Object { -not (Test-AddonServerOnly -Addon $_) })
     $serverAddons = @($selectedAddons | Where-Object { Test-AddonServerOnly -Addon $_ })
+    $debugPrefixes = @(Select-DebugAddon -BuiltAddons $selectedAddons -Names $DebugAddons)
     if ($clientAddons.Count -eq 0) { throw 'No client addon in this build (every pack.json row, or every -Addons name, is serverOnly); at least one is needed for the Workshop output.' }
     Write-Manifest -LogPath $manifest -Line ("PACK {0} client={1} server={2}" -f $pack.modFolderName, (@($clientAddons | ForEach-Object { $_.pboName }) -join ','), (@($serverAddons | ForEach-Object { $_.pboName }) -join ','))
 
@@ -822,6 +877,10 @@ try {
             $flags = @(Initialize-SelfTestFlag -ProfilePath $profileDir -Prefix $prefixes)
             $expectedLogPrefixes = @($prefixes | ForEach-Object { $logPrefixOf[$_] })
             Write-Manifest -LogPath $manifest -Line ("SELFTEST FLAGS {0}" -f ($prefixes -join ','))
+            if ($debugPrefixes.Count -gt 0) {
+                Initialize-DebugFlag -ProfilePath $profileDir -Prefix $debugPrefixes | Out-Null
+                Write-Manifest -LogPath $manifest -Line ("DEBUG FLAGS {0}" -f ($debugPrefixes -join ','))
+            }
 
             $modPaths = @($modRoot)
             if ($devRoot) { $modPaths += $devRoot }

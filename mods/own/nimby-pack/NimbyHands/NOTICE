@@ -24,6 +24,26 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 29, 2026 (NIMBY-T-063, continued):
+  - Step 2 runs the natives ServerTakeToDst would run, one at a time with a debug line after
+    each (LocationSyncMoveEntity, SendServerMove, UpdateInventoryMenu), after a debug line that
+    dumps the engine junctures and the script reservation on the item. Three server crashes in
+    step 2 on October 28 left no script-side trace of which native died.
+  - The terminal notification to the giver and the receiver is sent through the call queue,
+    not from inside the state writer, which for CONFIRMED runs inside the engine's own move.
+  - Dev harness switch: while NimbyHandsServer.AllowDummyParties(true) is on, a party with no
+    identity passes the party check as connected, so the boot check can run a real transfer
+    between two spawned dummies. Off by default; a connected player always has an identity.
+  - NimbyHandsMoveItemToPlayer.Transfer() returns the registered request, so the dev harness can
+    read a refusal after the wait tick (the registry evicts terminal entries).
+- October 28, 2026 (NIMBY-T-063, the in-game run of October 28):
+  - Step 1 is no longer dispatched from inside the action. The request is registered as PENDING,
+    the server ends both players' offer and request loops, polls every 50 ms until both players
+    are free, and dispatches then; a request still waiting at 3000 ms is refused as "giver
+    inventory busy". The holder's hand state machine drops a hand event posted while the holder
+    is inside an action command, which left every October 27 transfer UNCONFIRMED.
+  - Step 2 runs one wait tick after the staged landing (was the same engine frame) and compares
+    the item's location by type and parent entity only (no hierarchy walk, no cargo cell).
 - October 21, 2026 (Hands plan v0.7, P3, ruling J2 of October 20 and the rulings of October 21):
   - A transfer is now two server moves under one id. Step 1 moves the item from the giver's
     hands into a free cargo location of the giver's own inventory (never a worn slot, never

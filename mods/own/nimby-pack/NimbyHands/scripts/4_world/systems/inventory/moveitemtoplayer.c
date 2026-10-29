@@ -35,6 +35,10 @@
 // giver's hand state machine dropped every hand event (feasibility study H-B): 12 of
 // 12 transfers UNCONFIRMED with the item still in hands. The October 20 diagnostic's
 // V3 waited, and confirmed.
+//
+// NIMBY-T-063, October 29, 2026: step 2 no longer calls ServerTakeToDst as one native. It
+// runs the same natives one at a time (NimbyHandsServer.MoveStep2) with a debug line after
+// each, after three server crashes in step 2 on October 28; a crash log now names the native.
 // -----------------------------------------------------------------------------
 
 class NimbyHandsMoveItemToPlayer
@@ -203,6 +207,14 @@ class NimbyHandsMoveItemToPlayer
         m_WaitStartMs = GetGame().GetTime();
         NimbyHandsServer.Defer(this, transfer);
         return true;
+    }
+
+    // The registered request, or null before Execute or when Execute refused it unregistered.
+    // The registry evicts a terminal entry, so this is how the dev harness reads a request's
+    // state and detail after the wait tick.
+    NimbyHandsWorldTransfer Transfer()
+    {
+        return m_Transfer;
     }
 
     // Polled every NimbyHandsConstants.WAIT_TICK_MS while the request waits. Returns true when
@@ -380,11 +392,10 @@ class NimbyHandsMoveItemToPlayer
             return;
         }
 
-        // HumanInventory.TakeToDst with neither end in hands falls through to
-        // GameInventory.TakeToDst(SERVER): LocationSyncMoveEntity plus SendServerMove
-        // (HumanInventory.c:243-251, Inventory.c:1057-1066). Its EEItemLocationChanged fires
-        // inside the call and writes CONFIRMED; its return value is the result.
-        bool moved = transfer.giver.ServerTakeToDst(src, dst);
+        // The natives ServerTakeToDst runs with neither end in hands, one per debug line
+        // (NimbyHandsServer.MoveStep2; HumanInventory.c:243-251, Inventory.c:1057-1066). The
+        // EEItemLocationChanged inside the first writes CONFIRMED; its return value is the result.
+        bool moved = NimbyHandsServer.MoveStep2(transfer, src, dst);
         if (NimbyHandsState.IsTerminal(transfer.state))
         {
             return;
@@ -492,7 +503,8 @@ class NimbyHandsMoveItemToPlayer
         {
             return NimbyHandsRules.CheckParty(role, false, false, false, false, false, false, false);
         }
-        bool connected = player.GetIdentity() != null;
+        // A dummy with no identity counts as connected only while the dev harness says so.
+        bool connected = player.GetIdentity() != null || NimbyHandsServer.DummyPartiesAllowed();
         bool alive = player.IsAlive();
         bool conscious = !player.IsUnconscious();
         return NimbyHandsRules.CheckParty(role, true, connected, alive, conscious, player.IsRestrained(), player.IsInVehicle(), player.IsSwimming());

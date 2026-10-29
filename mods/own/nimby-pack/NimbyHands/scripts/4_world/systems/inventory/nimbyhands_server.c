@@ -29,6 +29,9 @@
 //           from the two terminal writers only, to the giver and the receiver, each
 //           guarded for a null player and a null identity: the identity overload sends
 //           to every player when the identity is null (NotificationSystem.c:141-150).
+//           Sent through the call queue, never from inside the writer: a terminal state
+//           is often written inside EEItemLocationChanged, that is, inside the engine's
+//           own move (NIMBY-T-063, October 29, 2026).
 // Persists: Nothing. Every member is static server memory for the mission.
 // -----------------------------------------------------------------------------
 class NimbyHandsWorldTransfer : NimbyHandsTransfer
@@ -114,6 +117,23 @@ class NimbyHandsServer
         }
         s_ForcedStep2Refusals = s_ForcedStep2Refusals - 1;
         return true;
+    }
+
+    // Dev harness only (NIMBY-T-063 bot case): while on, a party with no identity (a spawned
+    // dummy) passes the party check as connected, so the boot check can run a real two-step
+    // transfer between two dummies with no client. Off by default; the harness turns it on for
+    // that one case and off again after it. A real player always has an identity, so this
+    // changes nothing for a connected player.
+    protected static bool s_DummyPartiesAllowed;
+
+    static void AllowDummyParties(bool allow)
+    {
+        s_DummyPartiesAllowed = allow;
+    }
+
+    static bool DummyPartiesAllowed()
+    {
+        return s_DummyPartiesAllowed;
     }
 
     // ---- descriptions -------------------------------------------------------
@@ -273,8 +293,11 @@ class NimbyHandsServer
         LogLifecycle(transfer);
         if (NimbyHandsState.IsTerminal(state))
         {
-            SendToast(transfer.giver, "giver", transfer.state, transfer.detail);
-            SendToast(transfer.receiver, "receiver", transfer.state, transfer.detail);
+            // On the next call-queue pass, not here: CONFIRMED and the signal refusals are
+            // written inside EEItemLocationChanged, inside the native move. An RPC from there
+            // has never run to completion (NIMBY-T-063). A deleted player reads as null then.
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.giver, "giver", transfer.state, transfer.detail);
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.receiver, "receiver", transfer.state, transfer.detail);
         }
         return true;
     }
@@ -288,7 +311,7 @@ class NimbyHandsServer
 
     // ---- the toast ------------------------------------------------------------
 
-    protected static void SendToast(PlayerBase player, string role, int state, string detail)
+    static void SendToast(PlayerBase player, string role, int state, string detail)
     {
         if (!player || !player.GetIdentity())
         {
@@ -306,6 +329,96 @@ class NimbyHandsServer
     static bool Dispatch(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
     {
         return transfer.giver.ServerTakeToDst(src, dst);
+    }
+
+    // ---- the step 2 move (NIMBY-T-063 instrumentation) ---------------------------
+    // What Man.ServerTakeToDst does for a move with neither end in hands, one native per
+    // debug line, so a crash log names the native that died (October 28, 2026: three access
+    // violations in step 2, the last inside ServerTakeToDst itself):
+    //   Man.TakeToDstImpl (Man.c:762-767) -> HumanInventory.TakeToDst (HumanInventory.c:243-251;
+    //   RedirectToHandEvent is false without a HANDS end) -> GameInventory.TakeToDst(SERVER)
+    //   (Inventory.c:1057-1066): LocationSyncMoveEntity (:567), then SendServerMove
+    //   (InventoryInputUserData.c:57) when it moved and dst is valid; then Man.UpdateInventoryMenu.
+    // Before the first native the debug line dumps the junctures (Game.c:757-759) and the
+    // reservation (Inventory.c:787) on the item, as the October 20 diagnostic did before its move.
+    static bool MoveStep2(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
+    {
+        string idText = transfer.id.ToString();
+        if (NimbyHandsLog.IsDebug())
+        {
+            NimbyHandsLog.Debug("id=" + idText + " step 2 move: src=" + DescribeLocation(src) + " dst=" + DescribeLocation(dst) + " " + DescribeJunctures(transfer.giver, transfer.receiver, transfer.item, dst) + " " + DescribeReservations(transfer.giver, transfer.item, src, dst));
+        }
+        bool moved = GameInventory.LocationSyncMoveEntity(src, dst);
+        NimbyHandsLog.Debug("id=" + idText + " step 2 move: LocationSyncMoveEntity=" + NimbyHandsLog.Bool(moved));
+        if (moved && dst.IsValid())
+        {
+            InventoryInputUserData.SendServerMove(null, InventoryCommandType.SYNC_MOVE, src, dst);
+            NimbyHandsLog.Debug("id=" + idText + " step 2 move: SendServerMove sent");
+        }
+        if (transfer.giver)
+        {
+            transfer.giver.UpdateInventoryMenu();
+            NimbyHandsLog.Debug("id=" + idText + " step 2 move: UpdateInventoryMenu done");
+        }
+        return moved;
+    }
+
+    // The engine's juncture locks (Game.c:757-759): on the item, between the giver and the
+    // item, on either player as an item, and on the giver for the destination. Server only.
+    static string DescribeJunctures(PlayerBase giver, PlayerBase receiver, EntityAI item, InventoryLocation dst)
+    {
+        if (!GetGame().IsServer())
+        {
+            return "j=client";
+        }
+        string line = "jItem=none jGiverItem=none";
+        if (item)
+        {
+            line = "jItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(item));
+            if (giver)
+            {
+                line = line + " jGiverItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJuncture(giver, item));
+            }
+            else
+            {
+                line = line + " jGiverItem=none";
+            }
+        }
+        if (giver)
+        {
+            line = line + " jGiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(giver));
+        }
+        if (receiver)
+        {
+            line = line + " jReceiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(receiver));
+        }
+        if (giver && dst)
+        {
+            line = line + " jDst=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureDestination(giver, dst));
+        }
+        return line;
+    }
+
+    // The script-side reservation (Inventory.c:787) on the item for each end, and whether the
+    // giver's inventory is still processing a deferred event (DayZPlayerInventory.c:4639).
+    static string DescribeReservations(PlayerBase giver, EntityAI item, InventoryLocation src, InventoryLocation dst)
+    {
+        if (!item)
+        {
+            return "rSrc=none rDst=none";
+        }
+        string line = "rSrc=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, src));
+        line = line + " rDst=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, dst));
+        if (giver)
+        {
+            DayZPlayerInventory inventory = DayZPlayerInventory.Cast(giver.GetInventory());
+            if (inventory)
+            {
+                line = line + " giverProcessing=" + NimbyHandsLog.Bool(inventory.IsProcessing());
+            }
+            line = line + " giverCmdAction=" + NimbyHandsLog.Bool(giver.GetCommand_Action() != null);
+        }
+        return line;
     }
 
     // ---- the step 1 wait (NIMBY-T-063) ------------------------------------------
