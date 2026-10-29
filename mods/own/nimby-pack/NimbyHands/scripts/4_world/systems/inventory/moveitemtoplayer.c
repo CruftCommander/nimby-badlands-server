@@ -449,7 +449,12 @@ class NimbyHandsMoveItemToPlayer
         {
             return f;
         }
-        bool giverIsRoot = transfer.item.GetHierarchyRootPlayer() == giver;
+        // NIMBY-T-063 (October 28 crash, access violation here on the first staged transfer):
+        // the root is read through the staged location's parent (the bag, then the player), the
+        // way the October 20 diagnostic's step 2 did, never by walking the item's own hierarchy,
+        // which the engine may still be updating after the hand event.
+        EntityAI stagedParent = src.GetParent();
+        bool giverIsRoot = stagedParent != null && stagedParent.GetHierarchyRootPlayer() == giver;
         f.itemAtSource = giverIsRoot && NimbyHandsServer.IsAtStagedLocation(transfer, src);
         f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
         if (!f.itemAtSource || f.itemReplaced)

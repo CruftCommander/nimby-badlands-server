@@ -413,11 +413,13 @@ class NimbyHandsServer
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnTimeout, Registry().TimeoutMs(), false, transfer.id);
     }
 
-    // Step 2 runs one tick after the step 1 signal, never inside it. The id lookup makes a
-    // call for an evicted request harmless.
+    // Step 2 runs after the step 1 signal, never inside it. A 0 ms CallLater ran in the same
+    // engine frame as the hand event's landing and the first staged transfer crashed the
+    // server inside step 2 (October 28, 2026); one wait tick later the move has settled. The
+    // id lookup makes a call for an evicted request harmless.
     static void ScheduleStep2(NimbyHandsWorldTransfer transfer)
     {
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnStep2, 0, false, transfer.id);
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnStep2, NimbyHandsConstants.WAIT_TICK_MS, false, transfer.id);
     }
 
     static void OnStep2(int id)
