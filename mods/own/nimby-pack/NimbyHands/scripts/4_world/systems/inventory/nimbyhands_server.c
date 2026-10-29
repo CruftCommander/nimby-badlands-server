@@ -57,11 +57,11 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     // The exact step 1 landing, recorded from signal 1: step 2 moves only from here.
     bool staged;
     int stagedType;
+    // The staged location as step 1's signal described it (type:parent@owner) and the
+    // parent entity it landed in. The cargo cell is not recorded: step 2 moves from the
+    // item's current location, and the two October 28 crashes sat on the cell compare.
+    string stagedText;
     EntityAI stagedParent;
-    int stagedSlot;
-    int stagedIdx;
-    int stagedRow;
-    int stagedCol;
 }
 
 class NimbyHandsServer
@@ -440,28 +440,34 @@ class NimbyHandsServer
         transfer.staged = true;
         transfer.stagedType = loc.GetType();
         transfer.stagedParent = loc.GetParent();
-        transfer.stagedSlot = loc.GetSlot();
-        transfer.stagedIdx = loc.GetIdx();
-        transfer.stagedRow = loc.GetRow();
-        transfer.stagedCol = loc.GetCol();
+        transfer.stagedText = DescribeLocation(loc);
     }
 
-    // The location is exactly the one step 1 landed in: type, parent, slot, and cargo cell.
+    // The item is still where step 1 put it: same location type and the same parent entity,
+    // read one native at a time with a debug line after each (October 28: two server crashes
+    // in this check, access violation in one native; the lines name it if it recurs).
     static bool IsAtStagedLocation(NimbyHandsWorldTransfer transfer, InventoryLocation loc)
     {
-        if (!transfer.staged || !loc || !transfer.stagedParent)
+        if (!transfer.staged || !loc)
         {
             return false;
         }
-        if (loc.GetType() != transfer.stagedType || loc.GetParent() != transfer.stagedParent)
+        string idText = transfer.id.ToString();
+        int type = loc.GetType();
+        NimbyHandsLog.Debug("id=" + idText + " staged check: type=" + type.ToString() + " staged=" + transfer.stagedType.ToString());
+        if (type != transfer.stagedType || type == InventoryLocationType.HANDS)
         {
             return false;
         }
-        if (loc.GetSlot() != transfer.stagedSlot || loc.GetIdx() != transfer.stagedIdx)
+        EntityAI parent = loc.GetParent();
+        NimbyHandsLog.Debug("id=" + idText + " staged check: parent read " + NimbyHandsLog.Bool(parent != null));
+        if (!parent)
         {
             return false;
         }
-        return loc.GetRow() == transfer.stagedRow && loc.GetCol() == transfer.stagedCol;
+        bool same = parent == transfer.stagedParent;
+        NimbyHandsLog.Debug("id=" + idText + " staged check: parent same=" + NimbyHandsLog.Bool(same) + " staged=" + transfer.stagedText);
+        return same;
     }
 
     // ---- signal 1: the item's location changed --------------------------------

@@ -449,13 +449,14 @@ class NimbyHandsMoveItemToPlayer
         {
             return f;
         }
-        // NIMBY-T-063 (October 28 crash, access violation here on the first staged transfer):
-        // the root is read through the staged location's parent (the bag, then the player), the
-        // way the October 20 diagnostic's step 2 did, never by walking the item's own hierarchy,
-        // which the engine may still be updating after the hand event.
-        EntityAI stagedParent = src.GetParent();
-        bool giverIsRoot = stagedParent != null && stagedParent.GetHierarchyRootPlayer() == giver;
-        f.itemAtSource = giverIsRoot && NimbyHandsServer.IsAtStagedLocation(transfer, src);
+        // NIMBY-T-063 (two server crashes here on October 28, access violation in a native on
+        // the first staged transfer, 0 ms and 50 ms after the signal): no hierarchy walk and no
+        // cargo-cell compare in step 2. The item is at its source when its current location has
+        // the staged type and the staged parent entity; the giver still owns that parent
+        // because the request was revalidated 50 ms ago and the reach check above holds.
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: location read");
+        f.itemAtSource = NimbyHandsServer.IsAtStagedLocation(transfer, src);
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: at source=" + NimbyHandsLog.Bool(f.itemAtSource));
         f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
         if (!f.itemAtSource || f.itemReplaced)
         {
