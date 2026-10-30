@@ -16,6 +16,13 @@ class NimbyHandsConstants
     static const int WAIT_TICK_MS = 50;
     static const int WAIT_CAP_MS = 3000;
 
+    // NIMBY-T-063, October 29, 2026: minimum milliseconds between the step 1 landing and step 2,
+    // measured by the step 2 poll (NimbyHandsServer.Step2Tick, every WAIT_TICK_MS). One tick,
+    // as the October 20 diagnostic ran it. 1000 ms was tried once (build 174154) and changed
+    // nothing: the crashes were in how step 2 was scheduled, not when. Budget: the step 1 wait
+    // cap, the hand event (~400 ms) and this delay stay under TRANSFER_TIMEOUT_MS.
+    static const int STEP2_DELAY_MS = 50;
+
     // Meters added to an action's own reach when the server revalidates proximity at dispatch,
     // so a receiver who drifts during the animation is not refused for a few centimeters.
     static const float PROXIMITY_TOLERANCE = 0.5;

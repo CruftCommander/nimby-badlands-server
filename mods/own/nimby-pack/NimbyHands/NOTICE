@@ -24,6 +24,35 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 29, 2026, evening (NIMBY-T-063, crashes 4 to 8, the step 2 poll, step 2 without the giver):
+  - While the step 2 move runs, every inventory signal handler returns at once and the end
+    handler only notes that the signal fired; the CONFIRMED bookkeeping (registry, log, toast)
+    runs after LocationSyncMoveEntity returns, outside the engine's callback. Crash 8 died inside
+    that callback on a pure-script static call, after the move itself had put the item in the
+    receiver's inventory.
+  - Step 2 never touches the giver object. Seven crashes on 1.30.164200 died on the first
+    operation inside the step 2 move that handed the stored giver reference to the engine or to
+    a script call after the step 1 hand event (ServerTakeToDst, HasInventoryJuncture,
+    GetIdentity), from the signal and from the poll alike, while the same reads on the giver in
+    the step 2 validation passed moments earlier. The move runs LocationSyncMoveEntity and
+    SendServerMove on the two locations only; Man.UpdateInventoryMenu is not called. The
+    terminal toast resolves its two targets from GetGame().GetPlayers() by the identity ids
+    captured at registration, so a player who left is not found rather than dereferenced.
+  - Step 2 is no longer scheduled from inside the step 1 signal. Six server crashes on game
+    build 1.30.164200 all ran step 2 from a CallLater posted inside EEItemLocationChanged (the
+    engine's hand-event move) and died in the script VM on the first touch of the giver, at six
+    different sites; every step 2 that confirmed (dev harness, the October 20 diagnostic) ran
+    from a timer of its own. The dispatch now starts a 50 ms poll (NimbyHandsServer.Step2Tick,
+    outside the callback) that runs step 2 for a STAGED transfer at least
+    NimbyHandsConstants.STEP2_DELAY_MS (one tick) past the landing it recorded (stagedAtMs). The
+    registry gained CollectByState for the poll. A 1000 ms delay from the signal was tried once
+    (build 174154) and crashed the same way.
+  - The juncture and reservation dumps write one debug line per native, so a crash in one of
+    them leaves the values read before it (crash 4 lost the value HasInventoryJunctureItem had
+    returned). The dispatch reads the giver's junctures before the hand event ("step 1
+    junctures:"); step 2 names the giver through its identity ("step 2 giver:"), reads the
+    reservations ("step 2 reservations:"), then runs the move natives, and no longer reads the
+    junctures (crashes 4 and 5 died inside HasInventoryJuncture(giver, item)).
 - October 29, 2026 (NIMBY-T-063, continued):
   - Step 2 runs the natives ServerTakeToDst would run, one at a time with a debug line after
     each (LocationSyncMoveEntity, SendServerMove, UpdateInventoryMenu), after a debug line that

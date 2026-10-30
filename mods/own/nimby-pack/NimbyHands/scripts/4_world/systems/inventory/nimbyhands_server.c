@@ -65,6 +65,12 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     // item's current location, and the two October 28 crashes sat on the cell compare.
     string stagedText;
     EntityAI stagedParent;
+    // GetGame().GetTime() when the STAGED signal was read; the step 2 poll measures from it.
+    int stagedAtMs;
+    // Identity ids captured at registration; the terminal toast resolves its targets from the
+    // engine's player list by these, never through the stored references (see MoveStep2).
+    string giverId;
+    string receiverId;
 }
 
 class NimbyHandsServer
@@ -74,6 +80,13 @@ class NimbyHandsServer
     // not a flag, so a nested location change cannot clear the outer trace.
     protected static int s_TraceDepth;
     protected static int s_Sequence;
+    // The step 2 move in flight (NIMBY-T-063, October 29, 2026): while s_Step2MoveId is set,
+    // every inventory signal handler returns at once and the end handler only raises
+    // s_Step2Landed. Crash 8 (crash_2026-10-29_19-42-55) died inside the engine's move callback
+    // on a pure-script static call in the CONFIRMED bookkeeping; MoveStep2 does that bookkeeping
+    // after LocationSyncMoveEntity returns, outside the callback.
+    protected static int s_Step2MoveId;
+    protected static bool s_Step2Landed;
     // Dev harness only (cost path B): step-2 refusals still to force. Server memory.
     protected static int s_ForcedStep2Refusals;
 
@@ -266,6 +279,8 @@ class NimbyHandsServer
     {
         transfer.giverText = DescribePlayer(transfer.giver);
         transfer.receiverText = DescribePlayer(transfer.receiver);
+        transfer.giverId = NimbyHandsActionData.IdentityId(transfer.giver);
+        transfer.receiverId = NimbyHandsActionData.IdentityId(transfer.receiver);
         transfer.itemText = DescribeItem(transfer.item);
     }
 
@@ -277,7 +292,7 @@ class NimbyHandsServer
         transfer.state = NimbyHandsState.REFUSED;
         transfer.detail = detail;
         LogLifecycle(transfer);
-        SendToast(transfer.requester, "requester", transfer.state, transfer.detail);
+        SendToastTo(transfer.requester, "requester", transfer.state, transfer.detail);
     }
 
     // Moves the transfer and writes its line. Returns false when the lifecycle forbids the
@@ -296,8 +311,8 @@ class NimbyHandsServer
             // On the next call-queue pass, not here: CONFIRMED and the signal refusals are
             // written inside EEItemLocationChanged, inside the native move. An RPC from there
             // has never run to completion (NIMBY-T-063). A deleted player reads as null then.
-            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.giver, "giver", transfer.state, transfer.detail);
-            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.receiver, "receiver", transfer.state, transfer.detail);
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.giverId, "giver", transfer.state, transfer.detail);
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.receiverId, "receiver", transfer.state, transfer.detail);
         }
         return true;
     }
@@ -311,7 +326,17 @@ class NimbyHandsServer
 
     // ---- the toast ------------------------------------------------------------
 
-    static void SendToast(PlayerBase player, string role, int state, string detail)
+    // The terminal toast: the target is resolved from the engine's player list by the identity
+    // id captured at registration (NIMBY-T-063, October 29, 2026: the stored giver reference is
+    // not handed to the engine after the hand event; a player who left is simply not found).
+    static void SendToast(string identityId, string role, int state, string detail)
+    {
+        PlayerBase player = FindPlayerByIdentityId(identityId);
+        NimbyHandsLog.Debug("toast role=" + role + " target=" + DescribePlayer(player));
+        SendToastTo(player, role, state, detail);
+    }
+
+    static void SendToastTo(PlayerBase player, string role, int state, string detail)
     {
         if (!player || !player.GetIdentity())
         {
@@ -322,12 +347,39 @@ class NimbyHandsServer
         NotificationSystem.SendNotificationToPlayerExtended(player, NimbyHandsConstants.TOAST_SECONDS, NimbyHandsConstants.TOAST_TITLE, text, "");
     }
 
+    // The connected player with this identity id, from GetGame().GetPlayers, or null.
+    static PlayerBase FindPlayerByIdentityId(string identityId)
+    {
+        if (identityId == "")
+        {
+            return null;
+        }
+        array<Man> players = new array<Man>;
+        GetGame().GetPlayers(players);
+        foreach (Man man : players)
+        {
+            if (man && man.GetIdentity() && man.GetIdentity().GetId() == identityId)
+            {
+                return PlayerBase.Cast(man);
+            }
+        }
+        return null;
+    }
+
     // ---- dispatch -------------------------------------------------------------
 
     // Hands the request to the holder's own hand state machine (Man.c:757). The return value
     // only says the request was routed; see signal 3 in the header.
+    // Before the hand event the debug lines read the giver's junctures (the October 20
+    // diagnostic's predispatch read, clean on 1.30.164078): crashes 4 and 5 (October 29, 2026)
+    // died in HasInventoryJuncture(giver, item) after the hand event, so a crash here says
+    // the native or the giver reference is at fault, a clean read says the hand event is.
     static bool Dispatch(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
     {
+        if (NimbyHandsLog.IsDebug())
+        {
+            LogJunctures("step 1", transfer.id.ToString(), transfer.giver, transfer.receiver, transfer.item, dst);
+        }
         return transfer.giver.ServerTakeToDst(src, dst);
     }
 
@@ -339,86 +391,101 @@ class NimbyHandsServer
     //   RedirectToHandEvent is false without a HANDS end) -> GameInventory.TakeToDst(SERVER)
     //   (Inventory.c:1057-1066): LocationSyncMoveEntity (:567), then SendServerMove
     //   (InventoryInputUserData.c:57) when it moved and dst is valid; then Man.UpdateInventoryMenu.
-    // Before the first native the debug line dumps the junctures (Game.c:757-759) and the
-    // reservation (Inventory.c:787) on the item, as the October 20 diagnostic did before its move.
+    // This function never touches the giver object (NIMBY-T-063, October 29, 2026). On game
+    // build 1.30.164200 seven server crashes in a row died here, each on the first operation
+    // that handed transfer.giver to the engine or to a script call after the step 1 hand event:
+    // ServerTakeToDst on it (crash 3), HasInventoryJuncture(giver, item) (4, 5),
+    // DescribePlayer(giver) (6, 7), at 0, 49, 93, 999 ms after the landing, scheduled from the
+    // signal or from the poll alike, while every item-only and location-only read passed and the
+    // same reads on the giver inside CollectStep2Facts passed moments earlier. The same code
+    // confirmed on 1.30.164078 (October 20) and confirms every boot between two dummies. So the
+    // debug lines read the item and the two locations only, the reservation lines read the item
+    // only, and Man.UpdateInventoryMenu (a menu refresh hint the vanilla TakeToDstImpl sends) is
+    // not called. The junctures are read by Dispatch, before the hand event.
     static bool MoveStep2(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
     {
         string idText = transfer.id.ToString();
         if (NimbyHandsLog.IsDebug())
         {
-            NimbyHandsLog.Debug("id=" + idText + " step 2 move: src=" + DescribeLocation(src) + " dst=" + DescribeLocation(dst) + " " + DescribeJunctures(transfer.giver, transfer.receiver, transfer.item, dst) + " " + DescribeReservations(transfer.giver, transfer.item, src, dst));
+            NimbyHandsLog.Debug("id=" + idText + " step 2 move: src=" + DescribeLocation(src) + " dst=" + DescribeLocation(dst));
+            LogReservations(idText, transfer.item, src, dst);
         }
+        s_Step2MoveId = transfer.id;
+        s_Step2Landed = false;
         bool moved = GameInventory.LocationSyncMoveEntity(src, dst);
-        NimbyHandsLog.Debug("id=" + idText + " step 2 move: LocationSyncMoveEntity=" + NimbyHandsLog.Bool(moved));
+        bool landed = s_Step2Landed;
+        s_Step2MoveId = 0;
+        s_Step2Landed = false;
+        NimbyHandsLog.Debug("id=" + idText + " step 2 move: LocationSyncMoveEntity=" + NimbyHandsLog.Bool(moved) + " signal=" + NimbyHandsLog.Bool(landed));
         if (moved && dst.IsValid())
         {
             InventoryInputUserData.SendServerMove(null, InventoryCommandType.SYNC_MOVE, src, dst);
             NimbyHandsLog.Debug("id=" + idText + " step 2 move: SendServerMove sent");
         }
-        if (transfer.giver)
+        // The bookkeeping the signal handler used to do, now outside the engine's callback:
+        // CONFIRMED when the move reported success, the signal fired, and the item's hierarchy
+        // root is the receiver (a pointer compare, no read through either player).
+        if (moved && landed && transfer.item && transfer.receiver && transfer.item.GetHierarchyRootPlayer() == transfer.receiver)
         {
-            transfer.giver.UpdateInventoryMenu();
-            NimbyHandsLog.Debug("id=" + idText + " step 2 move: UpdateInventoryMenu done");
+            Advance(transfer, NimbyHandsState.CONFIRMED, "signal=EEItemLocationChanged dst=" + DescribeItemLocation(transfer.item));
         }
         return moved;
     }
 
     // The engine's juncture locks (Game.c:757-759): on the item, between the giver and the
     // item, on either player as an item, and on the giver for the destination. Server only.
-    static string DescribeJunctures(PlayerBase giver, PlayerBase receiver, EntityAI item, InventoryLocation dst)
+    // One native per debug line, so a crash in one of them leaves the values read before it.
+    // stage names the caller ("step 1" before the hand event, "step 2" before the move).
+    static void LogJunctures(string stage, string idText, PlayerBase giver, PlayerBase receiver, EntityAI item, InventoryLocation dst)
     {
+        string prefix = "id=" + idText + " " + stage + " junctures: ";
         if (!GetGame().IsServer())
         {
-            return "j=client";
+            NimbyHandsLog.Debug(prefix + "j=client");
+            return;
         }
-        string line = "jItem=none jGiverItem=none";
         if (item)
         {
-            line = "jItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(item));
+            NimbyHandsLog.Debug(prefix + "jItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(item)));
             if (giver)
             {
-                line = line + " jGiverItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJuncture(giver, item));
+                NimbyHandsLog.Debug(prefix + "jGiverItem=" + NimbyHandsLog.Bool(GetGame().HasInventoryJuncture(giver, item)));
             }
             else
             {
-                line = line + " jGiverItem=none";
+                NimbyHandsLog.Debug(prefix + "jGiverItem=none");
             }
+        }
+        else
+        {
+            NimbyHandsLog.Debug(prefix + "jItem=none jGiverItem=none");
         }
         if (giver)
         {
-            line = line + " jGiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(giver));
+            NimbyHandsLog.Debug(prefix + "jGiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(giver)));
         }
         if (receiver)
         {
-            line = line + " jReceiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(receiver));
+            NimbyHandsLog.Debug(prefix + "jReceiver=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureItem(receiver)));
         }
         if (giver && dst)
         {
-            line = line + " jDst=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureDestination(giver, dst));
+            NimbyHandsLog.Debug(prefix + "jDst=" + NimbyHandsLog.Bool(GetGame().HasInventoryJunctureDestination(giver, dst)));
         }
-        return line;
     }
 
-    // The script-side reservation (Inventory.c:787) on the item for each end, and whether the
-    // giver's inventory is still processing a deferred event (DayZPlayerInventory.c:4639).
-    static string DescribeReservations(PlayerBase giver, EntityAI item, InventoryLocation src, InventoryLocation dst)
+    // The script-side reservation (Inventory.c:787) on the item for each end. One native per
+    // debug line, as LogJunctures. Reads the item only (see MoveStep2 for why not the giver).
+    static void LogReservations(string idText, EntityAI item, InventoryLocation src, InventoryLocation dst)
     {
+        string prefix = "id=" + idText + " step 2 reservations: ";
         if (!item)
         {
-            return "rSrc=none rDst=none";
+            NimbyHandsLog.Debug(prefix + "rSrc=none rDst=none");
+            return;
         }
-        string line = "rSrc=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, src));
-        line = line + " rDst=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, dst));
-        if (giver)
-        {
-            DayZPlayerInventory inventory = DayZPlayerInventory.Cast(giver.GetInventory());
-            if (inventory)
-            {
-                line = line + " giverProcessing=" + NimbyHandsLog.Bool(inventory.IsProcessing());
-            }
-            line = line + " giverCmdAction=" + NimbyHandsLog.Bool(giver.GetCommand_Action() != null);
-        }
-        return line;
+        NimbyHandsLog.Debug(prefix + "rSrc=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, src)));
+        NimbyHandsLog.Debug(prefix + "rDst=" + NimbyHandsLog.Bool(GameInventory.HasInventoryReservation(item, dst)));
     }
 
     // ---- the step 1 wait (NIMBY-T-063) ------------------------------------------
@@ -526,13 +593,55 @@ class NimbyHandsServer
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnTimeout, Registry().TimeoutMs(), false, transfer.id);
     }
 
-    // Step 2 runs after the step 1 signal, never inside it. A 0 ms CallLater ran in the same
-    // engine frame as the hand event's landing and the first staged transfer crashed the
-    // server inside step 2 (October 28, 2026); one wait tick later the move has settled. The
-    // id lookup makes a call for an evicted request harmless.
-    static void ScheduleStep2(NimbyHandsWorldTransfer transfer)
+    // ---- the step 2 poll (NIMBY-T-063, October 29, 2026) --------------------------
+    // Step 2 is never scheduled from inside the step 1 signal. Six server crashes on game
+    // build 1.30.164200 (October 28 and 29, 2026) all ran step 2 from a CallLater posted
+    // inside EEItemLocationChanged, that is inside the engine's hand-event move, and died in
+    // the script VM on the first touch of the giver object (six different sites: a location
+    // compare, a script method call, a juncture native, GetIdentity). Every step 2 that ever
+    // confirmed ran from somewhere else: the dev harness calls OnStep2 directly, and the
+    // October 20 diagnostic polled for the landing from its own timer (hands-t010, confirmed
+    // four of four on 1.30.164078). This poll is that timer: Submit starts it after the
+    // dispatch, from the wait tick, and it runs step 2 for every STAGED transfer at least
+    // STEP2_DELAY_MS past its stagedAtMs. It stops when the registry is empty (terminal
+    // entries are evicted; a stuck entry is evicted by OnTimeout).
+    protected static bool s_Step2Ticking;
+
+    static void EnsureStep2Poll()
     {
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.OnStep2, NimbyHandsConstants.WAIT_TICK_MS, false, transfer.id);
+        if (s_Step2Ticking)
+        {
+            return;
+        }
+        s_Step2Ticking = true;
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.Step2Tick, NimbyHandsConstants.WAIT_TICK_MS, true);
+    }
+
+    static void Step2Tick()
+    {
+        if (!s_Registry || s_Registry.Count() == 0)
+        {
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(NimbyHandsServer.Step2Tick);
+            s_Step2Ticking = false;
+            return;
+        }
+        int nowMs = GetGame().GetTime();
+        array<NimbyHandsTransfer> staged = new array<NimbyHandsTransfer>;
+        s_Registry.CollectByState(NimbyHandsState.STAGED, staged);
+        foreach (NimbyHandsTransfer entry : staged)
+        {
+            NimbyHandsWorldTransfer transfer = NimbyHandsWorldTransfer.Cast(entry);
+            if (!transfer)
+            {
+                continue;
+            }
+            int agoMs = nowMs - transfer.stagedAtMs;
+            if (agoMs >= NimbyHandsConstants.STEP2_DELAY_MS)
+            {
+                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 poll: staged " + agoMs.ToString() + " ms ago");
+                OnStep2(transfer.id);
+            }
+        }
     }
 
     static void OnStep2(int id)
@@ -551,6 +660,7 @@ class NimbyHandsServer
     static void RecordStaged(NimbyHandsWorldTransfer transfer, InventoryLocation loc)
     {
         transfer.staged = true;
+        transfer.stagedAtMs = GetGame().GetTime();
         transfer.stagedType = loc.GetType();
         transfer.stagedParent = loc.GetParent();
         transfer.stagedText = DescribeLocation(loc);
@@ -601,6 +711,10 @@ class NimbyHandsServer
 
     static void OnItemLocationChangedBegin(EntityAI item, InventoryLocation oldLoc, InventoryLocation newLoc)
     {
+        if (s_Step2MoveId != 0)
+        {
+            return;
+        }
         if (!ShouldTrace(item, oldLoc, newLoc))
         {
             return;
@@ -611,6 +725,12 @@ class NimbyHandsServer
 
     static void OnItemLocationChangedEnd(EntityAI item, InventoryLocation oldLoc, InventoryLocation newLoc)
     {
+        if (s_Step2MoveId != 0)
+        {
+            // Inside the step 2 move: one static write, nothing else (see s_Step2MoveId).
+            s_Step2Landed = true;
+            return;
+        }
         if (s_TraceDepth > 0 && ShouldTrace(item, oldLoc, newLoc))
         {
             TraceSignal("EEItemLocationChanged.end", item, DescribeLocation(oldLoc) + " -> " + DescribeLocation(newLoc));
@@ -648,11 +768,10 @@ class NimbyHandsServer
         string detail = "signal=EEItemLocationChanged dst=" + DescribeLocation(newLoc);
         if (verdict == NimbyHandsState.STAGED)
         {
+            // Nothing is scheduled from inside the engine's move callback; the step 2 poll
+            // (started by Submit, outside it) reads stagedAtMs on its next tick.
             RecordStaged(transfer, newLoc);
-            if (Advance(transfer, verdict, detail))
-            {
-                ScheduleStep2(transfer);
-            }
+            Advance(transfer, verdict, detail);
             return;
         }
         if (verdict == NimbyHandsState.REFUSED)
@@ -671,6 +790,10 @@ class NimbyHandsServer
 
     static void OnInventoryExitSignal(EntityAI item, Man player)
     {
+        if (s_Step2MoveId != 0)
+        {
+            return;
+        }
         if (s_TraceDepth > 0)
         {
             TraceSignal("OnInventoryExit", item, "player=" + DescribePlayer(player));
@@ -679,6 +802,10 @@ class NimbyHandsServer
 
     static void OnInventoryEnterSignal(EntityAI item, Man player)
     {
+        if (s_Step2MoveId != 0)
+        {
+            return;
+        }
         if (s_TraceDepth > 0)
         {
             TraceSignal("OnInventoryEnter", item, "player=" + DescribePlayer(player));

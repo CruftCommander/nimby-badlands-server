@@ -277,7 +277,8 @@ class NimbyHandsMoveItemToPlayer
         bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
         // A server hand event is deferred to the holder's next inventory update
         // (DayZPlayerInventory.c:4448, 4623-4634), so no signal is expected inside the call;
-        // if one did land the item, its line is already written and step 2 is scheduled.
+        // if one did land the item, its line is already written. Step 2 is run by the poll
+        // started here, outside the engine's move callback (NimbyHandsServer.Step2Tick).
         if (NimbyHandsState.IsTerminal(transfer.state))
         {
             return transfer.state == NimbyHandsState.CONFIRMED;
@@ -285,6 +286,7 @@ class NimbyHandsMoveItemToPlayer
         if (transfer.state == NimbyHandsState.STAGED)
         {
             NimbyHandsServer.ScheduleTimeout(transfer);
+            NimbyHandsServer.EnsureStep2Poll();
             return true;
         }
         if (!accepted)
@@ -293,6 +295,7 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
         NimbyHandsServer.ScheduleTimeout(transfer);
+        NimbyHandsServer.EnsureStep2Poll();
         return true;
     }
 

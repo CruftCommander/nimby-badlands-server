@@ -139,6 +139,22 @@ class NimbyHandsTransfers
         return null;
     }
 
+    // Appends every registered transfer in the given state to into (a snapshot: the caller
+    // may advance or evict entries while it walks the array). Returns how many were added.
+    int CollectByState(int state, notnull array<NimbyHandsTransfer> into)
+    {
+        int added = 0;
+        foreach (string key, NimbyHandsTransfer entry : m_ByItem)
+        {
+            if (entry.state == state)
+            {
+                into.Insert(entry);
+                added = added + 1;
+            }
+        }
+        return added;
+    }
+
     // A fresh correlation id. Begin uses it; a refusal that never enters the registry (no
     // item, item in flight) takes one too, so every logged request has its own id.
     int NewId()
