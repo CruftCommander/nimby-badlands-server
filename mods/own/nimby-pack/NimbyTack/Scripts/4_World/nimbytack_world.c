@@ -79,6 +79,16 @@ class NimbyTackWorld
         return s_LastProbeDetail;
     }
 
+    // NIMBY-T-065: true when the last target-not-building refusal was a player build (base
+    // building or a tent), the only case the T29 box is for. Another player or a loose item
+    // under the cursor refuses silently.
+    protected static bool s_LastProbePlayerBuild = false;
+
+    static bool LastProbePlayerBuild()
+    {
+        return s_LastProbePlayerBuild;
+    }
+
     // True when a refusal detail is worth building: the debug flag is on (the pin-check line reads
     // it on either side), or this is the server, whose production refuse pin line prints it once
     // per request. The client's per-frame condition without the flag skips the ToString work.
@@ -149,6 +159,7 @@ class NimbyTackWorld
     {
         s_LastProbeReason = "";
         s_LastProbeDetail = "-";
+        s_LastProbePlayerBuild = false;
         if (!player || !target)
         {
             s_LastProbeReason = "no-target";
@@ -167,6 +178,7 @@ class NimbyTackWorld
         if (wall.IsMan() || wall.IsInherited(ItemBase))
         {
             s_LastProbeReason = "target-not-building";
+            s_LastProbePlayerBuild = wall.IsInherited(BaseBuildingBase) || wall.IsInherited(TentBase);
             if (WantDetail())
             {
                 s_LastProbeDetail = ClassOf(wall);

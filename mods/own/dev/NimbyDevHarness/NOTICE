@@ -24,7 +24,10 @@ How it runs (server only):
   check ("disconnected") before any later fact; the dummy cases therefore prove
   the ownership, consent, in-flight, step-2 guard, and switch branches, not the
   receiver-space branch, which the in-game V3 diagnostic and the forced-refusal
-  run cover.
+  run cover. The one exception is the last boot case, the bot step 2: it turns on
+  NimbyHandsServer.AllowDummyParties for its own run only, so production step 2
+  runs between the two dummies on a forged STAGED entry. Step 1 cannot run on a
+  dummy: its hand state machine never runs the hand event (October 29, 2026).
 - The forge file word "step2-refuse" arms one forced Hands step-2 refusal at mission
   start (cost path B): the next real transfer ends
   "REFUSED detail=no space in receiver inventory (forced by dev harness); item with
@@ -32,6 +35,23 @@ How it runs (server only):
 
 Changes, newest first:
 
+- October 29, 2026 (NIMBY-T-063 bot case, Jeff's ruling of October 28): boot case
+  hands-bot-step2-cargo-to-cargo, ordered last: a forged STAGED entry for the
+  pliers in A's cargo, the dummy party switch on, and the production
+  NimbyHandsServer.OnStep2 against dummy B (CollectStep2Facts, IsAtStagedLocation,
+  MoveStep2, the code of all three October 28 crashes); the report is written one
+  second later. A first version ran the whole production path from
+  NimbyHandsMoveItemToPlayer.Execute: the hand event was dispatched and never ran
+  (a dummy has no weapons command modifier, so its hand state machine never
+  updates), so step 1 stays out of the harness. harness-expression-probe records
+  how one mixed "obj != null && int == int" bool reads (a verdict written that way
+  read PASS while false in build-20261029-115044); verdicts are plain statements
+  now. The two step 1 refusal cases (take without consent, deposit into closed
+  pockets) call NimbyHandsServer.Tick() after Execute and read the refusal from
+  the request, since Execute now registers and waits. Dummies spawn with a
+  backpack, 1.5 m apart, at the mission's first dry player spawn point ("1024 0
+  1024" was sea on Nasdara; the dummies swam and a transfer was refused "giver
+  swimming").
 - October 21, 2026: created (Hands P3 build, ruling of October 21, 2026). Boot
   cases: Legs request aimed at another player's PlayerBase from a sender that does
   not own it; Hands take without consent; two takers on one offer; pockets closed by
