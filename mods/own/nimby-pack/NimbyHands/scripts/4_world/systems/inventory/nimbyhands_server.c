@@ -2,8 +2,10 @@
 // NimbyHandsServer - the server side of every transfer: the in-flight registry
 // (G5), the lifecycle log lines, the completion signals, the P3 second step, the
 // bounded timeout, and the on-screen toast (plan v0.7, P3; NIMBY-T-012, J4).
-// Steps   : Step 1 (NimbyHandsMoveItemToPlayer.Execute) asks the holder's own hand
-//           state machine to move the item from hands into the holder's cargo
+// Steps   : Step 1 (NimbyHandsMoveItemToPlayer.Poll -> Submit -> Dispatch, run from the
+//           giver's own CommandHandler for a connected giver since build 10, October 30,
+//           2026, NIMBY-T-063 probe) asks the holder's own hand state machine to move
+//           the item from hands into the holder's cargo
 //           (Man.ServerTakeToDst, Man.c:757-760 -> HumanInventory.TakeToDst
 //           HumanInventory.c:243-251 -> RedirectToHandEvent :200-229). Its arrival
 //           there is signal 1 below, which moves the request to STAGED and defers
@@ -547,13 +549,65 @@ class NimbyHandsServer
             for (int i = s_Waiting.Count() - 1; i >= 0; i--)
             {
                 NimbyHandsMoveItemToPlayer move = s_Waiting.Get(i);
-                if (!move || move.Poll(nowMs))
+                if (!move || move.Poll(nowMs, false))
                 {
                     s_Waiting.RemoveOrdered(i);
                 }
             }
         }
-        if (!s_Waiting || s_Waiting.Count() == 0)
+        StopTickWhenIdle();
+    }
+
+    // ---- the giver's frame (NIMBY-T-063 probe, build 10, October 30, 2026) ----------
+    // Called by PlayerBase.ModCommandHandlerBefore on the server for every player, every
+    // frame. Polls the waiting requests whose giver is this player, so for a connected giver
+    // the step 1 hand event (Dispatch -> ServerTakeToDst) is posted from inside the giver's
+    // own CommandHandler, right after vanilla's HandleInventory, instead of from the global
+    // call queue. The wait tick keeps running for the cap and for dummy givers.
+    static void OnCommandHandler(PlayerBase player)
+    {
+        if (!s_Waiting || s_Waiting.Count() == 0 || !player)
+        {
+            return;
+        }
+        int nowMs = GetGame().GetTime();
+        for (int i = s_Waiting.Count() - 1; i >= 0; i--)
+        {
+            NimbyHandsMoveItemToPlayer move = s_Waiting.Get(i);
+            if (!move)
+            {
+                s_Waiting.RemoveOrdered(i);
+                continue;
+            }
+            if (!move.GiverIs(player))
+            {
+                continue;
+            }
+            if (move.Poll(nowMs, true))
+            {
+                s_Waiting.RemoveOrdered(i);
+            }
+        }
+        StopTickWhenIdle();
+    }
+
+    // Build 10 probe: a giver with an identity (a connected player) dispatches step 1 only
+    // from its own CommandHandler. A dummy (no identity) has no client to desync and never runs
+    // a hand event (build 115044), so it keeps dispatching from the wait tick, which is what
+    // the dev harness boot cases rely on. Read before the hand event, where GetIdentity on the
+    // giver has always passed.
+    static bool DispatchesFromCommandHandler(PlayerBase giver)
+    {
+        if (!giver)
+        {
+            return false;
+        }
+        return giver.GetIdentity() != null;
+    }
+
+    protected static void StopTickWhenIdle()
+    {
+        if (s_Ticking && (!s_Waiting || s_Waiting.Count() == 0))
         {
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(NimbyHandsServer.Tick);
             s_Ticking = false;

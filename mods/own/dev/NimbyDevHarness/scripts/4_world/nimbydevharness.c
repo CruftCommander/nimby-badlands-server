@@ -14,6 +14,14 @@
 //           Since the step 1 wait (NIMBY-T-063), Execute registers and defers; every
 //           case that expects a step 1 refusal calls NimbyHandsServer.Tick() after
 //           Execute and reads the verdict from the request it holds.
+//           The two-player step 2 case (forge word "two-player-step2", October 30, 2026,
+//           NIMBY-T-063 discriminator) runs on a server with two connected players and
+//           no dummy: a wrench is created in the first player's cargo, a STAGED entry is
+//           forged for it, and production step 2 moves it to the second player. No hand
+//           event runs anywhere. Ten crashes shared a connected giver AND a preceding
+//           server-driven hand event; the one confirmed step 2 (the bot case) had neither.
+//           CONFIRMED here isolates the hand event as the cause; a crash here says the
+//           server move between connected players is itself broken on 1.30.164200.
 // Vanilla : CreateObjectEx (Global/Game.c:703), ObjectDelete (:705), GetPlayers
 //           (:945), ScriptReadWriteContext (gameplay.c:134-141),
 //           ScriptCallQueue.CallLater (2_GameLib/DayZ/tools.c:61),
@@ -42,6 +50,9 @@ class NimbyDevHarness
     // After the bot step 2, one second for SendServerMove's aftermath and the deferred toast
     // before the world is deleted and the report is written.
     static const int BOT_SETTLE_MS = 1000;
+    // Forge word for the two-player step 2 case. Must not contain "online": ForgeHas matches
+    // by substring and "online" starts the Legs and Hands online cases.
+    static const string TWO_PLAYER_STEP2_WORD = "two-player-step2";
     // Dummy B stands this far from dummy A: inside UAMaxDistances.DEFAULT (2.0 m) plus the
     // tolerance with room for the surface placement, and outside their capsules.
     static const float DUMMY_SPACING_M = 1.5;
@@ -58,6 +69,13 @@ class NimbyDevHarness
     protected static int s_RegistryBefore;
     // The bot step 2's request: the registry evicts a terminal entry, so the harness holds it.
     protected static ref NimbyHandsWorldTransfer s_BotTransfer;
+
+    // The two-player step 2 case runs once per mission; its world is two connected players.
+    protected static bool s_TwoPlayerStep2Ran;
+    protected static PlayerBase s_TwoPlayerGiver;
+    protected static PlayerBase s_TwoPlayerReceiver;
+    protected static EntityAI s_TwoPlayerItem;
+    protected static ref NimbyHandsWorldTransfer s_TwoPlayerTransfer;
 
     // ---- the forge file ---------------------------------------------------------
 
@@ -130,11 +148,122 @@ class NimbyDevHarness
     // in the world, so they wait.
     static void OnPlayerConnected(PlayerBase player)
     {
-        if (!GetGame().IsServer() || !player || !ForgeHas("online"))
+        if (!GetGame().IsServer() || !player)
+        {
+            return;
+        }
+        if (ForgeHas(TWO_PLAYER_STEP2_WORD))
+        {
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarness.ArmTwoPlayerStep2, ONLINE_DELAY_MS, false, player);
+        }
+        if (!ForgeHas("online"))
         {
             return;
         }
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarness.RunOnlineCases, ONLINE_DELAY_MS, false, player);
+    }
+
+    // ---- the two-player step 2 case (NIMBY-T-063 discriminator, October 30, 2026) ------------
+
+    // ONLINE_DELAY_MS after a connect. Runs once, when a second connected player exists: the
+    // player who connected earlier is the giver (D in the S6-30 rows), the one who just
+    // connected is the receiver (L). Phase 1 creates the wrench in the giver's cargo and
+    // waits SETTLE_MS: a native inventory search that touched an item created in the same
+    // tick crashed the server (build-20261021-142821).
+    static void ArmTwoPlayerStep2(PlayerBase receiver)
+    {
+        if (s_TwoPlayerStep2Ran || !receiver || !receiver.GetIdentity())
+        {
+            return;
+        }
+        PlayerBase giver = OtherConnectedPlayer(receiver);
+        if (!giver)
+        {
+            Print(PREFIX + " two-player step 2: waiting for a second connected player (receiver=" + NimbyHandsLog.DescribeIdentity(receiver.GetIdentity()) + ")");
+            return;
+        }
+        s_TwoPlayerStep2Ran = true;
+        s_TwoPlayerGiver = giver;
+        s_TwoPlayerReceiver = receiver;
+        s_TwoPlayerItem = giver.GetInventory().CreateInInventory("Wrench");
+        Print(PREFIX + " two-player step 2: giver=" + NimbyHandsLog.DescribeIdentity(giver.GetIdentity()) + " receiver=" + NimbyHandsLog.DescribeIdentity(receiver.GetIdentity()) + " wrench at " + Where(s_TwoPlayerItem));
+        if (!s_TwoPlayerItem)
+        {
+            Begin();
+            Record("hands-two-player-step2-cargo-to-cargo", false, "CreateInInventory(Wrench) on the giver returned null");
+            Report("Forge", "forge");
+            return;
+        }
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarness.RunTwoPlayerStep2, SETTLE_MS, false);
+    }
+
+    // Phase 2: a forged STAGED entry stands for step 1's landing, exactly as the bot case
+    // forges it, and OnStep2 runs the production CollectStep2Facts, IsAtStagedLocation and
+    // MoveStep2 between the two connected players. Both have identities, so the dummy party
+    // switch stays off. Proximity is revalidated: the players must stand within reach.
+    static void RunTwoPlayerStep2()
+    {
+        Begin();
+        if (!s_TwoPlayerGiver || !s_TwoPlayerReceiver || !s_TwoPlayerItem)
+        {
+            Record("hands-two-player-step2-cargo-to-cargo", false, "a player or the wrench went away before step 2");
+            Report("Forge", "forge");
+            return;
+        }
+        if (!ItemWith(s_TwoPlayerItem, s_TwoPlayerGiver))
+        {
+            Record("hands-two-player-step2-cargo-to-cargo", false, "wrench is not with the giver; at " + Where(s_TwoPlayerItem));
+            Report("Forge", "forge");
+            return;
+        }
+        NimbyHandsWorldTransfer forged = ForgeEntry(s_TwoPlayerGiver, s_TwoPlayerReceiver, s_TwoPlayerItem, "NimbyHandsActionTakeItem", NimbyHandsState.STAGED);
+        s_TwoPlayerTransfer = forged;
+        if (!forged)
+        {
+            Record("hands-two-player-step2-cargo-to-cargo", false, "could not forge the staged entry");
+            Report("Forge", "forge");
+            return;
+        }
+        Print(PREFIX + " two-player step 2: forged id=" + forged.id.ToString() + " STAGED, running production step 2");
+        NimbyHandsServer.OnStep2(forged.id);
+        // The report waits: SendServerMove's aftermath and the deferred toast run after the
+        // call, and a crash there must land before the verdict is written.
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarness.FinishTwoPlayerStep2, BOT_SETTLE_MS, false);
+    }
+
+    // Phase 3: the verdict. The wrench stays where it landed, so the receiver can see it in
+    // game; nothing is deleted.
+    static void FinishTwoPlayerStep2()
+    {
+        NimbyHandsWorldTransfer forged = s_TwoPlayerTransfer;
+        Record("hands-two-player-step2-cargo-to-cargo", BotDelivered(forged, s_TwoPlayerItem, s_TwoPlayerReceiver), DescribeEntry(forged) + " wrench at " + Where(s_TwoPlayerItem) + "; " + ReadTwoPlayerOutcome(forged));
+        Cleanup(forged);
+        s_TwoPlayerTransfer = null;
+        s_TwoPlayerGiver = null;
+        s_TwoPlayerReceiver = null;
+        s_TwoPlayerItem = null;
+        Report("Forge", "forge");
+    }
+
+    protected static string ReadTwoPlayerOutcome(NimbyHandsWorldTransfer transfer)
+    {
+        if (!transfer)
+        {
+            return "reading: no request to read";
+        }
+        if (transfer.state == NimbyHandsState.CONFIRMED)
+        {
+            return "reading: the server move between two connected players works on this server build with no hand event before it; the crashed runs differ from this one only by the preceding server-driven hand event";
+        }
+        if (transfer.state == NimbyHandsState.STAGED)
+        {
+            return "reading: step 2 returned without a verdict; left to the reconcile";
+        }
+        if (transfer.state == NimbyHandsState.REFUSED)
+        {
+            return "reading: step 2 refused; the detail names the fact (stand the players within reach and run again)";
+        }
+        return "reading: unexpected state";
     }
 
     // ---- reporting ----------------------------------------------------------------------

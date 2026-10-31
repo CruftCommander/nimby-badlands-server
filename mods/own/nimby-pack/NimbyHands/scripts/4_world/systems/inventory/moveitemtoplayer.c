@@ -39,6 +39,15 @@
 // NIMBY-T-063, October 29, 2026: step 2 no longer calls ServerTakeToDst as one native. It
 // runs the same natives one at a time (NimbyHandsServer.MoveStep2) with a debug line after
 // each, after three server crashes in step 2 on October 28; a crash log now names the native.
+//
+// NIMBY-T-063 probe, October 30, 2026 (build 10): for a connected giver (one with an identity)
+// the wait tick only holds and enforces the cap; the dispatch runs from the giver's own
+// CommandHandler (PlayerBase.ModCommandHandlerBefore -> NimbyHandsServer.OnCommandHandler ->
+// Poll with inGiverFrame), the frame in which vanilla itself posts server hand events
+// (HandleInventory, DayZPlayerImplement.c:2294). A dummy giver (no identity, dev harness)
+// still dispatches from the wait tick: a dummy never runs a hand event, and the harness
+// contract (Tick after Execute, then read the verdict) holds. Jeff ruled this one-build probe
+// on October 30 over the client-driven step 1; if it crashes, the client-driven step 1 follows.
 // -----------------------------------------------------------------------------
 
 class NimbyHandsMoveItemToPlayer
@@ -64,6 +73,10 @@ class NimbyHandsMoveItemToPlayer
     // NIMBY-T-063: the registered request while it waits, and when the wait began.
     protected ref NimbyHandsWorldTransfer m_Transfer;
     protected int m_WaitStartMs;
+    // Build 10 probe: CommandHandler visits by the giver while this request waited (zero at a
+    // wait cap says the hook never ran for this giver), and whether the hold line was written.
+    protected int m_GiverTicks;
+    protected bool m_HeldForGiverLogged;
 
     // requester is the player whose action made the request (the taker for Take, the
     // holder for Give and Put In Pockets); dst_player is the receiver.
@@ -217,14 +230,31 @@ class NimbyHandsMoveItemToPlayer
         return m_Transfer;
     }
 
-    // Polled every NimbyHandsConstants.WAIT_TICK_MS while the request waits. Returns true when
-    // the wait is over: dispatched or refused.
-    bool Poll(int nowMs)
+    // True when player is the giver this request waits on (the hierarchy root of the item at
+    // registration). Used by the giver's CommandHandler to find its own requests.
+    bool GiverIs(PlayerBase player)
+    {
+        if (!m_Transfer || !player)
+        {
+            return false;
+        }
+        return m_Transfer.giver == player;
+    }
+
+    // Polled every NimbyHandsConstants.WAIT_TICK_MS from the wait tick (inGiverFrame false) and
+    // every frame from the giver's CommandHandler (inGiverFrame true) while the request waits.
+    // Returns true when the wait is over: dispatched or refused. Build 10 probe: a connected
+    // giver dispatches only from its own frame; the wait tick holds it and enforces the cap.
+    bool Poll(int nowMs, bool inGiverFrame)
     {
         NimbyHandsWorldTransfer transfer = m_Transfer;
         if (!transfer || transfer.state != NimbyHandsState.PENDING)
         {
             return true;
+        }
+        if (inGiverFrame)
+        {
+            m_GiverTicks++;
         }
         int waited = nowMs - m_WaitStartMs;
         int capMs = NimbyHandsConstants.WAIT_CAP_MS;
@@ -237,11 +267,26 @@ class NimbyHandsMoveItemToPlayer
         }
         if (verdict == NimbyHandsRules.WAIT_CAP)
         {
-            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait cap waited=" + waited.ToString() + " giverFree=" + NimbyHandsLog.Bool(giverFree) + " receiverFree=" + NimbyHandsLog.Bool(receiverFree));
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait cap waited=" + waited.ToString() + " giverFree=" + NimbyHandsLog.Bool(giverFree) + " receiverFree=" + NimbyHandsLog.Bool(receiverFree) + " giverTicks=" + m_GiverTicks.ToString());
             NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, NimbyHandsRules.WaitCapDetail(capMs));
             return true;
         }
-        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait free waited=" + waited.ToString());
+        bool giverFrameOnly = NimbyHandsServer.DispatchesFromCommandHandler(transfer.giver);
+        if (giverFrameOnly && !inGiverFrame)
+        {
+            if (!m_HeldForGiverLogged)
+            {
+                m_HeldForGiverLogged = true;
+                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait free waited=" + waited.ToString() + " held for the giver's CommandHandler");
+            }
+            return false;
+        }
+        string site = "callQueue";
+        if (inGiverFrame)
+        {
+            site = "commandHandler";
+        }
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait free waited=" + waited.ToString() + " site=" + site + " giverTicks=" + m_GiverTicks.ToString());
         // Consent was read when the request was made and the loop that carried it has ended;
         // open pockets are a standing state, so they are read again.
         if (m_ActionName == "NimbyHandsActionPutInPockets")
@@ -253,12 +298,13 @@ class NimbyHandsMoveItemToPlayer
             }
             SetConsent(open, "receiver's pockets are closed");
         }
-        return Submit(transfer, waited);
+        return Submit(transfer, waited, site);
     }
 
     // Revalidates, writes REQUESTED, dispatches step 1, and schedules the timeout. The
-    // observation period starts here, not at registration.
-    protected bool Submit(NimbyHandsWorldTransfer transfer, int waitedMs)
+    // observation period starts here, not at registration. site names the dispatch frame
+    // (build 10 probe): "commandHandler" or "callQueue".
+    protected bool Submit(NimbyHandsWorldTransfer transfer, int waitedMs, string site)
     {
         InventoryLocation src = new InventoryLocation;
         InventoryLocation stage = new InventoryLocation;
@@ -272,7 +318,7 @@ class NimbyHandsMoveItemToPlayer
         }
 
         transfer.startedMs = GetGame().GetTime();
-        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString();
+        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString() + " site=" + site;
         NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, requested);
         bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
         // A server hand event is deferred to the holder's next inventory update

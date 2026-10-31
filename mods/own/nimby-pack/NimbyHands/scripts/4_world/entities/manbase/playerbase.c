@@ -107,6 +107,28 @@ modded class PlayerBase
         NimbyHandsClosePockets( "reconnect" );
     }
 
+    // NIMBY-T-063 probe, October 30, 2026 (build 10): a waiting Hands request whose giver is
+    // this player is polled and dispatched here, inside the giver's own CommandHandler, where
+    // vanilla runs its server inventory work: DayZPlayerImplement.CommandHandler calls
+    // HandleInventory and HumanInventory.Update (DayZPlayerImplement.c:2294-2295) and then this
+    // hook (:2297). Nine server crashes on 1.30.164200 followed a step 1 hand event dispatched
+    // from the global call queue; this build moves only the dispatch site. Server only; a
+    // player with no waiting request costs one static call with an early return.
+    override bool ModCommandHandlerBefore( float pDt, int pCurrentCommandID, bool pCurrentCommandFinished )
+    {
+        if ( super.ModCommandHandlerBefore( pDt, pCurrentCommandID, pCurrentCommandFinished ) )
+        {
+            return true;
+        }
+
+        if ( GetGame().IsServer() )
+        {
+            NimbyHandsServer.OnCommandHandler( this );
+        }
+
+        return false;
+    }
+
     override void SetActions( out TInputActionMap InputActionMap )
     {
         super.SetActions( InputActionMap );
