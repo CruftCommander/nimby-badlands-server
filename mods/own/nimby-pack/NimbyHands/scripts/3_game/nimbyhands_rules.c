@@ -546,6 +546,29 @@ class NimbyHandsRules
         return "giver inventory busy; players did not become free within " + capMs.ToString() + " ms";
     }
 
+    // ---- the step 2 gate (build 14, October 31, 2026) ---------------------------------------
+    // Step 2 runs when the landing is at least delayMs old AND the giver's inventory is idle
+    // (DayZPlayerInventory.IsProcessing false, no action command): twelve server crashes followed
+    // a step 2 move 50 to 93 ms after a hand-event landing, when the giver's hand state machine
+    // may still have been finishing that event; the one confirmed two-client step 2 (S6-D) had an
+    // idle giver. A giver that never goes idle is caught by the bounded timeout.
+    static const int STEP2_WAIT = 0;
+    static const int STEP2_HELD = 1;
+    static const int STEP2_RUN = 2;
+
+    static int Step2Verdict(int ageMs, int delayMs, bool giverIdle)
+    {
+        if (ageMs < delayMs)
+        {
+            return STEP2_WAIT;
+        }
+        if (!giverIdle)
+        {
+            return STEP2_HELD;
+        }
+        return STEP2_RUN;
+    }
+
     // ---- the client-driven step 1 (NIMBY-T-063, October 31, 2026) -------------------------
     // Ten server crashes on 1.30.164200 followed a server-driven hand event on a connected giver
     // (ServerTakeToDst from the call queue and from the giver's own CommandHandler alike); the
@@ -1170,6 +1193,10 @@ class NimbyHandsRules
         failures += Case(results, "stage refused: another identity is ignored", !ClientStageRefusalAccepted("b", "a", NimbyHandsState.REQUESTED));
         failures += Case(results, "stage refused: empty ids are ignored", !ClientStageRefusalAccepted("", "", NimbyHandsState.REQUESTED));
         failures += Case(results, "stage refused: a staged request is not refused by the client", !ClientStageRefusalAccepted("a", "a", NimbyHandsState.STAGED));
+        failures += Case(results, "step 2 gate: younger than the delay waits", Step2Verdict(49, 50, true) == STEP2_WAIT);
+        failures += Case(results, "step 2 gate: old enough but giver busy holds", Step2Verdict(50, 50, false) == STEP2_HELD);
+        failures += Case(results, "step 2 gate: old enough and giver idle runs", Step2Verdict(50, 50, true) == STEP2_RUN);
+        failures += Case(results, "step 2 gate: busy giver holds however old", Step2Verdict(4000, 50, false) == STEP2_HELD);
         return failures;
     }
 

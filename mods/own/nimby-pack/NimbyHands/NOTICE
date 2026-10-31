@@ -24,6 +24,13 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 31, 2026 (NIMBY-T-063, build 14, step 2 waits for an idle giver):
+  - The step 2 poll runs the move only when the giver's inventory is idle (NimbyHandsServer.IsFree:
+    DayZPlayerInventory.IsProcessing false, no action or action command) as well as STEP2_DELAY_MS
+    past the landing (NimbyHandsRules.Step2Verdict); each held tick is a debug line and the count is
+    logged at dispatch. Crash 12 followed a step 2 move 50 ms after a client-driven landing with
+    nothing of ours inside the callback; the giver's hand state machine was the remaining difference
+    from the confirmed S6-D run.
 - October 31, 2026 (NIMBY-T-063, build 13, nothing inside the landing callback):
   - ItemBase.EEItemLocationChanged now only sets a flag (NimbyHandsServer.OnItemLocationChanged, no
     arguments); the step 2 poll reads each REQUESTED item's location and writes STAGED, CONFIRMED or

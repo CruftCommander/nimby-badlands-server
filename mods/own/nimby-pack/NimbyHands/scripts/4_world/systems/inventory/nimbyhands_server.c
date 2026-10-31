@@ -75,6 +75,9 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     EntityAI stagedParent;
     // GetGame().GetTime() when the STAGED signal was read; the step 2 poll measures from it.
     int stagedAtMs;
+    // Build 14: poll ticks on which step 2 was held because the giver's inventory was still
+    // processing (DayZPlayerInventory.IsProcessing) or in an action command. Logged at dispatch.
+    int step2HeldTicks;
     // Identity ids captured at registration; the terminal toast resolves its targets from the
     // engine's player list by these, never through the stored references (see MoveStep2).
     string giverId;
@@ -764,11 +767,23 @@ class NimbyHandsServer
                 continue;
             }
             int agoMs = nowMs - transfer.stagedAtMs;
-            if (agoMs >= NimbyHandsConstants.STEP2_DELAY_MS)
+            // Build 14 (October 31, 2026): step 2 waits for the giver's inventory to be idle. IsFree
+            // reads IsProcessing and the action commands on the giver; those natives passed in
+            // CollectStep2Facts on every run since the client-driven step 1.
+            bool giverIdle = IsFree(transfer.giver, true);
+            int verdict = NimbyHandsRules.Step2Verdict(agoMs, NimbyHandsConstants.STEP2_DELAY_MS, giverIdle);
+            if (verdict == NimbyHandsRules.STEP2_WAIT)
             {
-                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 poll: staged " + agoMs.ToString() + " ms ago");
-                OnStep2(transfer.id);
+                continue;
             }
+            if (verdict == NimbyHandsRules.STEP2_HELD)
+            {
+                transfer.step2HeldTicks = transfer.step2HeldTicks + 1;
+                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 held: giver processing, staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
+                continue;
+            }
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 poll: staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
+            OnStep2(transfer.id);
         }
     }
 
