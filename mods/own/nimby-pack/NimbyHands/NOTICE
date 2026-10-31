@@ -24,6 +24,14 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 31, 2026 (NIMBY-T-063, build 15, the server holds every in-flight transfer):
+  - NimbyHandsServer keeps each registered transfer in a static ref array from Execute until its
+    terminal Advance (Hold, Release). The minidump of crash 13, read with the exception-stream
+    CONTEXT against the server executable, shows the engine's string assignment writing
+    transfer.detail into a NimbyHandsWorldTransfer whose memory had been freed and reused (the
+    destination buffer pointer was garbage; the faulting read is its capacity header at pointer-8,
+    which every crash address since crash 8 matches). The registry map and the move object were
+    the only owners; the dev harness, whose transfers never died, holds its own in a static ref.
 - October 31, 2026 (NIMBY-T-063, build 14, step 2 waits for an idle giver):
   - The step 2 poll runs the move only when the giver's inventory is idle (NimbyHandsServer.IsFree:
     DayZPlayerInventory.IsProcessing false, no action or action command) as well as STEP2_DELAY_MS

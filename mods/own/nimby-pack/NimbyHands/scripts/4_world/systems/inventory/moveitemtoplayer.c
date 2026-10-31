@@ -225,6 +225,8 @@ class NimbyHandsMoveItemToPlayer
         // NIMBY-T-063: nothing is validated or dispatched inside the action. The request holds
         // until both players are free; Poll revalidates and dispatches then.
         m_Transfer = transfer;
+        // Build 15: the server holds the transfer until its terminal line (NimbyHandsServer.Hold).
+        NimbyHandsServer.Hold(transfer);
         m_WaitStartMs = GetGame().GetTime();
         NimbyHandsServer.Defer(this, transfer);
         return true;

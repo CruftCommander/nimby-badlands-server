@@ -87,6 +87,13 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
 class NimbyHandsServer
 {
     protected static ref NimbyHandsTransfers s_Registry;
+    // Build 15 (October 31, 2026, NIMBY-T-063): every transfer registered by a request is held here
+    // from registration until its terminal Advance. The minidump of crash 13 (and the addresses of
+    // crashes 8 to 12) show the engine's string assignment writing transfer.detail into a freed and
+    // reused NimbyHandsWorldTransfer: the registry map and the move object were the only owners,
+    // the move object is released from s_Waiting right after Submit, and the dev harness, whose
+    // transfers never died, holds its own in a static ref. This is that ref for production.
+    protected static ref array<ref NimbyHandsWorldTransfer> s_InFlight;
     // The step 2 move in flight (NIMBY-T-063, October 29, 2026): while s_Step2MoveId is set,
     // every inventory signal handler returns at once and the end handler only raises
     // s_Step2Landed. Crash 8 (crash_2026-10-29_19-42-55) died inside the engine's move callback
@@ -104,6 +111,30 @@ class NimbyHandsServer
             s_Registry = new NimbyHandsTransfers(NimbyHandsConstants.TRANSFER_TIMEOUT_MS);
         }
         return s_Registry;
+    }
+
+    static void Hold(NimbyHandsWorldTransfer transfer)
+    {
+        if (!s_InFlight)
+        {
+            s_InFlight = new array<ref NimbyHandsWorldTransfer>;
+        }
+        s_InFlight.Insert(transfer);
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " held; in flight=" + s_InFlight.Count().ToString());
+    }
+
+    static void Release(NimbyHandsWorldTransfer transfer)
+    {
+        if (!s_InFlight || !transfer)
+        {
+            return;
+        }
+        int index = s_InFlight.Find(transfer);
+        if (index >= 0)
+        {
+            s_InFlight.RemoveOrdered(index);
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " released; in flight=" + s_InFlight.Count().ToString());
+        }
     }
 
     static NimbyHandsWorldTransfer FindTransfer(int id)
@@ -314,6 +345,9 @@ class NimbyHandsServer
             // has never run to completion (NIMBY-T-063). A deleted player reads as null then.
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.giverId, "giver", transfer.state, transfer.detail);
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.SendToast, 0, false, transfer.receiverId, "receiver", transfer.state, transfer.detail);
+            // Build 15: the hold ends with the terminal line; the caller's own local keeps the object
+            // through the rest of its call.
+            Release(transfer);
         }
         return true;
     }
