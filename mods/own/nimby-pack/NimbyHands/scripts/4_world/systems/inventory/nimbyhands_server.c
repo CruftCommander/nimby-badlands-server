@@ -2,7 +2,12 @@
 // NimbyHandsServer - the server side of every transfer: the in-flight registry
 // (G5), the lifecycle log lines, the completion signals, the P3 second step, the
 // bounded timeout, and the on-screen toast (plan v0.7, P3; NIMBY-T-012, J4).
-// Steps   : Step 1 (NimbyHandsMoveItemToPlayer.Poll -> Submit -> Dispatch, run from the
+// Steps   : Step 1 for a connected giver, since October 31, 2026 (NIMBY-T-063): the server sends
+//           NimbyHandsRpc.STAGE to the giver's client, which posts PredictiveTakeToDst from hands
+//           into its own cargo (see "the client-driven step 1" below); the landing is signal 1 as
+//           for the server path. Step 1 for a dummy giver (dev harness; the path every connected
+//           giver took through October 30, crashes 1 to 10):
+//           (NimbyHandsMoveItemToPlayer.Poll -> Submit -> Dispatch, run from the
 //           giver's own CommandHandler for a connected giver since build 10, October 30,
 //           2026, NIMBY-T-063 probe) asks the holder's own hand state machine to move
 //           the item from hands into the holder's cargo
@@ -383,6 +388,78 @@ class NimbyHandsServer
             LogJunctures("step 1", transfer.id.ToString(), transfer.giver, transfer.receiver, transfer.item, dst);
         }
         return transfer.giver.ServerTakeToDst(src, dst);
+    }
+
+    // ---- the client-driven step 1 (NIMBY-T-063, October 31, 2026) -----------------------
+    // Crashes 4 to 10 on 1.30.164200 all followed a server-driven hand event on a connected
+    // giver (Dispatch above, from the call queue or from the giver's own CommandHandler); the
+    // same step 2 with no hand event before it confirmed between two connected players (S6-D,
+    // run testserver-20261031-153005). So a connected giver stages the item from its own client:
+    // the server sends NimbyHandsRpc.STAGE to the giver's identity, the client posts
+    // PredictiveTakeToDst (NimbyHandsClient.OnStageRequest), the engine carries it to the server
+    // as any player-made hands-to-cargo move and applies it in the giver's CommandHandler;
+    // signal 1 writes STAGED as before and the step 2 poll takes it from there. A client that
+    // cannot post the move answers STAGE_REFUSED (OnClientStageRefused); a client that answers
+    // nothing is caught by the bounded timeout. Dispatch above stays for a dummy giver.
+
+    // The dispatch path for this giver (NimbyHandsRules.StageVia): a giver with an identity has
+    // a client; a dev harness dummy has none.
+    static string StageVia(PlayerBase giver)
+    {
+        bool hasIdentity = giver != null && giver.GetIdentity() != null;
+        return NimbyHandsRules.StageVia(hasIdentity);
+    }
+
+    // Sends the stage request to the giver's own client. The item travels as its network id;
+    // the client finds its own staging cell (the same FindStagingLocation) and the server records
+    // whatever cell the landing reports, so the stage computed here is written only to the log.
+    static void RequestClientStage(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation stage)
+    {
+        int low = 0;
+        int high = 0;
+        transfer.item.GetNetworkID(low, high);
+        Param3<int, int, int> request = new Param3<int, int, int>(transfer.id, low, high);
+        GetGame().RPCSingleParam(transfer.giver, NimbyHandsRpc.STAGE, request, true, transfer.giver.GetIdentity());
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 1 stage rpc sent to giver=" + transfer.giverText + " item=" + transfer.itemText + " net=" + low.ToString() + ":" + high.ToString() + " stage=" + DescribeLocation(stage));
+    }
+
+    // STAGE_REFUSED from a client (PlayerBase.OnRPC on the server). Accepted only from the
+    // giver's own identity for a request still REQUESTED (NimbyHandsRules.ClientStageRefusalAccepted);
+    // anything else is logged and ignored. The reason text is the client's, escaped.
+    static void OnClientStageRefused(PlayerIdentity sender, ParamsReadContext ctx)
+    {
+        Param2<int, string> reply = new Param2<int, string>(0, "");
+        if (!ctx.Read(reply))
+        {
+            NimbyHandsLog.Info("stage refused: unreadable reply from " + DescribeIdentity(sender));
+            return;
+        }
+        NimbyHandsWorldTransfer transfer = FindTransfer(reply.param1);
+        string senderId = "";
+        if (sender)
+        {
+            senderId = sender.GetId();
+        }
+        if (!transfer)
+        {
+            NimbyHandsLog.Info("stage refused: unknown id=" + reply.param1.ToString() + " from " + DescribeIdentity(sender));
+            return;
+        }
+        if (!NimbyHandsRules.ClientStageRefusalAccepted(senderId, transfer.giverId, transfer.state))
+        {
+            NimbyHandsLog.Info("stage refused: ignored id=" + transfer.id.ToString() + " state=" + NimbyHandsState.Name(transfer.state) + " from " + DescribeIdentity(sender) + " giver=" + transfer.giverText);
+            return;
+        }
+        Advance(transfer, NimbyHandsState.REFUSED, NimbyHandsRules.ClientStageRefusalDetail(NimbyHandsLog.Escape(reply.param2)));
+    }
+
+    static string DescribeIdentity(PlayerIdentity identity)
+    {
+        if (!identity)
+        {
+            return "(no identity)";
+        }
+        return NimbyHandsLog.Quote(identity.GetName()) + " (" + identity.GetId() + ", " + identity.GetPlainId() + ")";
     }
 
     // ---- the step 2 move (NIMBY-T-063 instrumentation) ---------------------------

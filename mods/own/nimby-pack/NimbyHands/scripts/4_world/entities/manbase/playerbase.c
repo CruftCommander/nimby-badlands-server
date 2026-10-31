@@ -129,6 +129,30 @@ modded class PlayerBase
         return false;
     }
 
+    // Client-driven step 1 (NIMBY-T-063, October 31, 2026). STAGE arrives on the giver's client
+    // (sent to its identity only); STAGE_REFUSED arrives on the server from that client. Ids in
+    // NimbyHandsRpc; the same shape as NimbyGreet and NimbyAutorun.
+    override void OnRPC( PlayerIdentity sender, int rpc_type, ParamsReadContext ctx )
+    {
+        if ( rpc_type == NimbyHandsRpc.STAGE )
+        {
+            if ( GetGame().IsClient() )
+            {
+                NimbyHandsClient.OnStageRequest( this, ctx );
+            }
+            return;
+        }
+        if ( rpc_type == NimbyHandsRpc.STAGE_REFUSED )
+        {
+            if ( GetGame().IsServer() )
+            {
+                NimbyHandsServer.OnClientStageRefused( sender, ctx );
+            }
+            return;
+        }
+        super.OnRPC( sender, rpc_type, ctx );
+    }
+
     override void SetActions( out TInputActionMap InputActionMap )
     {
         super.SetActions( InputActionMap );

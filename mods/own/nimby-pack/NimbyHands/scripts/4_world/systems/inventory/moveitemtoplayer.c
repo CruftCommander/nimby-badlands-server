@@ -40,6 +40,14 @@
 // runs the same natives one at a time (NimbyHandsServer.MoveStep2) with a debug line after
 // each, after three server crashes in step 2 on October 28; a crash log now names the native.
 //
+// NIMBY-T-063, October 31, 2026 (build 12): a connected giver no longer gets a server hand event at
+// all. Submit sends NimbyHandsRpc.STAGE to the giver's client, which posts PredictiveTakeToDst from
+// hands into its own cargo (NimbyHandsClient); the engine applies that as any player-made move and
+// signal 1 writes STAGED as before. Build 10 (below) crashed the server like crashes 4 to 9 and the
+// discriminator run S6-D confirmed step 2 with no hand event, so the hand event itself was the fault.
+// The CommandHandler plumbing below is kept for now (Jeff, October 31); for a connected giver it
+// only chooses the frame the RPC is sent from. Dispatch (ServerTakeToDst) remains the dummy path.
+//
 // NIMBY-T-063 probe, October 30, 2026 (build 10): for a connected giver (one with an identity)
 // the wait tick only holds and enforces the cap; the dispatch runs from the giver's own
 // CommandHandler (PlayerBase.ModCommandHandlerBefore -> NimbyHandsServer.OnCommandHandler ->
@@ -318,9 +326,21 @@ class NimbyHandsMoveItemToPlayer
         }
 
         transfer.startedMs = GetGame().GetTime();
-        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString() + " site=" + site;
+        string via = NimbyHandsServer.StageVia(transfer.giver);
+        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString() + " site=" + site + " via=" + via;
         NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, requested);
-        bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
+        // Client-driven step 1 (October 31, 2026): a connected giver stages from its own client;
+        // the RPC has no result to read here, so the request counts as accepted and the landing,
+        // a STAGE_REFUSED reply, or the timeout decides. A dummy giver keeps the server hand event.
+        bool accepted = true;
+        if (via == NimbyHandsRules.VIA_CLIENT)
+        {
+            NimbyHandsServer.RequestClientStage(transfer, src, stage);
+        }
+        else
+        {
+            accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
+        }
         // A server hand event is deferred to the holder's next inventory update
         // (DayZPlayerInventory.c:4448, 4623-4634), so no signal is expected inside the call;
         // if one did land the item, its line is already written. Step 2 is run by the poll

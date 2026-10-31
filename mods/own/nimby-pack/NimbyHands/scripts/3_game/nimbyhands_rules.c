@@ -546,6 +546,67 @@ class NimbyHandsRules
         return "giver inventory busy; players did not become free within " + capMs.ToString() + " ms";
     }
 
+    // ---- the client-driven step 1 (NIMBY-T-063, October 31, 2026) -------------------------
+    // Ten server crashes on 1.30.164200 followed a server-driven hand event on a connected giver
+    // (ServerTakeToDst from the call queue and from the giver's own CommandHandler alike); the
+    // same step 2 between two connected players with no hand event confirmed (S6-D). So a giver
+    // with a client stages the item itself: the server sends NimbyHandsRpc.STAGE and the client
+    // runs PredictiveTakeToDst from hands into its own cargo, the move every player-made
+    // hands-to-cargo drag takes. A giver without a client (a dev harness dummy) keeps the server
+    // path; a dummy never runs a hand event.
+    static const string VIA_CLIENT = "client";
+    static const string VIA_SERVER = "server";
+
+    static string StageVia(bool giverHasIdentity)
+    {
+        if (giverHasIdentity)
+        {
+            return VIA_CLIENT;
+        }
+        return VIA_SERVER;
+    }
+
+    // What the giver's client found when the stage request arrived, in precedence order; ""
+    // when the move can be posted. The text travels back in STAGE_REFUSED and becomes the detail.
+    static string ClientStageRefusal(bool itemFound, bool inHands, bool canStoreInput, bool hasRoom)
+    {
+        if (!itemFound)
+        {
+            return "item not found on the giver's client";
+        }
+        if (!inHands)
+        {
+            return "item not in the giver's hands on the client";
+        }
+        if (!canStoreInput)
+        {
+            return "giver's client has inventory input pending";
+        }
+        if (!hasRoom)
+        {
+            return "no space in giver inventory on the client";
+        }
+        return "";
+    }
+
+    // The REFUSED detail written by the server from a STAGE_REFUSED reply.
+    static string ClientStageRefusalDetail(string reason)
+    {
+        return "client could not stage: " + reason;
+    }
+
+    // A STAGE_REFUSED reply counts only from the giver's own identity for a request that is
+    // still REQUESTED; anything else is ignored and logged (another client cannot refuse a
+    // transfer it is not the giver of).
+    static bool ClientStageRefusalAccepted(string senderId, string giverId, int state)
+    {
+        if (senderId == "" || giverId == "" || senderId != giverId)
+        {
+            return false;
+        }
+        return state == NimbyHandsState.REQUESTED;
+    }
+
     // The server-side minimum interval between two pocket toggles of one player (review item
     // 3). A clock that moved backwards (a new mission) opens the gate.
     static bool PocketToggleAllowed(int lastMs, int nowMs, int minMs)
@@ -612,6 +673,12 @@ class NimbyHandsRules
         if (StartsWith(detail, "no delivery") || StartsWith(detail, "no completion signal") || StartsWith(detail, "reconciled"))
         {
             return FAMILY_NO_DELIVERY;
+        }
+        // The giver's client could not post the stage move (client-driven step 1): the giver
+        // retries, so it reads as the giver being busy.
+        if (StartsWith(detail, "client could not stage"))
+        {
+            return FAMILY_GIVER_BUSY;
         }
         return FAMILY_OTHER;
     }
@@ -1089,6 +1156,20 @@ class NimbyHandsRules
         failures += Case(results, "in-flight toast is role neutral", ToastText(REFUSED, "item in flight (id=2)", "requester") == "That item is already being transferred.");
         failures += Case(results, "refusal families are distinct for the main details", RefusalFamily("giver dead") == FAMILY_GIVER_STATE && RefusalFamily("giver inventory busy") == FAMILY_GIVER_BUSY);
         failures += Case(results, "unknown detail falls back to other", RefusalFamily("something new") == FAMILY_OTHER);
+        failures += Case(results, "stage rpc ids are fixed", NimbyHandsRpc.STAGE == 6552101 && NimbyHandsRpc.STAGE_REFUSED == 6552102);
+        failures += Case(results, "stage via: a giver with an identity stages from its client", StageVia(true) == VIA_CLIENT);
+        failures += Case(results, "stage via: a dummy giver stages from the server", StageVia(false) == VIA_SERVER);
+        failures += Case(results, "client stage: every check true posts the move", ClientStageRefusal(true, true, true, true) == "");
+        failures += Case(results, "client stage: missing item refuses first", ClientStageRefusal(false, false, false, false) == "item not found on the giver's client");
+        failures += Case(results, "client stage: item not in hands refuses", ClientStageRefusal(true, false, true, true) == "item not in the giver's hands on the client");
+        failures += Case(results, "client stage: pending input refuses", ClientStageRefusal(true, true, false, true) == "giver's client has inventory input pending");
+        failures += Case(results, "client stage: no room refuses", ClientStageRefusal(true, true, true, false) == "no space in giver inventory on the client");
+        failures += Case(results, "client stage refusal detail names the client", ClientStageRefusalDetail("x") == "client could not stage: x");
+        failures += Case(results, "client stage refusal detail is the giver-busy family", RefusalFamily(ClientStageRefusalDetail("giver's client has inventory input pending")) == FAMILY_GIVER_BUSY);
+        failures += Case(results, "stage refused: accepted from the giver while requested", ClientStageRefusalAccepted("a", "a", NimbyHandsState.REQUESTED));
+        failures += Case(results, "stage refused: another identity is ignored", !ClientStageRefusalAccepted("b", "a", NimbyHandsState.REQUESTED));
+        failures += Case(results, "stage refused: empty ids are ignored", !ClientStageRefusalAccepted("", "", NimbyHandsState.REQUESTED));
+        failures += Case(results, "stage refused: a staged request is not refused by the client", !ClientStageRefusalAccepted("a", "a", NimbyHandsState.STAGED));
         return failures;
     }
 

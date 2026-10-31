@@ -35,3 +35,16 @@ class NimbyHandsConstants
     // A press inside it is refused silently: a refused repeat is not a consent change.
     static const int POCKET_TOGGLE_MIN_MS = 500;
 }
+
+// RPC ids for the client-driven step 1 (NIMBY-T-063, October 31, 2026). The 6552 block: Autorun
+// holds 6550, Greet 6551 (NimbyAutorunRpc, NimbyGreetRules). Both travel on the giver's own
+// PlayerBase (GetGame().RPCSingleParam with the giver's identity; PlayerBase.OnRPC).
+class NimbyHandsRpc
+{
+    // Server to the giver's client: stage the item in hands into the giver's own cargo.
+    // Param3<int, int, int>: transfer id, item network id low bits, item network id high bits.
+    static const int STAGE = 6552101;
+    // Giver's client to the server: the stage request could not be carried out.
+    // Param2<int, string>: transfer id, reason (NimbyHandsRules.ClientStageRefusal).
+    static const int STAGE_REFUSED = 6552102;
+}
