@@ -24,6 +24,13 @@ key from O, or bound the pocket toggle, binds it once more under Options > Contr
 ("Hands: offer or request item", "Hands: open or close pockets").
 
 Changes made for the NIMBY | HARDCORE | BADLANDS | 1pp server are listed below, newest first.
+- October 31, 2026 (NIMBY-T-063, build 13, nothing inside the landing callback):
+  - ItemBase.EEItemLocationChanged now only sets a flag (NimbyHandsServer.OnItemLocationChanged, no
+    arguments); the step 2 poll reads each REQUESTED item's location and writes STAGED, CONFIRMED or
+    REFUSED from the poll (ObserveLandings). Crash 11 followed a fully client-driven step 1 at the
+    same instruction as crashes 9 and 10; every crashed run had run NimbyHands script inside that
+    callback at the step 1 landing, and the one confirmed two-client step 2 (S6-D) had not.
+  - The OnInventoryExit/OnInventoryEnter overrides and the debug "signal=" trace lines are removed.
 - October 31, 2026 (NIMBY-T-063, the client-driven step 1, build 12):
   - A connected giver no longer receives a server-driven hand event. Submit sends NimbyHandsRpc.STAGE
     (6552101) to the giver's own client, which posts Man.PredictiveTakeToDst from hands into its own

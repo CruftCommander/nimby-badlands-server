@@ -21,12 +21,13 @@
 //           GameInventory.TakeToDst(SERVER): LocationSyncMoveEntity plus SendServerMove
 //           (Inventory.c:1057-1066, :567). It runs no anti-cheat and takes no juncture,
 //           so RevalidateStep2 is the only guard, and its return value is the result.
-// Signals : 1. ItemBase.EEItemLocationChanged on the server (EntityAI.c:976): from
-//              REQUESTED a landing in the giver's own cargo is STAGED; from STAGED a
-//              landing with the receiver is CONFIRMED; anything else refuses.
-//           2. OnInventoryExit/OnInventoryEnter (ItemBase.c:1222-1244) fire only from
-//              inside signal 1 (EntityAI.c:980), so they are traced behind the debug
-//              flag with a sequence number, not wired.
+// Signals : 1. ItemBase.EEItemLocationChanged on the server (EntityAI.c:976) sets one static
+//              flag and nothing else (build 13, October 31, 2026); the step 2 poll reads each
+//              REQUESTED item's location and writes STAGED (landed in the giver's own cargo),
+//              CONFIRMED (with the receiver) or REFUSED (anywhere else) from the poll. Through
+//              build 12 that classification ran inside the callback, and every one of the eleven
+//              crashes followed such a landing (see "signal 1" below).
+//           2. OnInventoryExit/OnInventoryEnter are no longer hooked (they fire inside signal 1).
 //           3. The holder's hand event result cannot be observed on 1.30 (the class is
 //              an engine class; HumanInventory.c:228-229 drops the queue-time result),
 //              so step 1's refusal conditions are asked before dispatch.
@@ -83,10 +84,6 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
 class NimbyHandsServer
 {
     protected static ref NimbyHandsTransfers s_Registry;
-    // Depth of traced EEItemLocationChanged calls on the stack (debug ranking). A counter,
-    // not a flag, so a nested location change cannot clear the outer trace.
-    protected static int s_TraceDepth;
-    protected static int s_Sequence;
     // The step 2 move in flight (NIMBY-T-063, October 29, 2026): while s_Step2MoveId is set,
     // every inventory signal handler returns at once and the end handler only raises
     // s_Step2Landed. Crash 8 (crash_2026-10-29_19-42-55) died inside the engine's move callback
@@ -260,12 +257,6 @@ class NimbyHandsServer
             return false;
         }
         return loc.GetType() != InventoryLocationType.HANDS;
-    }
-
-    protected static int NextSequence()
-    {
-        s_Sequence = s_Sequence + 1;
-        return s_Sequence;
     }
 
     // ---- lifecycle lines ----------------------------------------------------
@@ -757,6 +748,12 @@ class NimbyHandsServer
             return;
         }
         int nowMs = GetGame().GetTime();
+        // Build 13: a step 1 landing is read here, outside the engine's callback (signal 1 below).
+        if (s_LandingDirty)
+        {
+            s_LandingDirty = false;
+            ObserveLandings();
+        }
         array<NimbyHandsTransfer> staged = new array<NimbyHandsTransfer>;
         s_Registry.CollectByState(NimbyHandsState.STAGED, staged);
         foreach (NimbyHandsTransfer entry : staged)
@@ -824,37 +821,21 @@ class NimbyHandsServer
         return same;
     }
 
-    // ---- signal 1: the item's location changed --------------------------------
+    // ---- signal 1: the item's location changed (build 13, October 31, 2026) ------------
+    // Nothing runs inside the engine's callback. Eleven server crashes on 1.30.164200 (October 28
+    // to 31) each followed a step 1 landing whose EEItemLocationChanged ran NimbyHands script: the
+    // registry lookup, the trace lines (GetHierarchyRootPlayer, GetIdentity on the giver), RecordStaged
+    // and Advance(STAGED) with its Print. The one two-client step 2 that confirmed (S6-D) had no such
+    // landing. Crash 8 died on the same kind of bookkeeping inside the step 2 move callback and was
+    // cured by moving it after the native returned; this is the same cure for the step 1 landing.
+    // ItemBase.EEItemLocationChanged now calls OnItemLocationChanged with no arguments; it writes
+    // one static and returns. The step 2 poll (Step2Tick, every WAIT_TICK_MS while the registry holds
+    // an entry) reads the flag and asks each REQUESTED item where it is now (ObserveLandings), then
+    // classifies the landing with the same ClassifyMove and writes STAGED or REFUSED from the poll.
+    // The debug "signal=" trace lines and the OnInventoryExit/Enter hooks are gone with it.
+    protected static bool s_LandingDirty;
 
-    protected static bool ShouldTrace(EntityAI item, InventoryLocation oldLoc, InventoryLocation newLoc)
-    {
-        if (!NimbyHandsLog.IsDebug())
-        {
-            return false;
-        }
-        if (IsPlayerToPlayer(oldLoc, newLoc))
-        {
-            return true;
-        }
-        // Any change of an item with a registry entry, so step 1 (same root) leaves a line.
-        return s_Registry && s_Registry.Find(ItemKey(item)) != null;
-    }
-
-    static void OnItemLocationChangedBegin(EntityAI item, InventoryLocation oldLoc, InventoryLocation newLoc)
-    {
-        if (s_Step2MoveId != 0)
-        {
-            return;
-        }
-        if (!ShouldTrace(item, oldLoc, newLoc))
-        {
-            return;
-        }
-        s_TraceDepth = s_TraceDepth + 1;
-        TraceSignal("EEItemLocationChanged.begin", item, DescribeLocation(oldLoc) + " -> " + DescribeLocation(newLoc));
-    }
-
-    static void OnItemLocationChangedEnd(EntityAI item, InventoryLocation oldLoc, InventoryLocation newLoc)
+    static void OnItemLocationChanged()
     {
         if (s_Step2MoveId != 0)
         {
@@ -862,84 +843,61 @@ class NimbyHandsServer
             s_Step2Landed = true;
             return;
         }
-        if (s_TraceDepth > 0 && ShouldTrace(item, oldLoc, newLoc))
-        {
-            TraceSignal("EEItemLocationChanged.end", item, DescribeLocation(oldLoc) + " -> " + DescribeLocation(newLoc));
-            s_TraceDepth = s_TraceDepth - 1;
-        }
-        if (!GetGame().IsServer() || !s_Registry || s_Registry.Count() == 0)
-        {
-            return;
-        }
-        NimbyHandsWorldTransfer transfer = NimbyHandsWorldTransfer.Cast(s_Registry.Find(ItemKey(item)));
-        if (!transfer)
-        {
-            return;
-        }
-        if (transfer.state != NimbyHandsState.REQUESTED && transfer.state != NimbyHandsState.STAGED)
+        s_LandingDirty = true;
+    }
+
+    // Run from Step2Tick when a location change happened since the last tick. Reads each REQUESTED
+    // item's current location and classifies it exactly as the callback handler did through build
+    // 12: a landing in the giver's own inventory (not hands) is STAGED, with the receiver is
+    // CONFIRMED, still in the giver's hands or a TEMP location is no change, anywhere else refuses.
+    protected static void ObserveLandings()
+    {
+        if (!s_Registry || s_Registry.Count() == 0)
         {
             return;
         }
-        Man newRoot = null;
-        if (newLoc.GetParent())
+        array<NimbyHandsTransfer> requested = new array<NimbyHandsTransfer>;
+        s_Registry.CollectByState(NimbyHandsState.REQUESTED, requested);
+        foreach (NimbyHandsTransfer entry : requested)
         {
-            newRoot = newLoc.GetParent().GetHierarchyRootPlayer();
-        }
-        bool atReceiver = newRoot != null && transfer.receiver != null && newRoot == transfer.receiver;
-        bool inGiverHands = newLoc.GetType() == InventoryLocationType.HANDS && newLoc.GetParent() == transfer.giver;
-        bool atGiverInventory = newRoot != null && transfer.giver != null && newRoot == transfer.giver && !inGiverHands;
-        bool isTemporary = newLoc.GetType() == InventoryLocationType.TEMP;
-        int from = transfer.state;
-        int verdict = NimbyHandsRules.ClassifyMove(from, atReceiver, atGiverInventory, inGiverHands, isTemporary);
-        if (verdict == NimbyHandsRules.NO_CHANGE)
-        {
-            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " location change ignored new=" + DescribeLocation(newLoc));
-            return;
-        }
-        string detail = "signal=EEItemLocationChanged dst=" + DescribeLocation(newLoc);
-        if (verdict == NimbyHandsState.STAGED)
-        {
-            // Nothing is scheduled from inside the engine's move callback; the step 2 poll
-            // (started by Submit, outside it) reads stagedAtMs on its next tick.
-            RecordStaged(transfer, newLoc);
-            Advance(transfer, verdict, detail);
-            return;
-        }
-        if (verdict == NimbyHandsState.REFUSED)
-        {
-            if (from == NimbyHandsState.STAGED)
+            NimbyHandsWorldTransfer transfer = NimbyHandsWorldTransfer.Cast(entry);
+            if (!transfer || !transfer.item)
             {
-                detail = "item left the staged location before delivery; " + detail;
+                continue;
             }
-            else
+            InventoryLocation loc = new InventoryLocation;
+            if (!transfer.item.GetInventory().GetCurrentInventoryLocation(loc))
+            {
+                continue;
+            }
+            EntityAI parent = loc.GetParent();
+            Man newRoot = null;
+            if (parent)
+            {
+                newRoot = parent.GetHierarchyRootPlayer();
+            }
+            bool atReceiver = newRoot != null && transfer.receiver != null && newRoot == transfer.receiver;
+            bool inGiverHands = loc.GetType() == InventoryLocationType.HANDS && parent == transfer.giver;
+            bool atGiverInventory = newRoot != null && transfer.giver != null && newRoot == transfer.giver && !inGiverHands;
+            bool isTemporary = loc.GetType() == InventoryLocationType.TEMP;
+            int verdict = NimbyHandsRules.ClassifyMove(transfer.state, atReceiver, atGiverInventory, inGiverHands, isTemporary);
+            if (verdict == NimbyHandsRules.NO_CHANGE)
+            {
+                continue;
+            }
+            string detail = "signal=EEItemLocationChanged (read by the poll) dst=" + DescribeLocation(loc);
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " landing observed: " + DescribeLocation(loc));
+            if (verdict == NimbyHandsState.STAGED)
+            {
+                RecordStaged(transfer, loc);
+                Advance(transfer, verdict, detail);
+                continue;
+            }
+            if (verdict == NimbyHandsState.REFUSED)
             {
                 detail = "item left the giver for another place before delivery; " + detail;
             }
-        }
-        Advance(transfer, verdict, detail);
-    }
-
-    static void OnInventoryExitSignal(EntityAI item, Man player)
-    {
-        if (s_Step2MoveId != 0)
-        {
-            return;
-        }
-        if (s_TraceDepth > 0)
-        {
-            TraceSignal("OnInventoryExit", item, "player=" + DescribePlayer(player));
-        }
-    }
-
-    static void OnInventoryEnterSignal(EntityAI item, Man player)
-    {
-        if (s_Step2MoveId != 0)
-        {
-            return;
-        }
-        if (s_TraceDepth > 0)
-        {
-            TraceSignal("OnInventoryEnter", item, "player=" + DescribePlayer(player));
+            Advance(transfer, verdict, detail);
         }
     }
 
@@ -1008,44 +966,5 @@ class NimbyHandsServer
             detail = "no completion signal within " + timeoutText + where;
         }
         Advance(transfer, verdict, detail);
-    }
-
-    // ---- debug ranking helpers --------------------------------------------------
-
-    static bool IsPlayerToPlayer(InventoryLocation oldLoc, InventoryLocation newLoc)
-    {
-        if (!oldLoc || !newLoc || !oldLoc.GetParent() || !newLoc.GetParent())
-        {
-            return false;
-        }
-        Man oldRoot = oldLoc.GetParent().GetHierarchyRootPlayer();
-        Man newRoot = newLoc.GetParent().GetHierarchyRootPlayer();
-        return oldRoot != null && newRoot != null && oldRoot != newRoot;
-    }
-
-    protected static void TraceSignal(string signal, EntityAI item, string detail)
-    {
-        if (!NimbyHandsLog.IsDebug())
-        {
-            return;
-        }
-        string side = "client";
-        if (GetGame().IsServer())
-        {
-            side = "server";
-        }
-        string id = "-";
-        if (s_Registry && item)
-        {
-            NimbyHandsTransfer transfer = s_Registry.Find(ItemKey(item));
-            if (transfer)
-            {
-                id = transfer.id.ToString();
-            }
-        }
-        string line = "signal=" + signal + " side=" + side + " seq=" + NextSequence().ToString();
-        line = line + " t=" + GetGame().GetTime().ToString() + " id=" + id;
-        line = line + " item=" + DescribeItem(item) + " " + detail;
-        NimbyHandsLog.Debug(line);
     }
 }
