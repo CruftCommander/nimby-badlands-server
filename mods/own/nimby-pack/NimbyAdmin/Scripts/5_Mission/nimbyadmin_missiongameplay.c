@@ -199,8 +199,13 @@ modded class MissionGameplay extends MissionBase
         NimbyAdminLog.Debug("players list id=" + requestId.ToString() + " players=" + list.players.Count().ToString() + " bytes=" + payload.Length().ToString());
         if (m_NimbyAdminMenu)
         {
-            m_NimbyAdminMenu.SetPlayers(list);
-            m_NimbyAdminMenu.SetStatus(list.players.Count().ToString() + " players.");
+            string notice = m_NimbyAdminMenu.SetPlayers(list);
+            string status = list.players.Count().ToString() + " players.";
+            if (notice != "")
+            {
+                status = status + " " + notice + ".";
+            }
+            m_NimbyAdminMenu.SetStatus(status);
         }
     }
 

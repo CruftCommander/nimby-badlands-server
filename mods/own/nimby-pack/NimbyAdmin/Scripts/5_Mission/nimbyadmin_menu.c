@@ -252,26 +252,23 @@ class NimbyAdminMenu extends NimbySharedWindow
 
     // ---- data from MissionGameplay ------------------------------------------------------------
 
-    void SetPlayers(NimbyAdminPlayerList list)
+    // Review finding 2: the selection is kept only for the same BI id and session number
+    // (NimbyAdminSelection.Rebind). Returns "" or the notice for the status line.
+    string SetPlayers(NimbyAdminPlayerList list)
     {
         string selectedBi = "";
+        int selectedSession = 0;
         NimbyAdminPlayerRow before = SelectedPlayer();
         if (before)
         {
             selectedBi = before.biId;
+            selectedSession = before.session;
         }
         m_Players = list;
-        m_SelectedRow = -1;
-        int i = 0;
-        while (i < m_Players.players.Count())
-        {
-            if (selectedBi != "" && m_Players.players.Get(i).biId == selectedBi)
-            {
-                m_SelectedRow = i;
-            }
-            i = i + 1;
-        }
+        string notice;
+        m_SelectedRow = NimbyAdminSelection.Rebind(m_Players, selectedBi, selectedSession, notice);
         ShowPlayers();
+        return notice;
     }
 
     void SetStatus(string text)

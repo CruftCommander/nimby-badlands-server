@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
 // NimbyAdmin - self-test, 3_Game half (shared rules 8). Engine-free cases for the wire definition:
 // the envelope, the args codec at every bound (recon question 6), the push-kind seam (N9), the
-// request-id counter, roles, and the log gate. The 5_Mission half (the page registry) is in
-// nimbyadmin_missionbase.c. Lines: [NIMBY][Admin][SelfTest] PASS|FAIL <case>.
+// request-id counter, roles, the log gate, and the selection rule (review finding 2). The
+// 5_Mission half (the page registry) is in nimbyadmin_missionbase.c. Lines: [NIMBY][Admin][SelfTest] PASS|FAIL <case>.
 // Style : one statement per line.
 // -----------------------------------------------------------------------------
 
@@ -17,6 +17,40 @@ class NimbyAdminSelfTest
         failures += EnvelopeCases(results);
         failures += ArgsCases(results);
         failures += SeamCases(results);
+        failures += SelectionCases(results);
+        return failures;
+    }
+
+    protected static NimbyAdminPlayerRow Row(string biId, int session)
+    {
+        NimbyAdminPlayerRow row = new NimbyAdminPlayerRow();
+        row.biId = biId;
+        row.session = session;
+        row.name = biId;
+        return row;
+    }
+
+    // Review finding 2: the selection survives a refresh only for the same BI id and session.
+    protected static int SelectionCases(array<string> results)
+    {
+        int failures = 0;
+        NimbyAdminPlayerList list = new NimbyAdminPlayerList();
+        list.players.Insert(Row("A", 1));
+        list.players.Insert(Row("B", 7));
+        string notice;
+        int kept = NimbyAdminSelection.Rebind(list, "B", 7, notice);
+        failures += Case(results, "selection: the same BI id and session keep the selection", kept == 1 && notice == "");
+        NimbyAdminPlayerList after = new NimbyAdminPlayerList();
+        after.players.Insert(Row("A", 1));
+        after.players.Insert(Row("B", 9));
+        int moved = NimbyAdminSelection.Rebind(after, "B", 7, notice);
+        failures += Case(results, "selection: a reconnected player (same BI id, new session) clears it", moved == -1 && notice == NimbyAdminSelection.NOTICE_RECONNECTED);
+        NimbyAdminPlayerList gone = new NimbyAdminPlayerList();
+        gone.players.Insert(Row("A", 1));
+        int left = NimbyAdminSelection.Rebind(gone, "B", 7, notice);
+        failures += Case(results, "selection: a player who left clears it", left == -1 && notice == NimbyAdminSelection.NOTICE_LEFT);
+        int none = NimbyAdminSelection.Rebind(list, "", 0, notice);
+        failures += Case(results, "selection: no selection stays none, with no notice", none == -1 && notice == "");
         return failures;
     }
 

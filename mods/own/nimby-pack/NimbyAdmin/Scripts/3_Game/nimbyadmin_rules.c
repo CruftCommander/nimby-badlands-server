@@ -498,6 +498,51 @@ class NimbyAdminPlayerList
     ref array<ref NimbyAdminPlayerRow> players = new array<ref NimbyAdminPlayerRow>;
 }
 
+// Review finding 2 (October 31, 2026): a refresh keeps the selection only when a row carries both
+// the selected BI id and the selected session number, so a selection never moves to a
+// reconnected player's new session on its own (security contract, "targets resolve against
+// current sessions"). Engine-free; the menu applies it in SetPlayers.
+class NimbyAdminSelection
+{
+    static const string NOTICE_RECONNECTED = "selection cleared: player reconnected";
+    static const string NOTICE_LEFT = "selection cleared: player left";
+
+    // The row that keeps the selection, or -1. notice is "" when nothing was selected or the
+    // selection was kept; otherwise why it was cleared.
+    static int Rebind(NimbyAdminPlayerList list, string biId, int session, out string notice)
+    {
+        notice = "";
+        if (biId == "" || !list)
+        {
+            return -1;
+        }
+        bool sameBi = false;
+        int i = 0;
+        while (i < list.players.Count())
+        {
+            NimbyAdminPlayerRow row = list.players.Get(i);
+            if (row && row.biId == biId)
+            {
+                if (row.session == session)
+                {
+                    return i;
+                }
+                sameBi = true;
+            }
+            i = i + 1;
+        }
+        if (sameBi)
+        {
+            notice = NOTICE_RECONNECTED;
+        }
+        else
+        {
+            notice = NOTICE_LEFT;
+        }
+        return -1;
+    }
+}
+
 // The codec's done record (Plan 11 C7: the consumer's own type).
 class NimbyAdminDone
 {
