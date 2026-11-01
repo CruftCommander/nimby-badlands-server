@@ -978,60 +978,13 @@ class NimbyHandsServer
             for (int i = s_Waiting.Count() - 1; i >= 0; i--)
             {
                 NimbyHandsMoveItemToPlayer move = s_Waiting.Get(i);
-                if (!move || move.Poll(nowMs, false))
+                if (!move || move.Poll(nowMs))
                 {
                     s_Waiting.RemoveOrdered(i);
                 }
             }
         }
         StopTickWhenIdle();
-    }
-
-    // ---- the giver's frame (NIMBY-T-063 probe, build 10, October 30, 2026) ----------
-    // Called by PlayerBase.ModCommandHandlerBefore on the server for every player, every
-    // frame. Polls the waiting requests whose giver is this player, so for a connected giver
-    // the step 1 hand event (Dispatch -> ServerTakeToDst) is posted from inside the giver's
-    // own CommandHandler, right after vanilla's HandleInventory, instead of from the global
-    // call queue. The wait tick keeps running for the cap and for dummy givers.
-    static void OnCommandHandler(PlayerBase player)
-    {
-        if (!s_Waiting || s_Waiting.Count() == 0 || !player)
-        {
-            return;
-        }
-        int nowMs = GetGame().GetTime();
-        for (int i = s_Waiting.Count() - 1; i >= 0; i--)
-        {
-            NimbyHandsMoveItemToPlayer move = s_Waiting.Get(i);
-            if (!move)
-            {
-                s_Waiting.RemoveOrdered(i);
-                continue;
-            }
-            if (!move.GiverIs(player))
-            {
-                continue;
-            }
-            if (move.Poll(nowMs, true))
-            {
-                s_Waiting.RemoveOrdered(i);
-            }
-        }
-        StopTickWhenIdle();
-    }
-
-    // Build 10 probe: a giver with an identity (a connected player) dispatches step 1 only
-    // from its own CommandHandler. A dummy (no identity) has no client to desync and never runs
-    // a hand event (build 115044), so it keeps dispatching from the wait tick, which is what
-    // the dev harness boot cases rely on. Read before the hand event, where GetIdentity on the
-    // giver has always passed.
-    static bool DispatchesFromCommandHandler(PlayerBase giver)
-    {
-        if (!giver)
-        {
-            return false;
-        }
-        return giver.GetIdentity() != null;
     }
 
     protected static void StopTickWhenIdle()

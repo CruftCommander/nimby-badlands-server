@@ -392,6 +392,15 @@ Build 20:58 (`build-20261031-205828`, 5ed09f5, `SUMMARY PASS`, 690 of 690: Hands
 | --- | --- | --- | --- | --- |
 | S6-30 | Hands HD-001 (T-010, TGA-035) | D holds the kit wrench and offers (O); L uses Take. Three repetitions in one run (D to L, L to D, D to L) | **PASS, three of three: CONFIRMED, the first in-game confirms since the October 20 diagnostic.** Every canary `ok` (92 lines), no quarantine, no crash, clean shutdown, pool back to 8 after each | Run `testserver-20261031-210147`, 21:01 to 21:07. id=1 (D gives): `wait free waited=811 site=commandHandler`, `REQUESTED ... via=client` (21:05:44.707), `landing observed`, `STAGED` (45.157, +450 ms), `canary tick: ok` and `canary after IsFree: ok` on seven ticks (held 5), `step 2 poll: staged 300 ms ago`, the twelve `CollectStep2Facts` canaries `ok`, `canary after entry/LogReservations/LocationSyncMoveEntity/SendServerMove: ok`, `LocationSyncMoveEntity=true signal=true`, `SendServerMove sent`, **`state=CONFIRMED`** (45.457), `released; in flight=0`, `transfer recycled; pool=8`. id=2 (L gives) CONFIRMED 21:06:00.394; id=3 (D gives) CONFIRMED 21:06:37.682. Server stopped by Enter 21:07, `~DayZGame()` with no crash file |
 
+## Build 20: the build 10 CommandHandler plumbing removed (unwind step 1, November 1, 2026)
+
+The unwind of the hunt's workarounds, one build and one confirming S6-30 per step, in the order ruled on October 31: the build 10 dispatch plumbing first, then the build 14 idle gate, then the build 15 hold with the build 17 pool, then the canaries. The fix, the store probe and the `Replaced` cases stay throughout. A crash or a quarantine on any step stops the unwind at that step.
+
+- **Removed.** `PlayerBase.ModCommandHandlerBefore` (the server hook), `NimbyHandsServer.OnCommandHandler` and `DispatchesFromCommandHandler`, `NimbyHandsMoveItemToPlayer.GiverIs`, the `inGiverFrame` argument of `Poll`, the `site` argument of `Submit`, the fields `m_GiverTicks` and `m_HeldForGiverLogged`, the `held for the giver's CommandHandler` line, and `site=` with `giverTicks=` on the `wait free`, `wait cap` and `REQUESTED` lines. Every request dispatches from the wait tick (`NimbyHandsServer.Tick`) again, as before build 10; for a connected giver that tick sends `NimbyHandsRpc.STAGE` (build 12), for a dummy it runs `Dispatch`.
+- **Unchanged.** The wait itself (`WaitVerdict`, `WAIT_CAP_MS`, `IsFree`), the client-driven step 1, the poll-read landing, the build 14 idle gate, the build 15 hold, the build 17 pool, the canaries and the quarantine, the probe. Self-test counts unchanged (Hands 196, DevHarness 20): the plumbing had no case of its own.
+
+Readings: S6-30 CONFIRMED in both directions with every canary `ok` and no quarantine clears this step and the unwind moves to the idle gate; a CHANGED canary, a quarantine or a crash stops the unwind here, and the dispatch frame goes back on the table with this run as its evidence.
+
 ## Not in tonight's plan
 
 - Receiver killed between step 1 and step 2, and the corpse-delivery ruling Jeff owes (TGA-041): needs a third player.
