@@ -230,3 +230,22 @@ One at a time through Jeff, each with the recommendation first.
 6. **Request `args` format.** (A) The seat's `key=value` codec (recommended, R8). (B) JSON.
 7. **Discord retries (R6).** (A) Retry every error class at 1 s, 5 s, 30 s, then drop (recommended). (B) Retry only server errors and timeouts, drop client errors at once.
 8. **Role sync trigger.** (A) The client's `session.hello` after `OnPlayerLoaded` (recommended). (B) A server push at `ClientReady`.
+
+## Status, October 31, 2026, 23:30 (WRAPPING)
+
+Done (Stop B, on `feat/nimby-admin`, pushed):
+
+- Plan 3 v0.8 with the six accepted plan lines and `permissionsReloadSeconds` (`8012a3d`).
+- Client half `NimbyAdmin` (`795514e`), server half `NimbyAdminServer` (`39afab9`), dev-harness cases and the sandstorm proof plus the CRLF fix (`4cc7f54`), baseline and test record (this commit).
+- Build `@NIMBY-20261031-231332` (`-Dev -Qualification`, replica `storage_998`): `SUMMARY PASS`, `SERVERMOD` present, `Admin` 54/54, `AdminServer` 64/64, `DevHarness` 16/16, total 779/779. `Test-NimbyRepo.ps1` PASS.
+
+Blocked:
+
+- The two-client session and every in-game row: at 23:14 the main clone's test server started (`profiles\patch-1`, port 2302, the Hands seat), on the same port and `storage_998` this session needs. Not stopped; waiting.
+- The rebuild from `4cc7f54` (line endings only since `-231332`): the build script refuses to boot while any DayZ server runs.
+
+Next:
+
+1. When no `DayZServer_x64` runs: `Build-NimbyPack.ps1 -ServerPath D:\DayZServer -BootInstanceId 998 -Dev -Qualification`, then update the build line of the test record.
+2. Jeff pastes the throwaway webhook into `profiles\nimby-admin-p0\NimbyAdmin\config.json` and starts `Start-NimbyTestServer.ps1` with the command in the test record from a console he keeps open.
+3. Run the gate table and the item 3 rows in `docs/testing/2026-10-31-central-scrutinizer-phase0.md`; then stop for the N18 review.
