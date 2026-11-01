@@ -287,6 +287,17 @@ class NimbyAdminServerRules
         return lastPushedRole != role;
     }
 
+    // Re-review finding 6: the only line a role push writes, or "" for a repeated hello with the
+    // same role (no debug line either; the gated line and the role reply are enough).
+    static string RoleSyncLine(string lastPushedRole, string role, string who, string source, int session, string reason)
+    {
+        if (!ShouldLogRoleSync(lastPushedRole, role))
+        {
+            return "";
+        }
+        return "role sync " + who + " role=" + role + " source=" + source + " session=" + session.ToString() + " reason=" + reason;
+    }
+
     // ---- time -----------------------------------------------------------------------------------
 
     static string Pad2(int value)

@@ -471,17 +471,21 @@ class NimbyAdminServerCore
         {
             return;
         }
-        bool logIt = NimbyAdminServerRules.ShouldLogRoleSync(session.lastRole, role);
+        // Re-review finding 6: a repeated hello with the same role writes no line at all, debug
+        // mode included; the role reply below is always sent.
+        string line = "";
+        if (NimbyAdminServerRules.ShouldLogRoleSync(session.lastRole, role))
+        {
+            line = NimbyAdminServerRules.RoleSyncLine(session.lastRole, role, NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64), RoleSource(session.steam64), session.number, reason);
+        }
         session.pushSequence = session.pushSequence + 1;
         session.lastRole = role;
         Param3<int, int, string> push = new Param3<int, int, string>(NimbyAdminRules.PUSH_ROLE, session.pushSequence, role);
         GetGame().RPCSingleParam(player, NimbyAdminRules.RPC_PUSH, push, true, session.identity);
-        if (!logIt)
+        if (line != "")
         {
-            NimbyAdminLog.Debug("role sync repeated session=" + session.number.ToString() + " role=" + role + " reason=" + reason);
-            return;
+            NimbyAdminLog.Info(line);
         }
-        NimbyAdminLog.Info("role sync " + NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64) + " role=" + role + " source=" + RoleSource(session.steam64) + " session=" + session.number.ToString() + " reason=" + reason);
     }
 
     protected static string RoleSource(string steam64)

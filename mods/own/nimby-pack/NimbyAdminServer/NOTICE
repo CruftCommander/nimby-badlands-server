@@ -13,7 +13,9 @@ Changes, newest first:
   evicted id is always below the floor and is stale, never accepted again; finding 3, a store
   that ever loaded a file or recovered from .lkg is never a first install again (m_EverLoaded),
   so a backup that disappears after a .lkg recovery keeps edits refused and never writes the
-  bootstrap owner file.
+  bootstrap owner file; finding 6, the role sync repeated debug line is removed: a repeated
+  hello with the same role writes no line, debug mode included
+  (NimbyAdminServerRules.RoleSyncLine); the gated role sync line and the role reply stay.
 - October 31, 2026 (Phase 0 review fixes, feat/nimby-admin; the Codex review of 439b729,
   docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md): finding 1, the replay
   window (the last 256 accepted ids per connection, a floor once full, no time expiry; "stale"

@@ -288,6 +288,8 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "hello: the first role sync of a connection is logged (finding 6)", NimbyAdminServerRules.ShouldLogRoleSync("", "none") && NimbyAdminServerRules.ShouldLogRoleSync("", "owner"));
         failures += Case(results, "hello: a repeated hello with the same role is not logged", NimbyAdminServerRules.ShouldLogRoleSync("none", "none") == false && NimbyAdminServerRules.ShouldLogRoleSync("admin", "admin") == false);
         failures += Case(results, "hello: a role change is logged", NimbyAdminServerRules.ShouldLogRoleSync("none", "admin") && NimbyAdminServerRules.ShouldLogRoleSync("owner", "none"));
+        failures += Case(results, "hello: a repeated hello with the same role writes no line, debug included (re-review 6)", NimbyAdminServerRules.RoleSyncLine("admin", "admin", "who", "file", 3, "hello") == "" && NimbyAdminServerRules.RoleSyncLine("none", "none", "who", "none", 3, "hello") == "");
+        failures += Case(results, "hello: the first push writes the one role sync line", NimbyAdminServerRules.RoleSyncLine("", "owner", "who", "file", 3, "hello") == "role sync who role=owner source=file session=3 reason=hello");
         failures += ReplayCases(results);
         NimbyAdminArgs args;
         string why;
