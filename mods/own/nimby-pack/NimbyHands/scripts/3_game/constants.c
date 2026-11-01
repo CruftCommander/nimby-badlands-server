@@ -34,14 +34,6 @@ class NimbyHandsConstants
     // Server-side minimum interval between two pocket toggles of one player (review item 3).
     // A press inside it is refused silently: a refused repeat is not a consent change.
     static const int POCKET_TOGGLE_MIN_MS = 500;
-
-    // Build 17 (November 1, 2026, NIMBY-T-063): NimbyHandsWorldTransfer objects allocated once at
-    // mission start and reused for every production request (NimbyHandsServer.Acquire, Recycle).
-    // The minidumps of crashes 13 to 15 show three dword zeros written into a transfer allocated
-    // moments earlier, during the giver's hand event; the forged transfers of the dev harness and
-    // S6-D, allocated long before any such churn, were never hit. The pool makes that allocation
-    // history permanent. More simultaneous requests than this fall back to a fresh allocation.
-    static const int TRANSFER_POOL_SIZE = 8;
 }
 
 // RPC ids for the client-driven step 1 (NIMBY-T-063, October 31, 2026). The 6552 block: Autorun
