@@ -279,3 +279,8 @@ Waiting:
 
 Next (Part 3): unchanged from the 00:25 status.
 
+## Status, November 1, 2026, 13:10 (third-pass fixes done, Part 3 starting)
+
+- Codex third pass over `git diff 439b729..a4c3a49` (copied to `docs/reviews/2026-11-01-central-scrutinizer-phase0-codex-rereview-2.md`): 12 closed, the finding 3 residual, a new medium 14 in the dev harness. Fixed in `e31ba54` (every recovery marks the store's history) and `05ad7c2` (harness id headroom), each with self-test cases; `@NIMBY-20261101-130715` `SUMMARY PASS`, 855/855.
+- Orchestrator ruling: no further review pass; straight into Part 3.
+
