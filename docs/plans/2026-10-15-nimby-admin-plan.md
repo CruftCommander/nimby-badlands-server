@@ -1,11 +1,13 @@
 # Plan 3 - Central Scrutinizer (`NimbyAdmin`)
 
-Draft v0.7, October 31, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (branch `feat/nimby-admin`, cut from `feat/nimby-shared` once Plan 11 Phase 1 passes, rebased onto `main` after Plan 11 merges), coordinated by the orchestrator; a Codex session reviews the security contract read-only at the Phase 0 gate (N18). Status: Phase 0 starts when Plan 11 (NimbyShared) Phase 1 passes. Plan 0 (shared tooling) has been on `main` since October 15, 2026.
+Draft v0.8, October 31, 2026 (night; v0.7 the same day). Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (branch `feat/nimby-admin`, cut from `feat/nimby-shared` once Plan 11 Phase 1 passes, rebased onto `main` after Plan 11 merges), coordinated by the orchestrator; a Codex session reviews the security contract read-only at the Phase 0 gate (N18). Status: Phase 0 Stop B (the vertical slice) in progress on `feat/nimby-admin` after the recon was accepted on October 31, 2026. Plan 0 (shared tooling) has been on `main` since October 15, 2026.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164200 / Nasdara (release 1 was qualified on 1.30.164078; the live binary moved to 164200 on October 22, 2026).
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
 Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.2) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; Jeff ruled its decisions Q1-Q6 the same day (hub decisions D32-D37): the companion is Eyes, its own mod-board row, and nothing from the addendum is in this plan beyond the N9 seams and Phase 5.
+
+Changes since v0.7 (Phase 0 recon `2026-10-31-nimby-admin-phase0-recon.md`, commit `7583397`, accepted by the orchestrator October 31, 2026, with Jeff's answers to its eight questions): the six recon plan lines applied, each marked "accepted by the orchestrator, October 31, 2026": gate row 1 evidence (session hello), the two-client gate session, one audit record for a denied or invalid request, ban enforcement at connection moved to Phase 1, Discord backoff on any error class (recon R6), and the 164200 reference. New `config.json` field `permissionsReloadSeconds` (recon question 5). The request `args` use the seat's `key=value` codec, never client JSON (question 6, recon R8). No decision from v0.1-v0.7 is reopened.
 
 Changes since v0.6 (Central Scrutinizer kickoff, October 31, 2026; Jeff's rulings recorded in N16-N18): the menu is built on the shared `NimbySharedWindow` shell and the NimbyShared chunk codec (Plan 11, `2026-10-31-nimby-shared-plan.md`), extracted from Greet first; the NimbyKit brief is absorbed as `spawn.kit` in Phase 2 (N17); the seats are named (N18). Phase 0 is rewritten against what Greet and release 1 proved between October 21 and 26, 2026 (chunked RPC, profile JSON, signed `.layout` on a real client, the `menu` input exclude and zeroing guard, the single-place hotkey read, `Data/Inputs.xml` rebinding, the server-only build output, and the HostHavoc `-servermod=` field), and its time box drops from five days to three. `inputs.xml` references now read `bin/preset_X1MouseKey.xml` (shared rules 7). The Players page refresh and the item catalog are named as chunk-codec payloads. No decision from v0.1-v0.6 is reopened.
 
@@ -114,6 +116,7 @@ flowchart LR
 | `spawnMaxItems` | `integer` | No | 50 | Items per request (N6) |
 | `spawnMaxVehicles` | `integer` | No | 1 | Vehicles per request (N6) |
 | `requestsPerSecond` | `integer` | No | 5 | Per-sender request limit |
+| `permissionsReloadSeconds` | `integer` | No | 5 | A request re-reads `permissions.json` when the cached copy is older than this, so a hand edit reaches the next request; bounds 1 to 300, out of range takes the default (recon question 5, ruled October 31, 2026) |
 | `discordQueueMax` | `integer` | No | 200 | Queued messages before overflow is reported |
 | `auditRetentionDays` | `integer` | No | 90 | Audit files older than this are rotated out |
 | `restrainTimeoutMinutes` | `integer` | No | 10 | A hold (N11) ends on its own after this many minutes |
@@ -133,7 +136,7 @@ flowchart LR
 | `createdUtc` | `string` | Yes | ISO 8601 UTC |
 | `text` | `string` | Yes | Escaped free text, maximum 500 characters |
 
-Audit record (one JSON object per line; two per command, `intent` then `result`):
+Audit record (one JSON object per line; two per command that reaches its handler, `intent` then `result`; a denied or invalid request writes one `result` record and no `intent`, because nothing changed - accepted by the orchestrator, October 31, 2026, recon plan line 3):
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -154,7 +157,7 @@ Depends on Plan 0 (shared tooling, on `main` since October 15, 2026) and on Plan
 
 ### Build and environment
 
-1. Record engine versions (1.30.164200), source revision, and the shared 1.30 reference hashes in `docs/baselines/`.
+1. Record engine versions (1.30.164200), source revision, and the shared 1.30 reference hashes in `docs/baselines/`. The reference is 164200 as of October 31, 2026 (`vendor/dayz-1.30-scripts/`, `scripts.pbo` SHA-256 `FF0AD7EE...`; the 164078 extract kept as `vendor/dayz-1.30-164078-scripts/`) - accepted by the orchestrator, October 31, 2026, recon plan line 6.
 2. Cite, do not re-prove: RPC in both directions with `Param3<int, int, string>` and chunked payloads above 1,000 bytes (Greet G5, G-P0-31, NIMBY-T-037); profile JSON load and save through `JsonFileLoader` (Greet G17); a `.layout` loaded from a signed client PBO on a real client (Greet Phase 1); menu open and close with the `menu` input exclude and the zeroing guard (NIMBY-T-039, NIMBY-T-058); the single-place hotkey read (NIMBY-T-046); `Data/Inputs.xml` rebinding (Ears EP-005, Greet G7); the 5_Mission `CallLater` ban (shared rules 7.1); the server-only build output (`Build-NimbyPack.ps1` `serverOnly`, `Start-NimbyTestServer.ps1 -ServerModPath`). The record names the row or finding for each.
 3. Verify in game on the replica and record file:line: `PlayerIdentity.GetPlainId()` returns the 17-digit Steam64 on a dedicated server (shared rules 4.2); `RestApi`/`RestContext`/`RestCallback` POST from the server to a throwaway webhook; player position set and the teleport surface check; `SandstormController.Start` and `Stop` take effect on a dedicated server (Phase 3 depends on it); the N2 key `Home` is free in `bin/preset_X1MouseKey.xml` (there is no `inputs.xml` in 1.30, shared rules 7).
 4. Orchestrator: `pack.json` carries the `NimbyAdmin` client row and the `NimbyAdminServer` row with `"serverOnly": true`; `*.layout` is already in `includePatterns`; `NimbyShared` is already the first row.
@@ -163,7 +166,7 @@ Depends on Plan 0 (shared tooling, on `main` since October 15, 2026) and on Plan
 
 ### Minimum vertical slice
 
-Menu shell with player selection; authenticated router; permission loading and first-owner bootstrap; audit journal; asynchronous Discord delivery; one command: teleport to player.
+Menu shell with player selection; authenticated router; permission loading and first-owner bootstrap; audit journal; asynchronous Discord delivery; one command: teleport to player. The ban store's loader, validator, `.lkg`, and self-test ship in Phase 0 so the N18 review covers them; enforcement at connection is Phase 1 (accepted by the orchestrator, October 31, 2026, recon plan line 4).
 
 ### Security contract
 
@@ -180,9 +183,11 @@ Permission updates take effect on the next request. Unknown roles and invalid en
 
 ### Gate tests
 
+The gate session is a two-client session (Jeff plus Jay or a second client): the duplicate, forged-teleport, and admin-teleport rows need a second connected player (accepted by the orchestrator, October 31, 2026, recon plan line 2).
+
 | Scenario | Required result | Evidence |
 | --- | --- | --- |
-| Non-admin presses the menu key | Nothing opens; no request sent | No `[NIMBY][Admin]` request line for that player |
+| Non-admin presses the menu key | Nothing opens; no request sent | No `[NIMBY][Admin]` request line from a Home press (every client sends `session.hello` at spawn; accepted by the orchestrator, October 31, 2026, recon plan line 1) |
 | Non-admin forges a teleport (dev harness) | Denied | Audit `result=denied`; no position change |
 | Admin teleports to a player | Moves | Audit `intent` then `result=ok` with the same `id`; one Discord message |
 | Duplicate request id | Second ignored | One `intent`, one `result`; `[NIMBY][Admin] duplicate id=` line |
@@ -217,6 +222,7 @@ Player list, teleport to, bring, heal, cure, per-stat editor, kill, kick, ban, u
 - Per-stat editor: Health, Blood, Shock, Energy, Water, Heat comfort, and Stamina, each set to an explicit value bounded to the vanilla range for that stat (`SetHealth`, `GetStatEnergy`/`GetStatWater`/`GetStatHeatComfort`, `StaminaHandler.SetStamina` at `StaminaHandler.c:1075`). Lowering a stat ("hurt") is the same command with a lower value; a value that would kill requires the same confirmation as kill. Stamina is not persisted and the edit is advisory until the next stamina tick.
 - Unstick: teleport with a 1 m lift, a 2 m forward nudge, and a surface check (addendum F16).
 - Restrain and release per N11. The server re-applies the hold if the target struggles free; a disconnect ends the hold; the timeout is enforced server side and does not depend on the admin staying online.
+- Ban enforcement at connection (`CGame.DisconnectPlayer`, `3_Game/DayZ/Global/Game.c:399`; vanilla call `5_Mission/DayZ/mission/missionServer.c:721`) lands here with its two-client test; the store itself shipped in Phase 0 (accepted by the orchestrator, October 31, 2026, recon plan line 4).
 - A ban on an online player also ends that session. Ban and permission changes persist before success is reported.
 - Removing or disabling Central Scrutinizer removes connection-time ban enforcement; the ops doc says so.
 
@@ -257,7 +263,7 @@ Records per the audit table above. Test locked files, rotation, and recovery loc
 
 - Webhook URL only in `config.json`; never in logs, client sync, or the repo.
 - Escaped text, mentions disabled, payload limits enforced.
-- Bounded queue (`discordQueueMax`); on `429`, back off on a fixed schedule (1 s, 5 s, 30 s) and then drop with one local line. `RestCallback` exposes status and body, not reliable headers, so retry-after values are not assumed.
+- Bounded queue (`discordQueueMax`); on any error class or timeout, back off on a fixed schedule (1 s, 5 s, 30 s) and then drop, with one local line per class per episode. `RestCallback` reports an `ERestResultState` error class, not the HTTP status (`3_Game/DayZ/Http/RestApi.c:8,55`), so a `429` cannot be told from another client error (recon R6) and retry-after values are not assumed (accepted by the orchestrator, October 31, 2026, recon plan line 5).
 - Distinguish retryable failures from configuration failures; surface overflow and permanent failure locally and in the admin menu.
 - Never repeat a game command because its notification failed.
 
