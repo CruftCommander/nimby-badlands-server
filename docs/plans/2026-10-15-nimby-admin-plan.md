@@ -1,11 +1,13 @@
 # Plan 3 - Central Scrutinizer (`NimbyAdmin`)
 
-Draft v0.6, October 21, 2026 (evening). Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `feat/nimby-admin`, coordinated by the orchestrator. Status: ready for Phase 0 once Plan 0 (shared tooling) is on `main`.
+Draft v0.7, October 31, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (branch `feat/nimby-admin`, cut from `feat/nimby-shared` once Plan 11 Phase 1 passes, rebased onto `main` after Plan 11 merges), coordinated by the orchestrator; a Codex session reviews the security contract read-only at the Phase 0 gate (N18). Status: Phase 0 starts when Plan 11 (NimbyShared) Phase 1 passes. Plan 0 (shared tooling) has been on `main` since October 15, 2026.
 
-Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164078 / Nasdara.
+Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164200 / Nasdara (release 1 was qualified on 1.30.164078; the live binary moved to 164200 on October 22, 2026).
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
-Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.1) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; none of it is planned until Jeff rules on its decisions Q1-Q6.
+Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.2) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; Jeff ruled its decisions Q1-Q6 the same day (hub decisions D32-D37): the companion is Eyes, its own mod-board row, and nothing from the addendum is in this plan beyond the N9 seams and Phase 5.
+
+Changes since v0.6 (Central Scrutinizer kickoff, October 31, 2026; Jeff's rulings recorded in N16-N18): the menu is built on the shared `NimbySharedWindow` shell and the NimbyShared chunk codec (Plan 11, `2026-10-31-nimby-shared-plan.md`), extracted from Greet first; the NimbyKit brief is absorbed as `spawn.kit` in Phase 2 (N17); the seats are named (N18). Phase 0 is rewritten against what Greet and release 1 proved between October 21 and 26, 2026 (chunked RPC, profile JSON, signed `.layout` on a real client, the `menu` input exclude and zeroing guard, the single-place hotkey read, `Data/Inputs.xml` rebinding, the server-only build output, and the HostHavoc `-servermod=` field), and its time box drops from five days to three. `inputs.xml` references now read `bin/preset_X1MouseKey.xml` (shared rules 7). The Players page refresh and the item catalog are named as chunk-codec payloads. No decision from v0.1-v0.6 is reopened.
 
 Changes since v0.5 (Jeff's rulings, October 21, 2026, evening): persistent-loot density added (N15): a server-side tile counter, a Density page, and per-tile Discord alerts in Phase 5, with per-player alerts once the F15 journal has data; the heatmap overlay joins Phase 6. Sandstorm control promoted into Phase 3 now that `SandstormController.Start`/`Stop` are verified (`3_Game/DayZ/Sandstorm.c:20,27`, Tweaker study T1a). New `config.json` fields `densityTileMeters`, `densityAlertObjects`, `densityPlayerAlertObjects`, `densityRefreshSeconds`.
 
@@ -42,6 +44,9 @@ Changes since v0.2: display name Golden God (N1); client and server PBO split (N
 | N13 | Admin notes store | `$profile:NimbyAdmin\notes.json` from Phase 5, same atomic write and `.lkg` as N8; Eyes imports the file when it ships and becomes the viewer, and the server keeps writing locally so an Eyes outage never loses a note | Decided by Jeff, October 21, 2026 |
 | N14 | Capabilities not adopted | Recorded under Later (not committed) with their one-line verdicts; nothing scheduled or estimated | Decided by Jeff, October 21, 2026 |
 | N15 | Persistent-loot density | Purpose: answer "why does this area have low performance" and catch a player or area hoarding. Phase 5: the registry counts persistent objects per map tile (`densityTileMeters`, default 200) by class group (base parts, tents, containers and barrels, underground stashes, loose ground items, vehicles; infected and animals excluded), a Density page lists the top tiles with counts and a best-guess owner, and a Discord alert fires when a tile passes `densityAlertObjects` (default 400), once per tile per restart. Per-player alerts (`densityPlayerAlertObjects`) use the F15 association journal and switch on when it has data; until then the owner column is marked best-guess. Phase 6 paints the tiles as a heat overlay on the map. Thresholds are starting values, tuned on live data | Decided by Jeff, October 21, 2026 (placement and alert unit); counting rules and defaults are Claude's |
+| N16 | Shell and codec | The menu is a `NimbySharedWindow` subclass, and every server-to-client payload above one RPC string (the Players refresh, the item catalog, the audit tail) goes through the NimbyShared chunk codec (Plan 11, C5 and C7). This addon holds no copy of either and never references a `NimbyGreet` class | Decided by Jeff, October 31, 2026 (a shared addon over a copied shell or a Greet dependency) |
+| N17 | Test kit | NimbyKit (`docs/plans/2026-10-26-testkit-brief.md`) is not built as its own addon. Phase 2 gains `spawn.kit`: one named item list from `$profile:NimbyAdmin\kits.json` given to one online player, audited and bounded like `spawn.item`. The automatic on-spawn kit is recorded under Later (not committed) | Decided by Jeff, October 31, 2026 |
+| N18 | Seats | One Claude Code session in the worktree implements, and runs `Build-NimbyPack.ps1` and the replica server itself; Jeff runs the in-game client steps and pastes the lines; a Codex session reviews the Phase 0 security contract (router, permissions store, ban store, audit journal) read-only at the gate, and every finding is addressed or ruled before the go | Decided by Jeff, October 31, 2026 |
 
 ## Architecture
 
@@ -61,7 +66,8 @@ flowchart LR
 
 | Component | PBO | Responsibility |
 | --- | --- | --- |
-| Menu | Client | Layouts and widgets; sends requests; never decides anything; hidden unless the admin state sync says the player has a role |
+| Menu | Client | A `NimbySharedWindow` subclass (Plan 11, C5): page registry, layouts, and widgets; sends requests; never decides anything; hidden unless the admin state sync says the player has a role; its pause-menu entry registers through `NimbySharedPauseButtons` and shows only with a role |
+| Chunk delivery | Both | `NimbySharedChunkSender` on the server and `NimbySharedChunkReceiver` on the client (Plan 11, C7) carry any payload above one RPC string; the chunk and done RPC ids come from the `65503xx` block |
 | Admin state sync | Both | Server tells a client its role at connect and on change through the `NimbyAdminPush` envelope (N9); the client only renders |
 | Command router | Server | Reads protocol version, request id, command, args; derives the actor from the connection; authorizes; dedupes; rate-limits; dispatches; returns the result to the sender only |
 | Permissions store | Server | `$profile:NimbyAdmin\permissions.json` with `.lkg`; first-owner bootstrap |
@@ -142,17 +148,18 @@ Audit record (one JSON object per line; two per command, `intent` then `result`)
 | `effects` | `object` | No | Actual created quantities, entities removed, values applied |
 | `reason` | `string` | No | Failure or denial reason |
 
-## Phase 0 - feasibility and security gate (5-day time box)
+## Phase 0 - feasibility and security gate (3-day time box)
 
-Depends on Plan 0 (shared tooling), including the server-mod build output.
+Depends on Plan 0 (shared tooling, on `main` since October 15, 2026) and on Plan 11 Phase 1 (the shell and the codec on `feat/nimby-shared`).
 
 ### Build and environment
 
-1. Record engine versions, source revision, and the shared 1.30 reference hashes in `docs/baselines/`.
-2. Verify against the shared reference and record file:line: RPC send and receive on both sides, `PlayerIdentity` Steam64 access, profile-folder file read and write, JSON load and save, `RestApi`/`RestContext`/`RestCallback`, menu creation and input focus, `.layout` loading from a signed PBO, the N2 key candidates in `inputs.xml`, and player position set.
-3. Confirm with the orchestrator that `pack.json` carries both `NimbyAdmin` rows and `*.layout` in `includePatterns`.
-4. Verify HostHavoc supports `-servermod=` from the panel and that outbound HTTPS to Discord works from the host, before any server-only code or webhook work.
-5. Build, sign, and boot both PBOs on Nasdara; verify a menu `.layout` loads from the signed client PBO on a real client.
+1. Record engine versions (1.30.164200), source revision, and the shared 1.30 reference hashes in `docs/baselines/`.
+2. Cite, do not re-prove: RPC in both directions with `Param3<int, int, string>` and chunked payloads above 1,000 bytes (Greet G5, G-P0-31, NIMBY-T-037); profile JSON load and save through `JsonFileLoader` (Greet G17); a `.layout` loaded from a signed client PBO on a real client (Greet Phase 1); menu open and close with the `menu` input exclude and the zeroing guard (NIMBY-T-039, NIMBY-T-058); the single-place hotkey read (NIMBY-T-046); `Data/Inputs.xml` rebinding (Ears EP-005, Greet G7); the 5_Mission `CallLater` ban (shared rules 7.1); the server-only build output (`Build-NimbyPack.ps1` `serverOnly`, `Start-NimbyTestServer.ps1 -ServerModPath`). The record names the row or finding for each.
+3. Verify in game on the replica and record file:line: `PlayerIdentity.GetPlainId()` returns the 17-digit Steam64 on a dedicated server (shared rules 4.2); `RestApi`/`RestContext`/`RestCallback` POST from the server to a throwaway webhook; player position set and the teleport surface check; `SandstormController.Start` and `Stop` take effect on a dedicated server (Phase 3 depends on it); the N2 key `Home` is free in `bin/preset_X1MouseKey.xml` (there is no `inputs.xml` in 1.30, shared rules 7).
+4. Orchestrator: `pack.json` carries the `NimbyAdmin` client row and the `NimbyAdminServer` row with `"serverOnly": true`; `*.layout` is already in `includePatterns`; `NimbyShared` is already the first row.
+5. HostHavoc: the Commandline Manager already exposes `-servermod=` (the live line is `"-servermod=" "-mod=@NIMBY"`). Still to verify before any server-only code depends on it: a `@NIMBY-Server` folder uploaded over SFTP to the server root loads from that field at a restart window, and outbound HTTPS to `discord.com` works from the host (the same throwaway webhook as item 3, one post, then the webhook is deleted). Both are Jeff's steps on the live panel; the seat prepares the folder and the exact lines.
+6. Build, sign, and boot both PBOs on Nasdara on the replica; the menu opens on a real client from the signed client PBO on the `NimbySharedWindow` shell, and a player without a role sees nothing.
 
 ### Minimum vertical slice
 
@@ -186,6 +193,7 @@ Permission updates take effect on the next request. Unknown roles and invalid en
 | Audit file locked or read-only (local) | Command blocked | `result=failed reason=audit unavailable`; no state change |
 | Webhook wrong or Discord down | Command succeeds | `result=ok`; one `[NIMBY][Admin] discord failed` line, not one per retry |
 | Self-test | Validators pass | `[NIMBY][Admin][SelfTest] PASS` for every case |
+| Security contract review (N18) | The Codex read-only review of the router, permissions store, ban store, and audit journal leaves no unaddressed finding | Review verdict and the disposition of each finding recorded in `docs/testing/<date>-central-scrutinizer-phase0.md` |
 
 Go/no-go: continue only when the slice passes and remaining uncertainties are written down. If the time box is exceeded or the menu or RPC plumbing proves unworkable, stop; Jay keeps the HostHavoc panel. Reintroducing CF/COT needs its own compatibility decision and persistence test.
 
@@ -222,6 +230,7 @@ Exit: every command passes authorized, unauthorized, stale-target, and restart t
 - Never silently move a failed inventory spawn to the ground.
 - Track entities created by the current request so incomplete construction is cleaned up before success is reported. A crash mid-request leaves an unresolved `intent`; do not claim exactly-once.
 - Vehicle presets live in `$profile:NimbyAdmin\vehicles.json` for explicitly supported classes; validate parts, fluids, placement, and operability individually. Reject unvalidated presets.
+- Kits (N17): `$profile:NimbyAdmin\kits.json` holds named item lists (`name`, `items[]` of `class` and `quantity`), validated on load like every other file (an invalid row is skipped and logged). `spawn.kit` gives one list to one online player through the same catalog validation, destination rules, N6 limits, and `result=partial` reporting as `spawn.item`. The first list is the one the NimbyKit brief proposed (`Hammer` 1, `Nail` 20, `Paper` 10, `Pen_Black` 1, `DuctTape` 1, `EpoxyPutty` 1, `KitchenKnife` 1, `Wrench` 1, `Whetstone` 1), subject to Jeff's edit of the file.
 
 | Scenario | Required result | Evidence |
 | --- | --- | --- |
@@ -231,6 +240,8 @@ Exit: every command passes authorized, unauthorized, stale-target, and restart t
 | Duplicate request id | Second ignored | One `result` |
 | Vehicle preset for each supported class | Drivable after spawn and after restart | Manual drive; audit `result=ok`; vehicle present after RCON `#shutdown` restart |
 | Unvalidated vehicle preset | Refused | `result=invalid reason=preset not validated` |
+| `spawn.kit` with the default list | Nine classes in the target's inventory | `result=ok effects.created=<n>`; one audit pair |
+| `kits.json` with an unknown class | List skipped and logged, other lists usable | `[NIMBY][Admin] kits.json: list <name> skipped` line |
 
 ## Phase 3 - world controls and audit delivery
 
@@ -309,6 +320,7 @@ Surfaced by the October 21, 2026 gap analysis against COT and VPP and not adopte
 | Capability | Verdict |
 | --- | --- |
 | Automatic removal of over-limit loot (the base-size governor idea, October 15, 2026) | Not adopted: N15 reports and alerts; removal stays a human, audited action |
+| Automatic test kit on fresh spawn (the NimbyKit brief, October 26, 2026) | Absorbed (N17): `spawn.kit` in Phase 2 covers the manual case; the on-spawn version is a `NimbyAdminServer` hook over `kits.json` plus a recipient list, built when a test window needs it |
 | Invisible and god mode as standalone toggles on self | Feasible (`Entity.SetInvisible`, `Object.SetAllowDamage`); spectate already uses both on the admin's hidden body. Would need Q5-style guards; no roleplay use identified for applying either to another player |
 | Map click-to-teleport (self and target) and click-to-drop | Same code paths as teleport and addendum F14 with a position argument; natural Phase 6 extension |
 | Saved loadouts applied to a player | Catalog plus a JSON file; useful for events |
@@ -347,3 +359,5 @@ Re-estimate after Phase 0 in engineering effort and tester hours. Treat five to 
 | DayZ update breaks a used API | Admin tool down | Small surface; boot check fails the build |
 | Object delete is irreversible | A wrong click removes a player's base part | Confirmation plus a full audit `target`; restoring is a manual respawn from the record, never a world rollback |
 | Restraint abused or forgotten | A player held with no admin present | Server-side timeout, owner notified in Discord, both forms audited; the toast tells the target it is an admin action |
+| Plan 11 merges late | The client PBO cannot build against `main` | `feat/nimby-admin` is cut from `feat/nimby-shared` and rebased after the merge; the server-side work of Phase 0 and Phase 1 does not wait |
+| Two seats in the tree | Build or test-server port collision with the Hands session | `AGENTS.md` shared-machine rule: check for a running `DayZServer_x64` before any boot |

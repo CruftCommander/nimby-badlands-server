@@ -1,0 +1,10 @@
+NimbyShared - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+The shared client addon of the @NIMBY pack: the window shell (a UIScriptedMenu base class, a
+pause-menu button registry over the vanilla DayZ 1.30 InGameMenu class, Bohemia Interactive)
+and the chunked RPC codec, both extracted from NimbyGreet (plan
+docs/plans/2026-10-31-nimby-shared-plan.md). No third-party mod code; no media.
+
+Changes, newest first:
+
+- October 31, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
+  builds with the pack.json row; the body lands from feat/nimby-shared.
