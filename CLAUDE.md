@@ -38,8 +38,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -SkipBootCheck
 
 # Qualification boot (storageAutoFix = 0) plus the dev harness (mods\own\dev\NimbyDevHarness, forged requests
-# against the real Legs and Hands handlers; SELFTEST DevHarness in build.log) under the separate nimby_dev key
+# against the real Legs and Hands handlers; SELFTEST DevHarness in build.log) under the separate nimby_dev key.
+# -DebugAddons NimbyHands also creates the Hands debug flag in the boot profile, so the step 2 lines are written
+# (the harness's bot transfer case, NIMBY-T-063)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -Dev -Qualification
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-NimbyPack.ps1 -ServerPath D:\DayZServer -BootInstanceId 998 -Dev -Qualification -DebugAddons NimbyHands
 
 # Release artifact: only the named addons (pack.json untouched), booted against storage_998, the copy of
 # live storage_1 that Sync-LiveReplica.ps1 makes (release gate decisions 1 and 2, October 26, 2026).
@@ -61,6 +64,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps
 # Against the live replica: 998 = copy of live storage_1, 999 = fresh world; -Vanilla = no mods (control boot)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath D:\DayZServer -InstanceId 998
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-NimbyTestServer.ps1 -ServerPath D:\DayZServer -InstanceId 998 -Vanilla
+
+# Read a test-server run (newest logs\testserver-* by default, or a logs\build-<stamp> boot check): Hands state
+# chains with timings, UNCONFIRMED and open ids, SCRIPT (E) and corrupted-variable hits, crash files, self-test
+# lines, VERDICT PASS|FAIL in <run>\evaluation.log (exit 0 PASS, 1 FAIL, 2 UNKNOWN). Use it on every run.
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Read-NimbyTestRun.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Read-NimbyTestRun.ps1 -RunPath .\logs\testserver-<stamp>
 
 # Refresh the local replica at D:\DayZServer from the WinSCP mirror of the live server (-WhatIf lists only)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Sync-LiveReplica.ps1

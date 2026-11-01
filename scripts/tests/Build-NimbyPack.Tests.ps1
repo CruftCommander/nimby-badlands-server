@@ -13,7 +13,7 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
     $repo = Get-TestRepoRoot
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Write-MetaCpp', 'Select-PackAddon', 'Resolve-BootInstance', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
+    . (Get-ScriptFunctionBlock -Path (Join-Path $repo 'scripts\Build-NimbyPack.ps1') -Name 'Get-OptionalProperty', 'Get-PackDefinition', 'Write-MetaCpp', 'Select-PackAddon', 'Select-DebugAddon', 'Initialize-DebugFlag', 'Resolve-BootInstance', 'Get-BootVerdict', 'Get-SelfTestVerdict', 'Get-SignatureVerdict')
     $packPath = Join-Path $repo 'mods\own\nimby-pack\pack.json'
     $pack = Get-PackDefinition -Path $packPath
     $failurePatterns = @($pack.bootCheck.failurePatterns)
@@ -352,6 +352,38 @@ Describe 'Resolve-BootInstance (release gate decision 2: the boot instance is a 
     }
 }
 
+Describe 'Select-DebugAddon and Initialize-DebugFlag (-DebugAddons, October 29, 2026)' {
+    BeforeAll {
+        $built = @(
+            [PSCustomObject]@{ pboName = 'NimbyAutorun'; prefix = 'NimbyAutorun' },
+            [PSCustomObject]@{ pboName = 'NimbyHands'; prefix = 'NimbyHands' }
+        )
+    }
+
+    It 'returns no prefix when -DebugAddons is omitted' {
+        @(Select-DebugAddon -BuiltAddons $built -Names $null).Count | Should -Be 0
+    }
+
+    It 'maps pboName to the flag folder prefix, from one comma-separated string, ignoring case' {
+        @(Select-DebugAddon -BuiltAddons $built -Names 'nimbyhands, NimbyAutorun') | Should -Be @('NimbyHands', 'NimbyAutorun')
+    }
+
+    It 'refuses an addon that is not built in this run' {
+        { Select-DebugAddon -BuiltAddons $built -Names 'NimbyGreet' } | Should -Throw -ExpectedMessage '*does not include*'
+    }
+
+    It 'refuses a name given twice' {
+        { Select-DebugAddon -BuiltAddons $built -Names 'NimbyHands,nimbyhands' } | Should -Throw -ExpectedMessage '*twice*'
+    }
+
+    It 'writes the debug flag file under the prefix folder of the profile' {
+        $profile = Join-Path $TestDrive 'profile'
+        $flags = @(Initialize-DebugFlag -ProfilePath $profile -Prefix @('NimbyHands'))
+        $flags | Should -Be @((Join-Path $profile 'NimbyHands\debug'))
+        Test-Path -LiteralPath (Join-Path $profile 'NimbyHands\debug') -PathType Leaf | Should -BeTrue
+    }
+}
+
 Describe 'Build-NimbyPack.ps1 parameters (release gate decision 2: the boot instance is a parameter)' {
     BeforeAll {
         $command = Get-Command (Join-Path $repo 'scripts\Build-NimbyPack.ps1')
@@ -359,6 +391,10 @@ Describe 'Build-NimbyPack.ps1 parameters (release gate decision 2: the boot inst
 
     It 'declares -Addons as a string array' {
         $command.Parameters['Addons'].ParameterType | Should -Be ([string[]])
+    }
+
+    It 'declares -DebugAddons as a string array' {
+        $command.Parameters['DebugAddons'].ParameterType | Should -Be ([string[]])
     }
 
     It 'declares -BootInstanceId as an int limited to 998 and 999 (shared rules, section 8)' {

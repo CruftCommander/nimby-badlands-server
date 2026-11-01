@@ -233,3 +233,20 @@ Describe 'Resolve-JoinPassword and Get-StandingJoinPassword' {
         Get-StandingJoinPassword -RepoRoot $root | Should -BeNullOrEmpty
     }
 }
+
+Describe 'Start-NimbyTestServer.ps1 parameters (-NoDev, October 29, 2026)' {
+    BeforeAll {
+        $command = Get-Command (Join-Path $repo 'scripts\Start-NimbyTestServer.ps1')
+    }
+
+    It 'declares -NoDev as a switch' {
+        $command.Parameters['NoDev'].ParameterType | Should -Be ([switch])
+    }
+
+    It 'never defaults the dev folder from the build log when -NoDev is given' {
+        $text = Get-Content -LiteralPath (Join-Path $repo 'scripts\Start-NimbyTestServer.ps1') -Raw
+        $defaults = [regex]::Matches($text, '(?m)^\s*if \(-not \$DevPath -and (?<rest>[^\r\n]*)\$DevPath = \$build\.DevPath')
+        $defaults.Count | Should -Be 2
+        foreach ($match in $defaults) { $match.Groups['rest'].Value | Should -BeLike '*-not $NoDev*' }
+    }
+}

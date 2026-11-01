@@ -76,6 +76,12 @@
 .PARAMETER DevPath
     A build\@NIMBY-Dev-<stamp> folder loaded beside the pack. Defaults from the chosen build's log.
 
+.PARAMETER NoDev
+    Boot the pack without the dev harness even when the chosen build's log names one (a -Dev
+    build). Clients that do not load the harness folder are kicked by the server otherwise
+    ("Client is missing a mod which is on the server (NIMBY Dev)", October 29, 2026). Refused
+    together with -DevPath.
+
 .PARAMETER ProfileName
     Reuse <repo>\profiles\<ProfileName> as the server profile instead of a per-run folder.
 
@@ -123,6 +129,7 @@ param(
     [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
     [ValidateSet(998, 999)][int]$InstanceId,
     [switch]$Vanilla,
+    [switch]$NoDev,
     [switch]$Force
 )
 
@@ -522,6 +529,9 @@ try {
     $build = $null
     if ($Vanilla) {
         if ($BuildPath -or $ServerModPath -or $DevPath) { throw '-Vanilla boots with no mod; drop -BuildPath, -ServerModPath, and -DevPath.' }
+    }
+    if ($NoDev -and $DevPath) { throw '-NoDev and -DevPath together: drop one.' }
+    if ($Vanilla) {
         Write-Manifest -LogPath $manifest -Line 'BUILD none (vanilla control boot)'
     }
     elseif ($BuildPath) {
@@ -540,14 +550,14 @@ try {
             Write-Manifest -LogPath $manifest -Line "BUILD FORCED verdict=$explicitVerdict by -Force"
         }
         if (-not $ServerModPath -and $null -ne $build -and $build.ServerModPath) { $ServerModPath = $build.ServerModPath }
-        if (-not $DevPath -and $null -ne $build -and $build.DevPath) { $DevPath = $build.DevPath }
+        if (-not $DevPath -and -not $NoDev -and $null -ne $build -and $build.DevPath) { $DevPath = $build.DevPath }
     }
     else {
         $build = Get-QualifiedModBuild -LogRoot $logRoot -ModFolderName $pack.modFolderName
         if ($null -eq $build) { throw 'No build with SUMMARY PASS in logs\build-*\build.log. Run Build-NimbyPack.ps1 to a PASS, or pass -BuildPath explicitly.' }
         $BuildPath = $build.ModPath
         if (-not $ServerModPath -and $build.ServerModPath) { $ServerModPath = $build.ServerModPath }
-        if (-not $DevPath -and $build.DevPath) { $DevPath = $build.DevPath }
+        if (-not $DevPath -and -not $NoDev -and $build.DevPath) { $DevPath = $build.DevPath }
         Write-Manifest -LogPath $manifest -Line ("BUILD selected verdict=PASS log={0}" -f $build.Path)
     }
     if ($ServerModPath -and -not (Test-ModFolder -Path $ServerModPath)) { throw "No addons\*.pbo under -ServerModPath '$ServerModPath' (a relative path is read from $((Get-Location).ProviderPath))." }
@@ -559,7 +569,7 @@ try {
     if ($DevPath) { $DevPath = Resolve-ModFolderPath -Path $DevPath -Label '-DevPath' }
     if ($Vanilla) { Write-Manifest -LogPath $manifest -Line 'MOD none' } else { Write-Manifest -LogPath $manifest -Line "MOD $BuildPath" }
     if ($ServerModPath) { Write-Manifest -LogPath $manifest -Line "SERVERMOD $ServerModPath" } else { Write-Manifest -LogPath $manifest -Line 'SERVERMOD none' }
-    if ($DevPath) { Write-Manifest -LogPath $manifest -Line "DEV $DevPath" } else { Write-Manifest -LogPath $manifest -Line 'DEV none' }
+    if ($DevPath) { Write-Manifest -LogPath $manifest -Line "DEV $DevPath" } elseif ($NoDev) { Write-Manifest -LogPath $manifest -Line 'DEV none (-NoDev)' } else { Write-Manifest -LogPath $manifest -Line 'DEV none' }
     if (-not $Vanilla) { foreach ($line in (Get-AddonHashLine -Path $BuildPath -Label 'client')) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($ServerModPath) { foreach ($line in (Get-AddonHashLine -Path $ServerModPath -Label 'server')) { Write-Manifest -LogPath $manifest -Line $line } }
     if ($DevPath) { foreach ($line in (Get-AddonHashLine -Path $DevPath -Label 'dev')) { Write-Manifest -LogPath $manifest -Line $line } }
