@@ -32,6 +32,11 @@ How it runs (server only):
 
 Changes, newest first:
 
+- October 31, 2026 (Central Scrutinizer Phase 0, feat/nimby-admin, ruling 2): nimbydevharness_admin.c
+  forges Central Scrutinizer requests at the wire (a ScriptReadWriteContext into the real
+  PlayerBase.OnRPC with a connected player's identity), so it names only NimbyAdmin client
+  classes, never NimbyAdminServer; armed by forge words "admin" (plus "admin-owner=<steam64>")
+  and "sandstorm". Two-line hook in OnPlayerConnected; NimbyAdmin added to requiredAddons.
 - October 21, 2026: created (Hands P3 build, ruling of October 21, 2026). Boot
   cases: Legs request aimed at another player's PlayerBase from a sender that does
   not own it; Hands take without consent; two takers on one offer; pockets closed by

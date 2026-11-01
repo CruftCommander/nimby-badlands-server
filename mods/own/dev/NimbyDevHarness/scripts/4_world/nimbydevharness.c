@@ -116,6 +116,8 @@ class NimbyDevHarness
     // in the world, so they wait.
     static void OnPlayerConnected(PlayerBase player)
     {
+        // Central Scrutinizer forged requests (nimbydevharness_admin.c, Plan 3 Phase 0, ruling 2).
+        NimbyDevHarnessAdmin.OnPlayerConnected(player);
         if (!GetGame().IsServer() || !player || !ForgeHas("online"))
         {
             return;
