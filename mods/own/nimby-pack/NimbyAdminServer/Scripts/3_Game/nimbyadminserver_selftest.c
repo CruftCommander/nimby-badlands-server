@@ -123,6 +123,8 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "webhook: http is refused", NimbyAdminServerRules.SplitWebhook("http://discord.com/api/webhooks/1/x", base, path) == false);
         failures += Case(results, "webhook: a path without a token is refused", NimbyAdminServerRules.SplitWebhook("https://discord.com/api/webhooks/123", base, path) == false);
         failures += Case(results, "webhook: a space is refused", NimbyAdminServerRules.SplitWebhook("https://discord.com/api/webhooks/1/a b", base, path) == false);
+        failures += Case(results, "webhook: wait=true is added at send time, with & after an existing query, never twice", NimbyAdminServerRules.WebhookRequestPath("1/abc") == "1/abc?wait=true" && NimbyAdminServerRules.WebhookRequestPath("1/abc?thread_id=9") == "1/abc?thread_id=9&wait=true" && NimbyAdminServerRules.WebhookRequestPath("1/abc?wait=true") == "1/abc?wait=true");
+        failures += DiscordQueueCases(results);
         return failures;
     }
 
@@ -241,6 +243,74 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "discord: mentions are disabled and text escaped", payload == "{\"content\":\"@everyone hi \\\"x\\\"\",\"allowed_mentions\":{\"parse\":[]}}");
         string longPayload = NimbyAdminServerRules.DiscordPayload(NimbySharedChunks.FillBytes("x", 3000));
         failures += Case(results, "discord: text is cut to 1,900 bytes", longPayload.Length() == 1900 + 46);
+        return failures;
+    }
+
+    // Gate-session fix round: the Discord delivery state machine. Before the fix every error
+    // class was retried, so a delivered POST that the engine reported through OnError was sent
+    // again (teleport 3 posted four times in the gate session); these cases call the new queue
+    // class, so they fail before by construction.
+    protected static int DiscordQueueCases(array<string> results)
+    {
+        int failures = 0;
+        int id;
+        int seq;
+        string payload;
+
+        NimbyAdminServerDiscordQueue ok = new NimbyAdminServerDiscordQueue();
+        ok.Add("a");
+        ok.Add("b");
+        bool sentA = ok.NextSend(0, id, seq, payload) && id == 1 && seq == 1 && payload == "a";
+        bool blocked = !ok.NextSend(0, id, seq, payload);
+        string okOutcome = ok.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_OK, 0);
+        bool sentB = ok.NextSend(0, id, seq, payload) && id == 2 && payload == "b";
+        failures += Case(results, "discord queue: one POST in flight; a success delivers once and the next message goes", sentA && blocked && okOutcome == NimbyAdminServerDiscordQueue.DELIVERED && sentB);
+
+        NimbyAdminServerDiscordQueue err = new NimbyAdminServerDiscordQueue();
+        err.Add("a");
+        err.NextSend(0, id, seq, payload);
+        string errOutcome = err.OnCallback(1, 1, "other", 0);
+        failures += Case(results, "discord queue: a non-timeout error drops the message at once, no retry", errOutcome == NimbyAdminServerDiscordQueue.DROPPED && err.Count() == 0 && !err.NextSend(100, id, seq, payload));
+        string repeat = err.OnCallback(1, 1, "other", 1);
+        failures += Case(results, "discord queue: a repeated OnError for a settled message is ignored", repeat == NimbyAdminServerDiscordQueue.IGNORED && err.Count() == 0);
+
+        NimbyAdminServerDiscordQueue slow = new NimbyAdminServerDiscordQueue();
+        slow.Add("a");
+        slow.NextSend(0, id, seq, payload);
+        string t1 = slow.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 0);
+        bool wait1 = !slow.NextSend(0.5, id, seq, payload) && slow.NextSend(1.0, id, seq, payload) && seq == 2;
+        string t2 = slow.OnCallback(1, 2, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 1);
+        bool wait2 = !slow.NextSend(5.5, id, seq, payload) && slow.NextSend(6.0, id, seq, payload) && seq == 3;
+        string t3 = slow.OnCallback(1, 3, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 6);
+        bool wait3 = !slow.NextSend(35.0, id, seq, payload) && slow.NextSend(36.0, id, seq, payload) && seq == 4;
+        string t4 = slow.OnCallback(1, 4, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 36);
+        bool retries = t1 == NimbyAdminServerDiscordQueue.RETRY && t2 == NimbyAdminServerDiscordQueue.RETRY && t3 == NimbyAdminServerDiscordQueue.RETRY;
+        failures += Case(results, "discord queue: a timeout retries after 1 s, 5 s and 30 s, then drops", retries && wait1 && wait2 && wait3 && t4 == NimbyAdminServerDiscordQueue.DROPPED && slow.Count() == 0);
+
+        NimbyAdminServerDiscordQueue late = new NimbyAdminServerDiscordQueue();
+        late.Add("a");
+        late.NextSend(0, id, seq, payload);
+        late.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 0);
+        string lateOk = late.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_OK, 0.5);
+        failures += Case(results, "discord queue: a late success from a timed-out attempt cancels the retry", lateOk == NimbyAdminServerDiscordQueue.DELIVERED && late.Count() == 0 && !late.NextSend(10, id, seq, payload));
+
+        NimbyAdminServerDiscordQueue racing = new NimbyAdminServerDiscordQueue();
+        racing.Add("a");
+        racing.Add("b");
+        racing.NextSend(0, id, seq, payload);
+        racing.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, 0);
+        racing.NextSend(1, id, seq, payload);
+        string oldOk = racing.OnCallback(1, 1, NimbyAdminServerDiscordQueue.KIND_OK, 1.2);
+        bool heldBack = !racing.NextSend(2, id, seq, payload);
+        string retryAnswer = racing.OnCallback(1, 2, NimbyAdminServerDiscordQueue.KIND_OK, 2);
+        bool nextGoes = racing.NextSend(2, id, seq, payload) && id == 2 && payload == "b";
+        failures += Case(results, "discord queue: a late success while the retry is in flight settles once; the retry's answer is ignored", oldOk == NimbyAdminServerDiscordQueue.DELIVERED && heldBack && retryAnswer == NimbyAdminServerDiscordQueue.IGNORED && nextGoes);
+
+        NimbyAdminServerDiscordQueue full = new NimbyAdminServerDiscordQueue();
+        full.m_Max = 2;
+        failures += Case(results, "discord queue: a full queue refuses a message", full.Add("a") && full.Add("b") && !full.Add("c") && full.Count() == 2);
+
+        failures += Case(results, "discord: the failed line names class and code and says dropped, not retried", NimbyAdminServerRules.DiscordFailedLine("other", 13, NimbyAdminServerDiscordQueue.DROPPED, 0) == "discord failed class=other code=13 queued=0; message dropped, not retried" && NimbyAdminServerRules.DiscordFailedLine("timeout", -1, NimbyAdminServerDiscordQueue.RETRY, 1) == "discord failed class=timeout queued=1; retry scheduled");
         return failures;
     }
 

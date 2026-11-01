@@ -1,11 +1,20 @@
 // -----------------------------------------------------------------------------
-// NimbyAdminServer - Discord delivery (Plan 3 v0.8 N5, Phase 3 Discord list; recon 7; ruling 7).
+// NimbyAdminServer - Discord delivery (Plan 3 v0.8 N5, Phase 3 Discord list; recon 7; ruling 7;
+// gate-session fix round, November 1, 2026).
 // Purpose : A bounded queue (discordQueueMax), one POST in flight, pumped from MissionServer.OnUpdate
-//           with tick-time comparisons (no CallLater, shared rules 7.1). Every error class and
-//           timeout retries the same message after 1 s, 5 s, 30 s, then drops it. One local line
-//           per failure class per episode; a success ends the episode. A command never waits on
+//           with tick-time comparisons (no CallLater, shared rules 7.1). A command never waits on
 //           this queue and is never repeated because its notification failed (the audit file is
 //           the record).
+// Retry   : Gate session of November 1, 2026: Discord answers a webhook POST with 204 and an
+//           empty body, which 164200 reported through OnError, so every delivered message was
+//           re-sent (teleport 3 posted four times). Now (orchestrator ruling): the request path
+//           carries wait=true, added at send time and never stored, so Discord answers 200 with a
+//           body; a message is retried only after a timeout, and only while no other callback has
+//           settled it; any other error is logged once per class per episode and the message is
+//           dropped, because a POST that reached Discord cannot be told apart from one that did
+//           not. A late success or error from an earlier attempt settles the message and cancels
+//           a retry not yet sent. Residual: a timed-out POST that did land and is then re-sent
+//           posts twice.
 // Secret  : The webhook URL lives only in config.json and in this object's memory (N5). It is
 //           never logged, never sent to a client, and RestApi.EnableDebug (RestApi.c:165) is
 //           never called, since engine debug output could print it.
@@ -18,42 +27,143 @@
 
 class NimbyAdminServerDiscordCallback extends RestCallback
 {
+    int m_MessageId;
     int m_Sequence;
-    bool m_Fired;
 
-    void NimbyAdminServerDiscordCallback(int sequence)
+    void NimbyAdminServerDiscordCallback(int messageId, int sequence)
     {
+        m_MessageId = messageId;
         m_Sequence = sequence;
     }
 
     override void OnSuccess(string data, int dataSize)
     {
-        if (m_Fired)
-        {
-            return;
-        }
-        m_Fired = true;
-        NimbyAdminServerDiscord.OnFinished(m_Sequence, true, "ok");
+        NimbyAdminServerDiscord.OnFinished(m_MessageId, m_Sequence, NimbyAdminServerDiscordQueue.KIND_OK, 0);
     }
 
     override void OnError(int errorCode)
     {
-        if (m_Fired)
-        {
-            return;
-        }
-        m_Fired = true;
-        NimbyAdminServerDiscord.OnFinished(m_Sequence, false, NimbyAdminServerDiscord.ErrorClass(errorCode));
+        NimbyAdminServerDiscord.OnFinished(m_MessageId, m_Sequence, NimbyAdminServerDiscord.ErrorClass(errorCode), errorCode);
     }
 
     override void OnTimeout()
     {
-        if (m_Fired)
+        NimbyAdminServerDiscord.OnFinished(m_MessageId, m_Sequence, NimbyAdminServerDiscordQueue.KIND_TIMEOUT, -1);
+    }
+}
+
+// The delivery state machine, engine-free and self-tested (gate-session fix round). One message
+// at the head is worked at a time; each POST of it is one attempt with its own sequence number.
+class NimbyAdminServerDiscordQueue
+{
+    static const string KIND_OK = "ok";
+    static const string KIND_TIMEOUT = "timeout";
+    static const string DELIVERED = "delivered";
+    static const string DROPPED = "dropped";
+    static const string RETRY = "retry";
+    static const string IGNORED = "ignored";
+
+    protected ref array<string> m_Payloads = new array<string>;
+    protected ref array<int> m_Ids = new array<int>;
+    protected int m_NextId;
+    protected int m_Sequence;
+    protected int m_InFlightSequence;
+    protected int m_Attempts;
+    protected float m_NextAt;
+    int m_Max = 200;
+    // The payload size of the message the last DELIVERED or DROPPED outcome settled.
+    int m_SettledBytes;
+
+    // False when the queue is full (the message is not kept).
+    bool Add(string payload)
+    {
+        if (m_Payloads.Count() >= m_Max)
         {
-            return;
+            return false;
         }
-        m_Fired = true;
-        NimbyAdminServerDiscord.OnFinished(m_Sequence, false, "timeout");
+        m_NextId = m_NextId + 1;
+        m_Payloads.Insert(payload);
+        m_Ids.Insert(m_NextId);
+        return true;
+    }
+
+    int Count()
+    {
+        return m_Payloads.Count();
+    }
+
+    bool InFlight()
+    {
+        return m_InFlightSequence != 0;
+    }
+
+    // True when the head message should be posted now; marks the attempt in flight.
+    bool NextSend(float now, out int messageId, out int sequence, out string payload)
+    {
+        messageId = 0;
+        sequence = 0;
+        payload = "";
+        if (m_InFlightSequence != 0 || m_Payloads.Count() == 0 || now < m_NextAt)
+        {
+            return false;
+        }
+        m_Sequence = m_Sequence + 1;
+        m_InFlightSequence = m_Sequence;
+        messageId = m_Ids.Get(0);
+        sequence = m_Sequence;
+        payload = m_Payloads.Get(0);
+        return true;
+    }
+
+    // One callback of any attempt. kind is KIND_OK, KIND_TIMEOUT, or an error class.
+    string OnCallback(int messageId, int sequence, string kind, float now)
+    {
+        bool current = sequence == m_InFlightSequence;
+        if (current)
+        {
+            m_InFlightSequence = 0;
+        }
+        if (m_Ids.Count() == 0 || m_Ids.Get(0) != messageId)
+        {
+            // A message already settled (a late or repeated callback).
+            return IGNORED;
+        }
+        if (!current)
+        {
+            // An earlier attempt of the head message, after a timeout. A success or an error
+            // settles it and cancels a retry not yet sent; another timeout changes nothing.
+            if (kind == KIND_TIMEOUT)
+            {
+                return IGNORED;
+            }
+            return Settle(kind == KIND_OK, now);
+        }
+        if (kind == KIND_TIMEOUT)
+        {
+            m_Attempts = m_Attempts + 1;
+            float delay = NimbyAdminServerRules.RetryDelay(m_Attempts);
+            if (delay >= 0)
+            {
+                m_NextAt = now + delay;
+                return RETRY;
+            }
+            return Settle(false, now);
+        }
+        return Settle(kind == KIND_OK, now);
+    }
+
+    protected string Settle(bool ok, float now)
+    {
+        m_SettledBytes = m_Payloads.Get(0).Length();
+        m_Payloads.RemoveOrdered(0);
+        m_Ids.RemoveOrdered(0);
+        m_Attempts = 0;
+        m_NextAt = now;
+        if (ok)
+        {
+            return DELIVERED;
+        }
+        return DROPPED;
     }
 }
 
@@ -62,24 +172,19 @@ class NimbyAdminServerDiscord
     protected static bool s_Enabled;
     protected static string s_Base = "";
     protected static string s_Path = "";
-    protected static int s_QueueMax = 200;
-    protected static ref array<string> s_Queue;
-    protected static ref NimbyAdminServerDiscordCallback s_InFlight;
-    // Finished callbacks stay referenced for a while: OnFinished runs inside the callback, so it
-    // must not drop the last reference to it, and OnError can fire again later (RestApi.c:53).
-    protected static ref array<ref NimbyAdminServerDiscordCallback> s_Retired;
-    protected static int s_Sequence;
-    protected static int s_Attempts;
-    protected static float s_NextAt;
+    protected static ref NimbyAdminServerDiscordQueue s_Queue;
+    // Callbacks stay referenced while the engine may still call them (OnError can fire again
+    // later, RestApi.c:53); the newest 16 are kept.
+    protected static ref array<ref NimbyAdminServerDiscordCallback> s_Callbacks;
     protected static bool s_Overflowing;
     protected static ref array<string> s_LoggedClasses;
 
     static void Init(NimbyAdminServerConfig config)
     {
-        s_Queue = new array<string>;
-        s_Retired = new array<ref NimbyAdminServerDiscordCallback>;
+        s_Queue = new NimbyAdminServerDiscordQueue();
+        s_Queue.m_Max = config.discordQueueMax;
+        s_Callbacks = new array<ref NimbyAdminServerDiscordCallback>;
         s_LoggedClasses = new array<string>;
-        s_QueueMax = config.discordQueueMax;
         s_Enabled = false;
         if (!config.HasWebhook())
         {
@@ -121,7 +226,7 @@ class NimbyAdminServerDiscord
         }
         if (errorCode == ERestResultState.EREST_ERROR_TIMEOUT)
         {
-            return "timeout";
+            return NimbyAdminServerDiscordQueue.KIND_TIMEOUT;
         }
         return "other";
     }
@@ -132,26 +237,21 @@ class NimbyAdminServerDiscord
         {
             return;
         }
-        if (s_Queue.Count() >= s_QueueMax)
+        if (!s_Queue.Add(NimbyAdminServerRules.DiscordPayload(text)))
         {
             if (!s_Overflowing)
             {
                 s_Overflowing = true;
-                NimbyAdminLog.Info("discord queue full max=" + s_QueueMax.ToString() + "; newest messages dropped until it drains");
+                NimbyAdminLog.Info("discord queue full max=" + s_Queue.m_Max.ToString() + "; newest messages dropped until it drains");
             }
             return;
         }
         s_Overflowing = false;
-        s_Queue.Insert(NimbyAdminServerRules.DiscordPayload(text));
     }
 
     static void Tick(float now)
     {
-        if (!s_Enabled || s_InFlight || s_Queue.Count() == 0)
-        {
-            return;
-        }
-        if (now < s_NextAt)
+        if (!s_Enabled)
         {
             return;
         }
@@ -165,57 +265,50 @@ class NimbyAdminServerDiscord
         {
             return;
         }
-        s_Sequence = s_Sequence + 1;
-        s_InFlight = new NimbyAdminServerDiscordCallback(s_Sequence);
+        int messageId;
+        int sequence;
+        string payload;
+        if (!s_Queue.NextSend(now, messageId, sequence, payload))
+        {
+            return;
+        }
+        NimbyAdminServerDiscordCallback callback = new NimbyAdminServerDiscordCallback(messageId, sequence);
+        s_Callbacks.Insert(callback);
+        if (s_Callbacks.Count() > 16)
+        {
+            s_Callbacks.RemoveOrdered(0);
+        }
         context.SetHeader("application/json");
-        context.POST(s_InFlight, s_Path, s_Queue.Get(0));
+        context.POST(callback, NimbyAdminServerRules.WebhookRequestPath(s_Path), payload);
     }
 
-    static void OnFinished(int sequence, bool ok, string errorClass)
+    // Runs inside the engine callback; the callback object stays referenced in s_Callbacks.
+    static void OnFinished(int messageId, int sequence, string kind, int errorCode)
     {
-        if (!s_InFlight || sequence != s_InFlight.m_Sequence)
+        if (!s_Queue)
         {
             return;
         }
-        s_Retired.Insert(s_InFlight);
-        if (s_Retired.Count() > 8)
-        {
-            s_Retired.Remove(0);
-        }
-        s_InFlight = null;
         float now = GetGame().GetTickTime();
-        if (ok)
+        string outcome = s_Queue.OnCallback(messageId, sequence, kind, now);
+        if (outcome == NimbyAdminServerDiscordQueue.IGNORED)
         {
-            int bytes = 0;
-            if (s_Queue.Count() > 0)
-            {
-                bytes = s_Queue.Get(0).Length();
-                s_Queue.Remove(0);
-            }
-            s_Attempts = 0;
-            s_NextAt = now;
+            NimbyAdminLog.Debug("discord late callback ignored seq=" + sequence.ToString() + " kind=" + kind);
+            return;
+        }
+        if (outcome == NimbyAdminServerDiscordQueue.DELIVERED)
+        {
             s_LoggedClasses.Clear();
-            NimbyAdminLog.Debug("discord delivered seq=" + sequence.ToString() + " bytes=" + bytes.ToString());
+            NimbyAdminLog.Debug("discord delivered seq=" + sequence.ToString() + " bytes=" + s_Queue.m_SettledBytes.ToString());
             return;
         }
-        if (s_LoggedClasses.Find(errorClass) < 0)
+        string line = NimbyAdminServerRules.DiscordFailedLine(kind, errorCode, outcome, s_Queue.Count());
+        if (s_LoggedClasses.Find(kind) < 0)
         {
-            s_LoggedClasses.Insert(errorClass);
-            NimbyAdminLog.Info("discord failed class=" + errorClass + " queued=" + s_Queue.Count().ToString());
-        }
-        s_Attempts = s_Attempts + 1;
-        float delay = NimbyAdminServerRules.RetryDelay(s_Attempts);
-        if (delay < 0)
-        {
-            if (s_Queue.Count() > 0)
-            {
-                s_Queue.Remove(0);
-            }
-            s_Attempts = 0;
-            s_NextAt = now;
-            NimbyAdminLog.Debug("discord dropped seq=" + sequence.ToString() + " after retries class=" + errorClass);
+            s_LoggedClasses.Insert(kind);
+            NimbyAdminLog.Info(line);
             return;
         }
-        s_NextAt = now + delay;
+        NimbyAdminLog.Debug(line);
     }
 }

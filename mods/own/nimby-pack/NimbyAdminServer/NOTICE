@@ -7,6 +7,14 @@ checks, and the RPC router. No media.
 
 Changes, newest first:
 
+- November 1, 2026, evening (gate-session fix round, feat/nimby-admin): Discord delivery is an
+  engine-free queue (NimbyAdminServerDiscordQueue). The POST path carries wait=true, added at
+  send time and never stored (& after an existing query), so Discord answers 200 with a body
+  instead of 204, which 164200 reported through OnError and the old queue re-sent (teleport 3
+  posted four times). A message is retried only after a timeout and only while no other callback
+  has settled it; any other error is logged once per class with the engine code and the message
+  is dropped. A late success or error from an earlier attempt settles the message and cancels a
+  retry not yet sent. Residual: a timed-out POST that did land and is then re-sent posts twice.
 - November 1, 2026, afternoon (Phase 0 third-pass fix, feat/nimby-admin;
   docs/reviews/2026-11-01-central-scrutinizer-phase0-codex-rereview-2.md): finding 3 residual,
   the history flag (m_EverLoaded, renamed m_HasHistory) is also set by every recovery, including

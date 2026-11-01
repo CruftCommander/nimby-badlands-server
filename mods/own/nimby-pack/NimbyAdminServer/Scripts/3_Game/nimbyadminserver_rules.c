@@ -539,6 +539,38 @@ class NimbyAdminServerRules
         return -1.0;
     }
 
+    // Gate-session fix round (orchestrator ruling, November 1, 2026): the POST path asks Discord
+    // to answer 200 with a body (wait=true) instead of 204 with none. Added at send time, never
+    // stored; joined with & when the stored URL already carries a query.
+    static string WebhookRequestPath(string path)
+    {
+        if (path.IndexOf("wait=") >= 0)
+        {
+            return path;
+        }
+        if (path.IndexOf("?") >= 0)
+        {
+            return path + "&wait=true";
+        }
+        return path + "?wait=true";
+    }
+
+    // The one local line for a failed attempt; names the class and the engine code, never the URL.
+    static string DiscordFailedLine(string kind, int errorCode, string outcome, int queued)
+    {
+        string line = "discord failed class=" + kind;
+        if (errorCode >= 0)
+        {
+            line = line + " code=" + errorCode.ToString();
+        }
+        line = line + " queued=" + queued.ToString();
+        if (outcome == NimbyAdminServerDiscordQueue.RETRY)
+        {
+            return line + "; retry scheduled";
+        }
+        return line + "; message dropped, not retried";
+    }
+
     // The webhook URL split for RestApi.GetRestContext (base) and POST (path). False for anything
     // that is not a Discord webhook. The URL itself is never logged (N5).
     static bool SplitWebhook(string url, out string base, out string path)
