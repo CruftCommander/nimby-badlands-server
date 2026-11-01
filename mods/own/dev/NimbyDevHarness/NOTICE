@@ -32,6 +32,10 @@ How it runs (server only):
 
 Changes, newest first:
 
+- October 31, 2026 (feat/nimby-admin, Central Scrutinizer review finding 1 and the orchestrator
+  ruling): the admin cases forge from the server's highest accepted id plus 1024 per identity
+  per step (NimbyAdminHighWater), at most 127 forged ids per run (SKIP beyond), and match audit
+  lines by id, actor Steam64 and run start.
 - October 31, 2026 (Central Scrutinizer Phase 0, feat/nimby-admin, ruling 2): nimbydevharness_admin.c
   forges Central Scrutinizer requests at the wire (a ScriptReadWriteContext into the real
   PlayerBase.OnRPC with a connected player's identity), so it names only NimbyAdmin client

@@ -10,8 +10,10 @@
 //           number; audit intent (a failed append blocks the command); handler; audit result;
 //           Discord; result to the sender only.
 // Stale   : a selection made before the target reconnected carries an old session number and is
-//           refused (reason "target session ended"). Request ids are deduplicated per sender per
-//           connection for SEEN_SECONDS; a protocol other than 1 is refused.
+//           refused (reason "target session ended"). Request ids go through the replay window
+//           per sender per connection (NimbyAdminServerSeen, review finding 1): a duplicate is
+//           dropped with one gated line, an id below the floor is "stale"; a protocol other than
+//           1 is refused.
 // Logs    : every refusal a client can cause is gated per sender (NimbyAdminLog.Gated); denied and
 //           invalid audit records are bounded per sender (30 a minute).
 // Gates   : server only (recon R11). The client half's PlayerBase override passes 6550301 to super.
@@ -190,6 +192,7 @@ class NimbyAdminServerCore
             NimbyAdminLog.Debug("session ended number=" + session.number.ToString() + " " + NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64));
             s_Sessions.Remove(uid);
         }
+        NimbyAdminHighWater.Clear(uid);
     }
 
     protected static NimbyAdminServerSession SessionFor(PlayerIdentity identity)
@@ -211,6 +214,7 @@ class NimbyAdminServerCore
         session.steam64 = identity.GetPlainId();
         session.name = identity.GetName();
         s_Sessions.Set(biId, session);
+        NimbyAdminHighWater.Clear(biId);
         return session;
     }
 
@@ -275,12 +279,19 @@ class NimbyAdminServerCore
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "actor identity");
             return;
         }
-        if (session.seen.Contains(requestId, now))
+        string replay = session.seen.Check(requestId);
+        if (replay == NimbyAdminServerSeen.DUPLICATE)
         {
             NimbyAdminLog.Gated("dup:" + key, "duplicate id=" + requestId.ToString() + " command=" + command + " " + NimbyAdminLog.Who(sender));
             return;
         }
-        session.seen.Remember(requestId, now);
+        if (replay == NimbyAdminServerSeen.STALE)
+        {
+            Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "stale");
+            return;
+        }
+        session.seen.Accept(requestId);
+        NimbyAdminHighWater.Publish(session.biId, session.seen.Highest());
         if (!NimbyAdminServerRules.IsKnownCommand(command))
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "unknown command");

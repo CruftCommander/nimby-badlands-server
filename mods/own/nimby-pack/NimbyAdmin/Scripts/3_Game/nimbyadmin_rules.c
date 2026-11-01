@@ -506,6 +506,42 @@ class NimbyAdminDone
     string kind;
 }
 
+// Review finding 1 (October 31, 2026): the highest request id the server accepted on each
+// connection, by BI id, so the dev harness can forge above it (orchestrator ruling: highest plus
+// 1024). Only NimbyAdminServer writes it, on the server; on a client nothing writes it and Get
+// returns 0. No decision reads it: the replay check lives in NimbyAdminServerSeen.
+class NimbyAdminHighWater
+{
+    protected static ref map<string, int> s_Highest;
+
+    static void Publish(string biId, int highest)
+    {
+        if (!s_Highest)
+        {
+            s_Highest = new map<string, int>;
+        }
+        s_Highest.Set(biId, highest);
+    }
+
+    static void Clear(string biId)
+    {
+        if (s_Highest)
+        {
+            s_Highest.Remove(biId);
+        }
+    }
+
+    static int Get(string biId)
+    {
+        int highest;
+        if (s_Highest && s_Highest.Find(biId, highest))
+        {
+            return highest;
+        }
+        return 0;
+    }
+}
+
 // The client's request-id counter: one fresh id per request for the whole client process.
 class NimbyAdminRequestIds
 {

@@ -29,8 +29,8 @@ class NimbyAdminServerRules
     // Denied and invalid audit records per sender: 30 a minute (recon 4.3, disk bound).
     static const float DENIAL_RECORDS_PER_SECOND = 0.5;
     static const int DENIAL_RECORDS_BURST = 30;
-    // Duplicate window per sender per connection (recon 4.3 step 7).
-    static const float SEEN_SECONDS = 300.0;
+    // Replay window per sender per connection (recon 4.3 step 7; review finding 1, October 31,
+    // 2026): the last SEEN_MAX accepted ids, no time-based expiry.
     static const int SEEN_MAX = 256;
 
     // Discord (recon 7, ruling 7).
@@ -644,61 +644,87 @@ class NimbyAdminServerBucket
     }
 }
 
-// Request ids seen from one sender on one connection, kept SEEN_SECONDS, at most SEEN_MAX.
+// The replay window of one sender on one connection (review finding 1, October 31, 2026). It
+// keeps the highest accepted id, the last SEEN_MAX accepted ids in acceptance order, and the
+// floor: the lowest id in that set once the set is full. An id in the set is a duplicate. An id
+// below the floor of a full set is stale. Any other id is accepted, also below the highest (a
+// gap), which lets the dev harness forge above a real client's ids. No time-based expiry.
+// Residual: an id evicted while a lower id is still in the set lies above the floor and would be
+// accepted again; only an id accepted out of order (the harness's high ids) can be in that place,
+// because a real client's ids rise (NimbyAdminRequestIds).
 class NimbyAdminServerSeen
 {
-    protected ref map<int, float> m_Ids = new map<int, float>;
+    static const string ACCEPT = "";
+    static const string DUPLICATE = "duplicate";
+    static const string STALE = "stale";
 
-    bool Contains(int requestId, float now)
+    protected ref array<int> m_Order = new array<int>;
+    protected ref map<int, bool> m_Set = new map<int, bool>;
+    protected int m_Highest;
+    protected int m_Floor;
+
+    // ACCEPT, DUPLICATE or STALE; changes nothing.
+    string Check(int requestId)
     {
-        float at;
-        if (!m_Ids.Find(requestId, at))
+        if (m_Set.Contains(requestId))
         {
-            return false;
+            return DUPLICATE;
         }
-        return now - at < NimbyAdminServerRules.SEEN_SECONDS;
+        if (m_Order.Count() >= NimbyAdminServerRules.SEEN_MAX && requestId < m_Floor)
+        {
+            return STALE;
+        }
+        return ACCEPT;
     }
 
-    void Remember(int requestId, float now)
+    // Records an id Check accepted.
+    void Accept(int requestId)
     {
-        if (m_Ids.Count() >= NimbyAdminServerRules.SEEN_MAX)
+        m_Order.Insert(requestId);
+        m_Set.Set(requestId, true);
+        if (requestId > m_Highest)
         {
-            Prune(now);
+            m_Highest = requestId;
         }
-        m_Ids.Set(requestId, now);
+        while (m_Order.Count() > NimbyAdminServerRules.SEEN_MAX)
+        {
+            int gone = m_Order.Get(0);
+            m_Order.RemoveOrdered(0);
+            m_Set.Remove(gone);
+        }
+        if (m_Order.Count() >= NimbyAdminServerRules.SEEN_MAX)
+        {
+            m_Floor = Lowest();
+        }
+    }
+
+    int Highest()
+    {
+        return m_Highest;
+    }
+
+    // 0 until the set is full.
+    int Floor()
+    {
+        return m_Floor;
     }
 
     int Count()
     {
-        return m_Ids.Count();
+        return m_Order.Count();
     }
 
-    // Drops expired ids; if none expired, the oldest one.
-    protected void Prune(float now)
+    protected int Lowest()
     {
-        array<int> drop = new array<int>;
-        int oldestId = 0;
-        float oldestAt = now + 1.0;
-        foreach (int id, float at : m_Ids)
+        int lowest = m_Order.Get(0);
+        foreach (int id : m_Order)
         {
-            if (now - at >= NimbyAdminServerRules.SEEN_SECONDS)
+            if (id < lowest)
             {
-                drop.Insert(id);
-            }
-            if (at < oldestAt)
-            {
-                oldestAt = at;
-                oldestId = id;
+                lowest = id;
             }
         }
-        if (drop.Count() == 0)
-        {
-            drop.Insert(oldestId);
-        }
-        foreach (int gone : drop)
-        {
-            m_Ids.Remove(gone);
-        }
+        return lowest;
     }
 }
 

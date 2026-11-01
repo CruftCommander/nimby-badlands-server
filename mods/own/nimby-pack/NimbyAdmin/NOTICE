@@ -6,6 +6,10 @@ Interactive) for the self-test hook, the menu, and the RPC plumbing. No media.
 
 Changes, newest first:
 
+- October 31, 2026 (Phase 0 review fixes, feat/nimby-admin; the Codex review of 439b729,
+  docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md): finding 1,
+  NimbyAdminHighWater (the server's highest accepted request id per connection, written only on
+  the server, read by the dev harness; no decision reads it).
 - October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the client half - the wire definition both
   halves read (RPC ids 6550301-6550305, the request envelope rules, the key=value args codec,
   the Players list and done classes), the [NIMBY][Admin] log helper, the PlayerBase RPC

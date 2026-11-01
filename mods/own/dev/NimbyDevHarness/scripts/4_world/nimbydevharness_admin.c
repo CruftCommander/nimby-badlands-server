@@ -14,7 +14,15 @@
 // Session : the server numbers sessions in InvokeOnConnect order (a new number for a new
 //           identity object); the harness mirrors that numbering from the same hook to build
 //           the teleport args.
-// Persists: Nothing. Forged request ids start at 100000000 plus the UTC second of the day x 100.
+// Ids     : review finding 1 and the orchestrator ruling (October 31, 2026): each step forges
+//           for an identity from the server's highest accepted id on that connection plus 1024,
+//           read at the start of the step through NimbyAdminHighWater (client half, 3_Game;
+//           written by the server). A run forges at most MAX_FORGES_PER_RUN ids, so the server's
+//           256-id set always keeps real client ids and its floor stays below the client's next
+//           id; a run that would exceed it SKIPs with a reason line. The duplicate case reuses an
+//           id that is inside the set. Audit lines are matched by id, actor Steam64 and run
+//           start, because these small ids repeat across runs on the same day.
+// Persists: Nothing.
 // Vanilla : ScriptCallQueue.CallLater (2_GameLib/DayZ/tools.c:61), from 4_World only (shared rules
 //           7.1); Weather.GetOvercast, GetWindMagnitude, GetSandstorm (3_Game/DayZ/Weather.c:183,
 //           205,210); WeatherPhenomenon.Set (:49); SandstormController.Start, Stop, IsActive
@@ -28,13 +36,24 @@ class NimbyDevHarnessAdmin
     static const string FORGE_FILE = "$profile:NimbyDevHarness\\forge";
     static const int START_DELAY_MS = 10000;
     static const int STEP_MS = 3000;
+    static const int FORGE_OFFSET = 1024;
+    static const int MAX_FORGES_PER_RUN = 127;
+    // Step 1: 2, step 2: 6, step 3: 2 (one id twice), step 4: 50.
+    static const int PLANNED_FORGES = 60;
 
     protected static bool s_Scheduled;
     protected static bool s_SandstormScheduled;
     protected static ref map<string, int> s_Sessions;
     protected static ref map<string, PlayerIdentity> s_Identities;
     protected static int s_NextSession = 1;
-    protected static int s_Base;
+    protected static int s_Forged;
+    protected static bool s_Aborted;
+    protected static string s_RunStart;
+    protected static ref map<string, int> s_StepBase;
+    protected static int s_IdDenied;
+    protected static int s_IdNotOwner;
+    protected static ref array<int> s_IdMalformed;
+    protected static int s_IdDuplicate;
     protected static ref array<string> s_Lines;
     protected static int s_Failures;
     protected static PlayerBase s_Owner;
@@ -118,33 +137,76 @@ class NimbyDevHarnessAdmin
 
     protected static void Forge(PlayerBase targetObject, PlayerIdentity sender, int protocol, int requestId, string command, string args)
     {
+        if (s_Forged >= MAX_FORGES_PER_RUN)
+        {
+            if (!s_Aborted)
+            {
+                s_Aborted = true;
+                Print(PREFIX + "[Forge] SKIP admin: forge limit " + MAX_FORGES_PER_RUN.ToString() + " reached; the remaining forges are not sent");
+            }
+            return;
+        }
+        s_Forged = s_Forged + 1;
         ScriptReadWriteContext ctx = new ScriptReadWriteContext;
         Param4<int, int, string, string> request = new Param4<int, int, string, string>(protocol, requestId, command, args);
         request.Serialize(ctx.GetWriteContext());   // the same field order RPCSingleParam writes (1_Core/DayZ/param.c:134-137)
         targetObject.OnRPC(sender, NimbyAdminRules.RPC_REQUEST, ctx.GetReadContext());
     }
 
-    protected static string AuditPath()
+    protected static string Pad2(int value)
+    {
+        if (value < 10)
+        {
+            return "0" + value.ToString();
+        }
+        return value.ToString();
+    }
+
+    protected static string Today()
     {
         int year;
         int month;
         int day;
         GetYearMonthDayUTC(year, month, day);
-        string mm = month.ToString();
-        if (month < 10)
-        {
-            mm = "0" + mm;
-        }
-        string dd = day.ToString();
-        if (day < 10)
-        {
-            dd = "0" + dd;
-        }
-        return "$profile:NimbyAdmin\\audit\\audit-" + year.ToString() + "-" + mm + "-" + dd + ".log";
+        return year.ToString() + "-" + Pad2(month) + "-" + Pad2(day);
     }
 
-    // The audit lines for one request id.
-    protected static array<string> AuditFor(int requestId)
+    // The audit journal's ts form, YYYY-MM-DDTHH:MM:SSZ, which orders like the times it names.
+    protected static string NowUtc()
+    {
+        int hour;
+        int minute;
+        int second;
+        GetHourMinuteSecondUTC(hour, minute, second);
+        return Today() + "T" + Pad2(hour) + ":" + Pad2(minute) + ":" + Pad2(second) + "Z";
+    }
+
+    protected static string AuditPath()
+    {
+        return "$profile:NimbyAdmin\\audit\\audit-" + Today() + ".log";
+    }
+
+    // Step ids: the server's highest accepted id for this identity plus FORGE_OFFSET, read once
+    // per step, plus n.
+    protected static void BeginStep()
+    {
+        s_StepBase = new map<string, int>;
+    }
+
+    protected static int IdFor(PlayerIdentity identity, int n)
+    {
+        string biId = identity.GetId();
+        int base;
+        if (!s_StepBase.Find(biId, base))
+        {
+            base = NimbyAdminHighWater.Get(biId) + FORGE_OFFSET;
+            s_StepBase.Set(biId, base);
+        }
+        return base + n;
+    }
+
+    // The audit lines this run wrote for one request id and actor.
+    protected static array<string> AuditFor(int requestId, PlayerBase actor)
     {
         array<string> found = new array<string>;
         string path = AuditPath();
@@ -158,12 +220,19 @@ class NimbyDevHarnessAdmin
             return found;
         }
         string needle = "{\"id\":\"" + requestId.ToString() + "\"";
+        string who = "\"actor\":{\"steam64\":\"" + actor.GetIdentity().GetPlainId() + "\"";
+        string tsKey = "\"ts\":\"";
         string line = "";
         while (FGets(handle, line) >= 0)
         {
-            if (line.IndexOf(needle) == 0)
+            int tsAt = line.IndexOf(tsKey);
+            if (line.IndexOf(needle) == 0 && line.IndexOf(who) > 0 && tsAt > 0 && line.Length() >= tsAt + tsKey.Length() + 20)
             {
-                found.Insert(line);
+                string ts = line.Substring(tsAt + tsKey.Length(), 20);
+                if (ts >= s_RunStart)
+                {
+                    found.Insert(line);
+                }
             }
             line = "";
         }
@@ -231,11 +300,6 @@ class NimbyDevHarnessAdmin
         return args.Encode();
     }
 
-    protected static int Id(int n)
-    {
-        return s_Base + n;
-    }
-
     // ---- the cases -------------------------------------------------------------------------------
 
     // Step 1: the second client (no role) forges a teleport, and aims a request at the owner's body.
@@ -243,11 +307,14 @@ class NimbyDevHarnessAdmin
     {
         s_Lines = new array<string>;
         s_Failures = 0;
-        int hour;
-        int minute;
-        int second;
-        GetHourMinuteSecondUTC(hour, minute, second);
-        s_Base = 100000000 + (hour * 3600 + minute * 60 + second) * 100;
+        s_Forged = 0;
+        s_Aborted = false;
+        s_RunStart = NowUtc();
+        if (PLANNED_FORGES > MAX_FORGES_PER_RUN)
+        {
+            Print(PREFIX + "[Forge] SKIP admin: the run plans " + PLANNED_FORGES.ToString() + " forged ids, above the limit " + MAX_FORGES_PER_RUN.ToString());
+            return;
+        }
         if (!FindPlayers())
         {
             Print(PREFIX + "[Forge] SKIP admin: need the owner (forge admin-owner=) and a second player in the world");
@@ -255,25 +322,36 @@ class NimbyDevHarnessAdmin
         }
         s_OwnerBefore = s_Owner.GetPosition();
         s_OtherBefore = s_Other.GetPosition();
-        Forge(s_Other, s_Other.GetIdentity(), 1, Id(1), NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
-        Forge(s_Owner, s_Other.GetIdentity(), 1, Id(2), NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
+        BeginStep();
+        s_IdDenied = IdFor(s_Other.GetIdentity(), 0);
+        s_IdNotOwner = IdFor(s_Other.GetIdentity(), 1);
+        Forge(s_Other, s_Other.GetIdentity(), 1, s_IdDenied, NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
+        Forge(s_Owner, s_Other.GetIdentity(), 1, s_IdNotOwner, NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step2, STEP_MS, false);
     }
 
     // Step 2: read step 1, then the owner sends six malformed requests.
     static void Step2()
     {
-        array<string> denied = AuditFor(Id(1));
+        array<string> denied = AuditFor(s_IdDenied, s_Other);
         float otherMoved = vector.Distance(s_OtherBefore, s_Other.GetPosition());
         bool deniedOk = denied.Count() == 1 && CountWith(denied, "\"result\":\"denied\"") == 1 && CountWith(denied, "\"reason\":\"no role\"") == 1;
         Record("non-admin forges a teleport", deniedOk && otherMoved < 0.5, "records=" + denied.Count().ToString() + " moved=" + otherMoved.ToString());
-        array<string> notOwner = AuditFor(Id(2));
+        array<string> notOwner = AuditFor(s_IdNotOwner, s_Other);
         Record("request aimed at another player's body is refused before read", notOwner.Count() == 0, "records=" + notOwner.Count().ToString() + " (expect a sender-not-owner line in the script log)");
         PlayerIdentity owner = s_Owner.GetIdentity();
-        Forge(s_Owner, owner, 2, Id(3), NimbyAdminRules.CMD_HELLO, "");
-        Forge(s_Owner, owner, 1, Id(4), "player.kill", "");
-        Forge(s_Owner, owner, 1, Id(5), NimbyAdminRules.CMD_TELEPORT_TO, NimbySharedChunks.FillBytes("a", 901));
-        Forge(s_Owner, owner, 1, Id(6), NimbyAdminRules.CMD_TELEPORT_TO, "target=%41;session=1");
+        BeginStep();
+        s_IdMalformed = new array<int>;
+        int k = 0;
+        while (k < 6)
+        {
+            s_IdMalformed.Insert(IdFor(owner, k));
+            k = k + 1;
+        }
+        Forge(s_Owner, owner, 2, s_IdMalformed.Get(0), NimbyAdminRules.CMD_HELLO, "");
+        Forge(s_Owner, owner, 1, s_IdMalformed.Get(1), "player.kill", "");
+        Forge(s_Owner, owner, 1, s_IdMalformed.Get(2), NimbyAdminRules.CMD_TELEPORT_TO, NimbySharedChunks.FillBytes("a", 901));
+        Forge(s_Owner, owner, 1, s_IdMalformed.Get(3), NimbyAdminRules.CMD_TELEPORT_TO, "target=%41;session=1");
         string seventeen = "";
         int i = 0;
         while (i < 17)
@@ -285,14 +363,14 @@ class NimbyDevHarnessAdmin
             seventeen = seventeen + "k" + i.ToString() + "=1";
             i = i + 1;
         }
-        Forge(s_Owner, owner, 1, Id(7), NimbyAdminRules.CMD_TELEPORT_TO, seventeen);
-        Forge(s_Owner, owner, 1, Id(8), NimbyAdminRules.CMD_TELEPORT_TO, "target=nobody;session=1");
+        Forge(s_Owner, owner, 1, s_IdMalformed.Get(4), NimbyAdminRules.CMD_TELEPORT_TO, seventeen);
+        Forge(s_Owner, owner, 1, s_IdMalformed.Get(5), NimbyAdminRules.CMD_TELEPORT_TO, "target=nobody;session=1");
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step3, STEP_MS, false);
     }
 
     protected static void ExpectInvalid(string name, int requestId, string reason)
     {
-        array<string> lines = AuditFor(requestId);
+        array<string> lines = AuditFor(requestId, s_Owner);
         bool ok = lines.Count() == 1 && CountWith(lines, "\"result\":\"invalid\"") == 1 && CountWith(lines, "\"reason\":\"" + reason + "\"") == 1;
         Record(name, ok, "records=" + lines.Count().ToString() + " reason=" + reason);
     }
@@ -300,35 +378,39 @@ class NimbyDevHarnessAdmin
     // Step 3: read the malformed cases, then the owner sends one teleport twice with the same id.
     static void Step3()
     {
-        ExpectInvalid("protocol 2", Id(3), "protocol");
-        ExpectInvalid("unknown command", Id(4), "unknown command");
-        ExpectInvalid("args of 901 bytes", Id(5), "args too long");
-        ExpectInvalid("unknown escape", Id(6), "bad escape");
-        ExpectInvalid("17 pairs", Id(7), "too many args");
-        ExpectInvalid("target that is not a session", Id(8), "target session ended");
+        ExpectInvalid("protocol 2", s_IdMalformed.Get(0), "protocol");
+        ExpectInvalid("unknown command", s_IdMalformed.Get(1), "unknown command");
+        ExpectInvalid("args of 901 bytes", s_IdMalformed.Get(2), "args too long");
+        ExpectInvalid("unknown escape", s_IdMalformed.Get(3), "bad escape");
+        ExpectInvalid("17 pairs", s_IdMalformed.Get(4), "too many args");
+        ExpectInvalid("target that is not a session", s_IdMalformed.Get(5), "target session ended");
         s_OwnerBefore = s_Owner.GetPosition();
         string args = TeleportArgs(s_Other);
-        Forge(s_Owner, s_Owner.GetIdentity(), 1, Id(9), NimbyAdminRules.CMD_TELEPORT_TO, args);
-        Forge(s_Owner, s_Owner.GetIdentity(), 1, Id(9), NimbyAdminRules.CMD_TELEPORT_TO, args);
+        BeginStep();
+        s_IdDuplicate = IdFor(s_Owner.GetIdentity(), 0);
+        // The second forge reuses the id the first one put inside the set.
+        Forge(s_Owner, s_Owner.GetIdentity(), 1, s_IdDuplicate, NimbyAdminRules.CMD_TELEPORT_TO, args);
+        Forge(s_Owner, s_Owner.GetIdentity(), 1, s_IdDuplicate, NimbyAdminRules.CMD_TELEPORT_TO, args);
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step4, STEP_MS, false);
     }
 
     // Step 4: read the duplicate case, then the second client bursts 50 hellos in one frame.
     static void Step4()
     {
-        array<string> lines = AuditFor(Id(9));
+        array<string> lines = AuditFor(s_IdDuplicate, s_Owner);
         int intents = CountWith(lines, "\"phase\":\"intent\"");
         int results = CountWith(lines, "\"result\":\"ok\"");
         float near = vector.Distance(s_Owner.GetPosition(), s_Other.GetPosition());
         Record("duplicate request id runs once", intents == 1 && results == 1 && lines.Count() == 2 && near < 3.0, "intents=" + intents.ToString() + " results=" + results.ToString() + " distance=" + near.ToString());
+        BeginStep();
         int n = 0;
         while (n < 50)
         {
-            Forge(s_Other, s_Other.GetIdentity(), 1, Id(100 + n), NimbyAdminRules.CMD_HELLO, "");
+            Forge(s_Other, s_Other.GetIdentity(), 1, IdFor(s_Other.GetIdentity(), n), NimbyAdminRules.CMD_HELLO, "");
             n = n + 1;
         }
-        Record("burst of 50 sent", true, "sent=50; the script log holds one rate-limited line for the sender");
-        Print(PREFIX + " admin forge complete; cases=" + s_Lines.Count().ToString() + " failures=" + s_Failures.ToString());
+        Record("burst of 50 sent", !s_Aborted, "sent=50; the script log holds one rate-limited line for the sender");
+        Print(PREFIX + " admin forge complete; cases=" + s_Lines.Count().ToString() + " failures=" + s_Failures.ToString() + " forged=" + s_Forged.ToString() + " limit=" + MAX_FORGES_PER_RUN.ToString());
     }
 
     // ---- item 3 row 4: sandstorm on a dedicated server -------------------------------------------

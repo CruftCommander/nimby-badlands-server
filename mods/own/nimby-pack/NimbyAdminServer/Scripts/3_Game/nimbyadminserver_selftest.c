@@ -3,8 +3,8 @@
 // server decision: Steam64, config bounds (permissionsReloadSeconds at every edge, ruling 5), the
 // webhook split, permission and ban rows, roles and capabilities (with the fake capability, N9),
 // ban expiry and the ruling 3 admission rule, N8 source decisions, ISO time, JSON and Discord
-// text, the retry schedule (ruling 7), the token bucket, the duplicate window, teleport args and
-// the session match. Lines: [NIMBY][AdminServer][SelfTest] PASS|FAIL <case>.
+// text, the retry schedule (ruling 7), the token bucket, the replay window (review finding 1),
+// teleport args and the session match. Lines: [NIMBY][AdminServer][SelfTest] PASS|FAIL <case>.
 // Style : one statement per line.
 // -----------------------------------------------------------------------------
 
@@ -214,17 +214,7 @@ class NimbyAdminServerSelfTest
         }
         failures += Case(results, "rate: a burst of 50 in one frame takes 10", taken == 10);
         failures += Case(results, "rate: one token returns after 0.3 s at 5 a second", bucket.Take(100.3, 5.0, 10) && bucket.Take(100.3, 5.0, 10) == false);
-        NimbyAdminServerSeen seen = new NimbyAdminServerSeen();
-        seen.Remember(5, 10.0);
-        failures += Case(results, "dedupe: a repeated id inside the window is seen", seen.Contains(5, 20.0));
-        failures += Case(results, "dedupe: an id past the window is not", seen.Contains(5, 10.0 + NimbyAdminServerRules.SEEN_SECONDS) == false);
-        int id = 0;
-        while (id < NimbyAdminServerRules.SEEN_MAX + 10)
-        {
-            seen.Remember(1000 + id, 50.0);
-            id = id + 1;
-        }
-        failures += Case(results, "dedupe: the window never holds more than SEEN_MAX ids", seen.Count() <= NimbyAdminServerRules.SEEN_MAX);
+        failures += ReplayCases(results);
         NimbyAdminArgs args;
         string why;
         NimbyAdminArgs.Parse("target=abc;session=4", args, why);
@@ -236,6 +226,52 @@ class NimbyAdminServerSelfTest
         NimbyAdminArgs.Parse("target=abc;session=4;extra=1", args, why);
         failures += Case(results, "teleport: an extra arg refused", NimbyAdminServerRules.CheckTeleportArgs(args) == "unexpected args");
         failures += Case(results, "session: the current number matches, an old one does not", NimbyAdminServerRules.SessionMatches(4, "4") && NimbyAdminServerRules.SessionMatches(5, "4") == false);
+        return failures;
+    }
+
+    // Accepts first to last (inclusive) in order; each must pass Check.
+    protected static bool AcceptRange(NimbyAdminServerSeen seen, int first, int last)
+    {
+        bool ok = true;
+        int id = first;
+        while (id <= last)
+        {
+            if (seen.Check(id) != NimbyAdminServerSeen.ACCEPT)
+            {
+                ok = false;
+            }
+            seen.Accept(id);
+            id = id + 1;
+        }
+        return ok;
+    }
+
+    // Review finding 1: duplicate inside the set, stale below the floor, gaps accepted, a replay
+    // after 300 accepted ids refused, and the harness ids (highest plus 1024) leave the client's
+    // next id acceptable.
+    protected static int ReplayCases(array<string> results)
+    {
+        int failures = 0;
+        NimbyAdminServerSeen dup = new NimbyAdminServerSeen();
+        dup.Accept(5);
+        failures += Case(results, "replay: an id inside the set is a duplicate", dup.Check(5) == NimbyAdminServerSeen.DUPLICATE);
+        NimbyAdminServerSeen gap = new NimbyAdminServerSeen();
+        gap.Accept(10);
+        failures += Case(results, "replay: a new id below the highest is accepted (gap)", gap.Check(7) == NimbyAdminServerSeen.ACCEPT && gap.Highest() == 10);
+        NimbyAdminServerSeen full = new NimbyAdminServerSeen();
+        bool filled = AcceptRange(full, 1, NimbyAdminServerRules.SEEN_MAX + 1);
+        failures += Case(results, "replay: the set holds SEEN_MAX ids and the floor is the lowest of them", filled && full.Count() == NimbyAdminServerRules.SEEN_MAX && full.Floor() == 2);
+        failures += Case(results, "replay: an id below the floor of a full set is stale", full.Check(1) == NimbyAdminServerSeen.STALE);
+        failures += Case(results, "replay: the floor itself is still a duplicate", full.Check(2) == NimbyAdminServerSeen.DUPLICATE);
+        NimbyAdminServerSeen replay = new NimbyAdminServerSeen();
+        bool ran = AcceptRange(replay, 1, 301);
+        failures += Case(results, "replay: an id replayed after 300 accepted ids is refused", ran && replay.Check(1) == NimbyAdminServerSeen.STALE);
+        NimbyAdminServerSeen mixed = new NimbyAdminServerSeen();
+        bool client = AcceptRange(mixed, 1, 200);
+        int base = mixed.Highest() + 1024;
+        bool harness = AcceptRange(mixed, base, base + 59);
+        failures += Case(results, "replay: after 60 harness ids at highest + 1024 the client's next id is accepted", client && harness && mixed.Count() == NimbyAdminServerRules.SEEN_MAX && mixed.Check(201) == NimbyAdminServerSeen.ACCEPT);
+        failures += Case(results, "replay: after the harness ids a client replay below the floor is still stale", mixed.Check(1) == NimbyAdminServerSeen.STALE);
         return failures;
     }
 
