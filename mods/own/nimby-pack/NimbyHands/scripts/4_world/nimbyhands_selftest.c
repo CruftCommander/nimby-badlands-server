@@ -11,6 +11,11 @@ modded class MissionBaseWorld
         super.OnInit();
         NimbyHandsLog.ReadDebugFlag();
         NimbyHandsLog.Info("loaded; server=" + NimbyHandsLog.Bool(GetGame().IsServer()) + " debug=" + NimbyHandsLog.Bool(NimbyHandsLog.IsDebug()));
+        if (GetGame().IsServer())
+        {
+            // Build 17 (November 1, 2026, NIMBY-T-063): the transfer pool, allocated before any player.
+            NimbyHandsServer.FillPool();
+        }
         if (!FileExist("$profile:NimbyHands\\selftest"))
         {
             return;

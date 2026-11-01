@@ -549,6 +549,23 @@ class NimbyDevHarness
             Cleanup(inFlight);
             Record("hands-forged-entry-evicts", registry.Count() == before, "registry=" + registry.Count().ToString());
 
+            // Build 17: a pooled transfer comes back reset. Acquire takes one, the case dirties it the
+            // way a request does, Recycle (synchronous here; production recycles one pass later)
+            // returns it, and the pool count and every dirtied field are read back.
+            int poolBefore = NimbyHandsServer.PoolCount();
+            NimbyHandsWorldTransfer pooledEntry = NimbyHandsServer.Acquire();
+            pooledEntry.detail = "dirty";
+            pooledEntry.state = NimbyHandsState.CONFIRMED;
+            pooledEntry.staged = true;
+            pooledEntry.step2HeldTicks = 3;
+            pooledEntry.giver = dummyA;
+            pooledEntry.giverAtStaged = dummyA;
+            pooledEntry.itemTextAtStaged = "dirty";
+            bool taken = pooledEntry.pooled && NimbyHandsServer.PoolCount() == poolBefore - 1;
+            NimbyHandsServer.Recycle(pooledEntry);
+            bool clean = pooledEntry.detail == "" && pooledEntry.state == NimbyHandsState.PENDING && !pooledEntry.staged && pooledEntry.step2HeldTicks == 0 && pooledEntry.giver == null && pooledEntry.giverAtStaged == null && pooledEntry.itemTextAtStaged == "" && pooledEntry.pooled;
+            Record("hands-pool-recycles-reset", taken && clean && NimbyHandsServer.PoolCount() == poolBefore, "pool before=" + poolBefore.ToString() + " after=" + NimbyHandsServer.PoolCount().ToString() + " taken=" + Bool(taken) + " clean=" + Bool(clean));
+
             dummyB.NimbyHandsSetPocketsOpen(true);
             dummyB.SetRestrained(true);
             bool closed = !dummyB.NimbyHandsGetPocketsOpen();

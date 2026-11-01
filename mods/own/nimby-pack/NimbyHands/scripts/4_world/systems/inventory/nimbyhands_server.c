@@ -41,8 +41,10 @@
 //           is often written inside EEItemLocationChanged, that is, inside the engine's
 //           own move (NIMBY-T-063, October 29, 2026).
 // Canary  : Build 16 (November 1, 2026, NIMBY-T-063): MoveStep2 compares giver, item and receiver
-//           with copies taken before the first step 2 native, after each native, and quarantines
-//           a transfer the engine has written into (see MoveStep2 and Canary).
+//           with their baselines after each step 2 native and quarantines a transfer the engine
+//           has written into (see MoveStep2 and Canary). Build 17: the baselines are copies taken
+//           at STAGED and the step 2 poll compares on every tick (TickCanary); production
+//           transfers come from a pool filled at mission start (FillPool, Acquire, Recycle).
 // Persists: Nothing. Every member is static server memory for the mission.
 // -----------------------------------------------------------------------------
 class NimbyHandsWorldTransfer : NimbyHandsTransfer
@@ -85,6 +87,57 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     // engine's player list by these, never through the stored references (see MoveStep2).
     string giverId;
     string receiverId;
+    // Build 17 (November 1, 2026, NIMBY-T-063): copies of the three references and the item text
+    // taken at STAGED (RecordStaged), the moment ObserveLandings has just proven giver intact
+    // (newRoot == giver). The step 2 poll compares the live fields with these on every tick,
+    // pointer compares only (TickCanary); the quarantine line is written from itemTextAtStaged,
+    // because itemText itself was one of the three damaged slots in crashes 13 to 15.
+    PlayerBase giverAtStaged;
+    EntityAI itemAtStaged;
+    PlayerBase receiverAtStaged;
+    string itemTextAtStaged;
+    // Build 17: true for an object that came from NimbyHandsServer.s_Pool and goes back to it
+    // after its terminal line. A forged harness entry (new) is never recycled.
+    bool pooled;
+
+    // Build 17: every field back to its default, so a recycled object carries nothing from the
+    // request before it. pooled is kept: it describes the object, not the request.
+    void Reset()
+    {
+        id = 0;
+        itemKey = "";
+        action = "";
+        state = NimbyHandsState.PENDING;
+        startedMs = 0;
+        detail = "";
+        giver = null;
+        receiver = null;
+        requester = null;
+        item = null;
+        itemText = "";
+        giverText = "";
+        receiverText = "";
+        reach = 0;
+        destinationFlags = 0;
+        consent = false;
+        consentDetail = "";
+        hasExpected = false;
+        expectedItem = null;
+        expectedGiverId = "";
+        expectedReceiverId = "";
+        staged = false;
+        stagedType = 0;
+        stagedText = "";
+        stagedParent = null;
+        stagedAtMs = 0;
+        step2HeldTicks = 0;
+        giverId = "";
+        receiverId = "";
+        giverAtStaged = null;
+        itemAtStaged = null;
+        receiverAtStaged = null;
+        itemTextAtStaged = "";
+    }
 }
 
 class NimbyHandsServer
@@ -97,6 +150,14 @@ class NimbyHandsServer
     // the move object is released from s_Waiting right after Submit, and the dev harness, whose
     // transfers never died, holds its own in a static ref. This is that ref for production.
     protected static ref array<ref NimbyHandsWorldTransfer> s_InFlight;
+    // Build 17 (November 1, 2026, NIMBY-T-063): the transfer pool. FillPool runs at mission start
+    // (MissionBaseWorld.OnInit) and allocates TRANSFER_POOL_SIZE objects before any player is in
+    // the world; Execute takes one (Acquire) and the terminal Advance gives it back (Release puts
+    // it in s_Retired, RecycleRetired resets it on the next call-queue pass, after every caller
+    // in the terminal frame has finished reading it). A quarantined object (Quarantine) never
+    // returns: it stays in s_InFlight for the mission.
+    protected static ref array<ref NimbyHandsWorldTransfer> s_Pool;
+    protected static ref array<ref NimbyHandsWorldTransfer> s_Retired;
     // The step 2 move in flight (NIMBY-T-063, October 29, 2026): while s_Step2MoveId is set,
     // every inventory signal handler returns at once and the end handler only raises
     // s_Step2Landed. Crash 8 (crash_2026-10-29_19-42-55) died inside the engine's move callback
@@ -128,15 +189,115 @@ class NimbyHandsServer
 
     static void Release(NimbyHandsWorldTransfer transfer)
     {
-        if (!s_InFlight || !transfer)
+        if (!transfer)
         {
             return;
         }
-        int index = s_InFlight.Find(transfer);
-        if (index >= 0)
+        if (s_InFlight)
         {
-            s_InFlight.RemoveOrdered(index);
-            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " released; in flight=" + s_InFlight.Count().ToString());
+            int index = s_InFlight.Find(transfer);
+            if (index >= 0)
+            {
+                s_InFlight.RemoveOrdered(index);
+                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " released; in flight=" + s_InFlight.Count().ToString());
+            }
+        }
+        Retire(transfer);
+    }
+
+    // ---- the transfer pool (build 17, November 1, 2026, NIMBY-T-063) ------------------------
+
+    static void FillPool()
+    {
+        if (!s_Pool)
+        {
+            s_Pool = new array<ref NimbyHandsWorldTransfer>;
+        }
+        while (s_Pool.Count() < NimbyHandsConstants.TRANSFER_POOL_SIZE)
+        {
+            NimbyHandsWorldTransfer fresh = new NimbyHandsWorldTransfer();
+            fresh.pooled = true;
+            s_Pool.Insert(fresh);
+        }
+        NimbyHandsLog.Info("transfer pool filled; size=" + s_Pool.Count().ToString());
+    }
+
+    static int PoolCount()
+    {
+        if (!s_Pool)
+        {
+            return 0;
+        }
+        return s_Pool.Count();
+    }
+
+    // A reset transfer from the pool, or a fresh one when the pool is empty (more simultaneous
+    // requests than TRANSFER_POOL_SIZE, or quarantines have drained it). The fresh one is not
+    // pooled and is released like a build 15 object.
+    static NimbyHandsWorldTransfer Acquire()
+    {
+        if (!s_Pool || s_Pool.Count() == 0)
+        {
+            NimbyHandsLog.Info("transfer pool empty; allocated fresh");
+            return new NimbyHandsWorldTransfer();
+        }
+        int last = s_Pool.Count() - 1;
+        NimbyHandsWorldTransfer transfer = s_Pool.Get(last);
+        s_Pool.RemoveOrdered(last);
+        NimbyHandsLog.Debug("transfer acquired from pool; left=" + s_Pool.Count().ToString());
+        return transfer;
+    }
+
+    // Resets and returns a pooled object at once. Recycle is what RecycleRetired does one
+    // call-queue pass after the terminal line; the dev harness calls it directly.
+    static void Recycle(NimbyHandsWorldTransfer transfer)
+    {
+        if (!transfer || !transfer.pooled)
+        {
+            return;
+        }
+        if (!s_Pool)
+        {
+            s_Pool = new array<ref NimbyHandsWorldTransfer>;
+        }
+        int id = transfer.id;
+        transfer.Reset();
+        if (s_Pool.Find(transfer) < 0)
+        {
+            s_Pool.Insert(transfer);
+        }
+        NimbyHandsLog.Debug("id=" + id.ToString() + " transfer recycled; pool=" + s_Pool.Count().ToString());
+    }
+
+    protected static void Retire(NimbyHandsWorldTransfer transfer)
+    {
+        if (!transfer || !transfer.pooled)
+        {
+            return;
+        }
+        if (!s_Retired)
+        {
+            s_Retired = new array<ref NimbyHandsWorldTransfer>;
+        }
+        if (s_Retired.Find(transfer) >= 0)
+        {
+            return;
+        }
+        s_Retired.Insert(transfer);
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyHandsServer.RecycleRetired, 0, false);
+    }
+
+    static void RecycleRetired()
+    {
+        if (!s_Retired)
+        {
+            return;
+        }
+        while (s_Retired.Count() > 0)
+        {
+            NimbyHandsWorldTransfer transfer = s_Retired.Get(0);
+            s_Retired.RemoveOrdered(0);
+            Recycle(transfer);
         }
     }
 
@@ -328,6 +489,8 @@ class NimbyHandsServer
         transfer.detail = detail;
         LogLifecycle(transfer);
         SendToastTo(transfer.requester, "requester", transfer.state, transfer.detail);
+        // Build 17: an unregistered refusal never reaches Advance, so it returns its pooled object here.
+        Retire(transfer);
     }
 
     // Moves the transfer and writes its line. Returns false when the lifecycle forbids the
@@ -537,22 +700,31 @@ class NimbyHandsServer
     {
         string idText = transfer.id.ToString();
         s_Step2CanaryTripped = false;
-        // Build 16: the copies. Taken before the first native; nothing below reads these fields
-        // again except through Canary's pointer compares.
-        PlayerBase giverBefore = transfer.giver;
-        EntityAI itemBefore = transfer.item;
-        PlayerBase receiverBefore = transfer.receiver;
+        // Build 16: the copies, taken before the first native. Build 17: the baselines are the
+        // STAGED copies when the transfer has them (production always does; a forged entry too,
+        // through RecordStaged), so a slot damaged between STAGED and this call reads CHANGED at
+        // entry instead of being copied as it is. Crash 15 copied the damaged giver and compared
+        // it with itself. The strings come from the STAGED copies for the same reason.
+        PlayerBase giverBefore = transfer.giverAtStaged;
+        EntityAI itemBefore = transfer.itemAtStaged;
+        PlayerBase receiverBefore = transfer.receiverAtStaged;
+        string itemText = transfer.itemTextAtStaged;
+        if (!transfer.staged)
+        {
+            giverBefore = transfer.giver;
+            itemBefore = transfer.item;
+            receiverBefore = transfer.receiver;
+            itemText = transfer.itemText;
+        }
         string giverId = transfer.giverId;
         string receiverId = transfer.receiverId;
-        string itemText = transfer.itemText;
-        string firstNative = "entry (debug off, LogReservations not run)";
+        Canary(transfer, idText, "entry", giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
         if (NimbyHandsLog.IsDebug())
         {
             NimbyHandsLog.Debug("id=" + idText + " step 2 move: src=" + DescribeLocation(src) + " dst=" + DescribeLocation(dst));
             LogReservations(idText, itemBefore, src, dst);
-            firstNative = "LogReservations";
+            Canary(transfer, idText, "LogReservations", giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
         }
-        Canary(transfer, idText, firstNative, giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
         s_Step2MoveId = transfer.id;
         s_Step2Landed = false;
         bool moved = GameInventory.LocationSyncMoveEntity(src, dst);
@@ -582,19 +754,14 @@ class NimbyHandsServer
         return moved;
     }
 
-    // Build 16: one canary. Compares the transfer's giver, item and receiver with the copies
-    // taken before the first native (pointer compares; no read through either side, no read of
-    // detail) and writes the line. The first CHANGED also writes the verdict line from the
-    // copies and quarantines the transfer: the registry forgets the entry without writing it,
-    // the object stays held in s_InFlight (never released, never destroyed), no toast is sent.
-    // Later canaries in the same move still write their line, so the log shows whether the
-    // fields changed again. Returns true when this canary found a change.
+    // Build 16: one canary. Compares the transfer's giver, item and receiver with the baselines
+    // (pointer compares; no read through either side, no read of detail) and writes the line.
+    // The first CHANGED quarantines the transfer (Quarantine). Later canaries in the same move
+    // still write their line, so the log shows whether the fields changed again. Returns true
+    // when this canary found a change.
     protected static bool Canary(NimbyHandsWorldTransfer transfer, string idText, string nativeName, PlayerBase giverBefore, EntityAI itemBefore, PlayerBase receiverBefore, string giverId, string receiverId, string itemText)
     {
-        bool giverSame = transfer.giver == giverBefore;
-        bool itemSame = transfer.item == itemBefore;
-        bool receiverSame = transfer.receiver == receiverBefore;
-        string verdict = NimbyHandsRules.Step2Canary(giverSame, itemSame, receiverSame);
+        string verdict = CompareBaselines(transfer, giverBefore, itemBefore, receiverBefore);
         NimbyHandsLog.Info("id=" + idText + " canary after " + nativeName + ": " + verdict);
         if (verdict == NimbyHandsRules.CANARY_OK)
         {
@@ -603,19 +770,70 @@ class NimbyHandsServer
         if (!s_Step2CanaryTripped)
         {
             s_Step2CanaryTripped = true;
-            // Where the item is, read through the copy of the item reference (intact in both
-            // minidumps; the same read passed immediately before the fatal write in crashes 13 and 14).
-            bool delivered = itemBefore != null && receiverBefore != null && itemBefore.GetHierarchyRootPlayer() == receiverBefore;
-            NimbyHandsLog.Info("id=" + idText + " canary verdict: engine wrote into the live transfer during " + nativeName + "; delivered=" + NimbyHandsLog.Bool(delivered) + " giver=" + giverId + " receiver=" + receiverId + " item=" + itemText + "; entry forgotten, object quarantined, no state, detail or toast written");
-            bool forgotten = Registry().Forget(transfer);
-            int inFlight = 0;
-            if (s_InFlight)
-            {
-                inFlight = s_InFlight.Count();
-            }
-            NimbyHandsLog.Info("id=" + idText + " quarantined; forgotten=" + NimbyHandsLog.Bool(forgotten) + " in flight=" + inFlight.ToString());
+            Quarantine(transfer, idText, "step 2 move, after " + nativeName, itemBefore, receiverBefore, giverId, receiverId, itemText);
         }
         return true;
+    }
+
+    // Build 17: the poll's canary, run on every Step2Tick for a STAGED entry before anything
+    // reads the giver. Compares the live fields with the STAGED copies. Each ok tick writes one
+    // debug line with the tick's age; a CHANGED tick writes the Info line with the age and the
+    // giver's processing state read through the STAGED copy (a real reference), quarantines the
+    // entry and returns true. Crashes 13 to 15 damaged the slots in the 350 ms between the step
+    // 1 landing and the step 2 poll; this names the 50 ms tick.
+    protected static bool TickCanary(NimbyHandsWorldTransfer transfer, int agoMs)
+    {
+        if (!transfer.staged)
+        {
+            return false;
+        }
+        string idText = transfer.id.ToString();
+        string verdict = CompareBaselines(transfer, transfer.giverAtStaged, transfer.itemAtStaged, transfer.receiverAtStaged);
+        if (verdict == NimbyHandsRules.CANARY_OK)
+        {
+            NimbyHandsLog.Debug("id=" + idText + " canary tick: ok, staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
+            return false;
+        }
+        bool processing = false;
+        DayZPlayerInventory inventory = null;
+        if (transfer.giverAtStaged)
+        {
+            inventory = DayZPlayerInventory.Cast(transfer.giverAtStaged.GetInventory());
+        }
+        if (inventory)
+        {
+            processing = inventory.IsProcessing();
+        }
+        NimbyHandsLog.Info("id=" + idText + " canary tick: " + verdict + ", staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString() + " giverProcessing=" + NimbyHandsLog.Bool(processing));
+        Quarantine(transfer, idText, "step 2 poll, " + agoMs.ToString() + " ms after STAGED", transfer.itemAtStaged, transfer.receiverAtStaged, transfer.giverId, transfer.receiverId, transfer.itemTextAtStaged);
+        return true;
+    }
+
+    // Pointer compares of the three references against their baselines; the verdict string.
+    protected static string CompareBaselines(NimbyHandsWorldTransfer transfer, PlayerBase giverBefore, EntityAI itemBefore, PlayerBase receiverBefore)
+    {
+        bool giverSame = transfer.giver == giverBefore;
+        bool itemSame = transfer.item == itemBefore;
+        bool receiverSame = transfer.receiver == receiverBefore;
+        return NimbyHandsRules.Step2Canary(giverSame, itemSame, receiverSame);
+    }
+
+    // Build 16: a transfer the engine has written into is never written again: no state, no
+    // detail, no toast. The verdict line is written from the baselines (where the item is, read
+    // through the copy of the item reference), the registry forgets the entry without writing the
+    // object, and the object stays held in s_InFlight for the rest of the mission: its destructor
+    // would free the overwritten detail buffer, and (build 17) it never returns to the pool.
+    protected static void Quarantine(NimbyHandsWorldTransfer transfer, string idText, string where, EntityAI itemBefore, PlayerBase receiverBefore, string giverId, string receiverId, string itemText)
+    {
+        bool delivered = itemBefore != null && receiverBefore != null && itemBefore.GetHierarchyRootPlayer() == receiverBefore;
+        NimbyHandsLog.Info("id=" + idText + " canary verdict: engine wrote into the live transfer before " + where + "; delivered=" + NimbyHandsLog.Bool(delivered) + " giver=" + giverId + " receiver=" + receiverId + " item=" + itemText + "; entry forgotten, object quarantined, no state, detail or toast written");
+        bool forgotten = Registry().Forget(transfer);
+        int inFlight = 0;
+        if (s_InFlight)
+        {
+            inFlight = s_InFlight.Count();
+        }
+        NimbyHandsLog.Info("id=" + idText + " quarantined; forgotten=" + NimbyHandsLog.Bool(forgotten) + " in flight=" + inFlight.ToString());
     }
 
     // The engine's juncture locks (Game.c:757-759): on the item, between the giver and the
@@ -880,6 +1098,12 @@ class NimbyHandsServer
                 continue;
             }
             int agoMs = nowMs - transfer.stagedAtMs;
+            // Build 17 (November 1, 2026): the canary runs before anything reads the giver. On a
+            // CHANGED tick the entry is quarantined and this tick leaves it alone.
+            if (TickCanary(transfer, agoMs))
+            {
+                continue;
+            }
             // Build 14 (October 31, 2026): step 2 waits for the giver's inventory to be idle. IsFree
             // reads IsProcessing and the action commands on the giver; those natives passed in
             // CollectStep2Facts on every run since the client-driven step 1.
@@ -920,6 +1144,11 @@ class NimbyHandsServer
         transfer.stagedType = loc.GetType();
         transfer.stagedParent = loc.GetParent();
         transfer.stagedText = DescribeLocation(loc);
+        // Build 17: the canary baselines, taken where the caller has just read giver intact.
+        transfer.giverAtStaged = transfer.giver;
+        transfer.itemAtStaged = transfer.item;
+        transfer.receiverAtStaged = transfer.receiver;
+        transfer.itemTextAtStaged = transfer.itemText;
     }
 
     // The item is still where step 1 put it: same location type and the same parent entity,

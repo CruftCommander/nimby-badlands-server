@@ -181,7 +181,9 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
-        NimbyHandsWorldTransfer transfer = new NimbyHandsWorldTransfer();
+        // Build 17 (November 1, 2026, NIMBY-T-063): from the pool filled at mission start, not a
+        // fresh allocation in the middle of the Take prompt's per-frame churn (NimbyHandsServer.Acquire).
+        NimbyHandsWorldTransfer transfer = NimbyHandsServer.Acquire();
         transfer.action = m_ActionName;
         transfer.requester = m_Requester;
         transfer.receiver = m_DstPlayer;
