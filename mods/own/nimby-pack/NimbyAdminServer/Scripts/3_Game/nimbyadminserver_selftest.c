@@ -518,17 +518,17 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "denial records: one sender keeps 30 and spends 30 of the 120 aggregate", kept == 30 && allLeft == 90);
         failures += Case(results, "denial records: an owner or admin is never held back, a player without a role is", NimbyAdminServerRules.DenialRecordExempt("owner") && NimbyAdminServerRules.DenialRecordExempt("admin") && !NimbyAdminServerRules.DenialRecordExempt("none"));
         NimbyAdminServerSuppressed held = new NimbyAdminServerSuppressed();
-        held.Add("76561190000000021");
-        held.Add("76561190000000021");
-        held.Add("76561190000000021");
-        held.Add("76561190000000022");
+        held.Add("76561190000000021", 0);
+        held.Add("76561190000000021", 0);
+        held.Add("76561190000000021", 0);
+        held.Add("76561190000000022", 0);
         string summary = held.EffectsJson();
         failures += Case(results, "denial records: held-back records are counted per sender for the summary", held.Total() == 4 && held.Senders() == 2 && summary.IndexOf("{\"suppressed\":4,\"senders\":2,\"listed\":[{\"steam64\":\"76561190000000021\",\"count\":3}") == 0);
         NimbyAdminServerSuppressed many = new NimbyAdminServerSuppressed();
         int s = 0;
         while (s < 12)
         {
-            many.Add("765611900000001" + (10 + s).ToString());
+            many.Add("765611900000001" + (10 + s).ToString(), 0);
             s = s + 1;
         }
         string manyJson = many.EffectsJson();
@@ -541,6 +541,21 @@ class NimbyAdminServerSelfTest
         }
         many.Clear();
         failures += Case(results, "denial records: the summary lists at most 10 senders and Clear empties it", listedCount == NimbyAdminServerSuppressed.MAX_LISTED && manyJson.IndexOf("\"senders\":12") > 0 && many.Total() == 0 && many.Senders() == 0);
+        // Re-review finding 12: the summary state machine. Before the fix the counts were cleared
+        // after the append whatever it returned, and the line said "written".
+        NimbyAdminServerSuppressed retry = new NimbyAdminServerSuppressed();
+        retry.Add("76561190000000031", 100.0);
+        retry.Add("76561190000000031", 110.0);
+        retry.Add("76561190000000032", 120.0);
+        failures += Case(results, "suppressed: the summary is due 60 s after the first held-back record", !retry.Due(159.0) && retry.Due(160.0));
+        string failed = retry.Finish(false, 160.0);
+        failures += Case(results, "suppressed: a failed append keeps the counts and defers to the next due time", failed == NimbyAdminServerSuppressed.DEFERRED && retry.Total() == 3 && retry.Senders() == 2 && !retry.Due(219.0) && retry.Due(220.0));
+        retry.Add("76561190000000033", 200.0);
+        string deferredLine = NimbyAdminServerSuppressed.SummaryLine(retry.Total(), retry.Senders(), failed);
+        failures += Case(results, "suppressed: the line after a failed append says summary deferred, not written", deferredLine.IndexOf("; summary deferred") > 0 && deferredLine.IndexOf("written") < 0 && deferredLine.IndexOf("suppressed=4 senders=3") > 0);
+        string written = retry.Finish(true, 220.0);
+        string writtenLine = NimbyAdminServerSuppressed.SummaryLine(4, 3, written);
+        failures += Case(results, "suppressed: a successful append clears the counts and the line says summary written", written == NimbyAdminServerSuppressed.WRITTEN && retry.Total() == 0 && retry.Senders() == 0 && !retry.Due(10000.0) && writtenLine.IndexOf("; summary written") > 0);
         return failures;
     }
 

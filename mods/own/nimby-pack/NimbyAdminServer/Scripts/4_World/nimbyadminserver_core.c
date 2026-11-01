@@ -63,7 +63,6 @@ class NimbyAdminServerCore
     protected static ref NimbyAdminServerBucket s_DenialAggregate;
     protected static ref map<string, ref NimbyAdminServerBucket> s_DenialRates;
     protected static ref NimbyAdminServerSuppressed s_Suppressed;
-    protected static float s_SuppressedSince;
     protected static int s_NextSession = 1;
 
     // ---- lifecycle (MissionServer, nimbyadminserver_missionserver.c) ----------------------------
@@ -365,11 +364,7 @@ class NimbyAdminServerCore
         }
         else
         {
-            if (s_Suppressed.Total() == 0)
-            {
-                s_SuppressedSince = now;
-            }
-            s_Suppressed.Add(actor.steam64);
+            s_Suppressed.Add(actor.steam64, now);
         }
         SendResult(actor, requestId, code, reason);
     }
@@ -390,11 +385,7 @@ class NimbyAdminServerCore
     // first held-back record; never subject to the limits itself.
     protected static void WriteSuppressedSummaryIfDue(float now)
     {
-        if (s_Suppressed.Total() == 0)
-        {
-            return;
-        }
-        if (now - s_SuppressedSince < NimbyAdminServerSuppressed.SUMMARY_SECONDS)
+        if (!s_Suppressed.Due(now))
         {
             return;
         }
@@ -402,9 +393,12 @@ class NimbyAdminServerCore
         record.result = "ok";
         record.reason = "denial record limit";
         record.effects = s_Suppressed.EffectsJson();
-        NimbyAdminServerAudit.Append(record);
-        NimbyAdminLog.Info("denied or invalid audit records held back suppressed=" + s_Suppressed.Total().ToString() + " senders=" + s_Suppressed.Senders().ToString() + "; one audit.suppressed record written");
-        s_Suppressed.Clear();
+        int total = s_Suppressed.Total();
+        int senders = s_Suppressed.Senders();
+        bool appended = NimbyAdminServerAudit.Append(record);
+        // Re-review finding 12: cleared only after a successful append.
+        string outcome = s_Suppressed.Finish(appended, now);
+        NimbyAdminLog.Info(NimbyAdminServerSuppressed.SummaryLine(total, senders, outcome));
     }
 
     protected static NimbyAdminServerAuditRecord ActorRecord(NimbyAdminServerActor actor, int requestId, string command, string phase)

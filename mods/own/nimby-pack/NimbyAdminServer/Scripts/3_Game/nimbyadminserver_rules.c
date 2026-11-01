@@ -963,12 +963,21 @@ class NimbyAdminServerSuppressed
     static const int MAX_LISTED = 10;
     static const float SUMMARY_SECONDS = 60.0;
 
+    static const string WRITTEN = "written";
+    static const string DEFERRED = "deferred";
+
     protected ref map<string, int> m_Counts = new map<string, int>;
     protected ref array<string> m_Order = new array<string>;
     protected int m_Total;
+    protected float m_DueAt;
 
-    void Add(string steam64)
+    // now: the tick time; the first held-back record sets the summary due SUMMARY_SECONDS later.
+    void Add(string steam64, float now)
     {
+        if (m_Total == 0)
+        {
+            m_DueAt = now + SUMMARY_SECONDS;
+        }
         int count = 0;
         if (m_Counts.Find(steam64, count))
         {
@@ -997,6 +1006,36 @@ class NimbyAdminServerSuppressed
         m_Counts.Clear();
         m_Order.Clear();
         m_Total = 0;
+    }
+
+    bool Due(float now)
+    {
+        return m_Total > 0 && now >= m_DueAt;
+    }
+
+    // Re-review finding 12: called after the summary append. The counts are cleared only when the
+    // append returned true; on failure they are kept (new ones keep adding) and the summary is
+    // retried at the next due time, SUMMARY_SECONDS later. Returns WRITTEN or DEFERRED.
+    string Finish(bool appended, float now)
+    {
+        if (appended)
+        {
+            Clear();
+            return WRITTEN;
+        }
+        m_DueAt = now + SUMMARY_SECONDS;
+        return DEFERRED;
+    }
+
+    // The one script-log line per summary attempt.
+    static string SummaryLine(int total, int senders, string outcome)
+    {
+        string line = "denied or invalid audit records held back suppressed=" + total.ToString() + " senders=" + senders.ToString();
+        if (outcome == WRITTEN)
+        {
+            return line + "; summary written";
+        }
+        return line + "; summary deferred: the audit append failed, counts kept, retry in " + SUMMARY_SECONDS.ToString() + " s";
     }
 
     // {"suppressed":N,"senders":M,"listed":[{"steam64":"..","count":n},...]}, the first
