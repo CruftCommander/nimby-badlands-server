@@ -284,3 +284,9 @@ Next (Part 3): unchanged from the 00:25 status.
 - Codex third pass over `git diff 439b729..a4c3a49` (copied to `docs/reviews/2026-11-01-central-scrutinizer-phase0-codex-rereview-2.md`): 12 closed, the finding 3 residual, a new medium 14 in the dev harness. Fixed in `e31ba54` (every recovery marks the store's history) and `05ad7c2` (harness id headroom), each with self-test cases; `@NIMBY-20261101-130715` `SUMMARY PASS`, 855/855.
 - Orchestrator ruling: no further review pass; straight into Part 3.
 
+## Status, November 1, 2026, 15:00 (gate session run, waiting on Jeff's go/no-go)
+
+- Gate build `@NIMBY-20261101-130917` (replica `storage_998`, qualification, 855/855) and the two-client session, 13:41 to 14:55. Real-client rows PASS: menu key without a role, admin teleport (move and audit), permission revocation, reconnect, restart, read-only audit file; item 3 proofs 1, 3 and 5 PASS.
+- FAIL: the three dev-harness rows (forged requests do not reach the router), the Discord evidence (duplicate posts; a 404 classed `other`, not `client`); proof 2 PARTIAL; proof 4 script PASS, visual NOT CONFIRMED.
+- Next, after Jeff's go/no-go: the fix round (harness, Discord `?wait=true` and timeout-only retry, sandstorm visual), then a rerun. Details in the test record, section Gate session.
+
