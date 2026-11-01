@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  NimbyShared page keys (Plan 11 v0.2, question 1, ruled October 31, 2026; shared rules 5).
+  Read by NimbySharedWindow, so every NIMBY window pages with the same keys. They replace
+  Greet's UANimbyGreetPageUp and UANimbyGreetPageDown (NIMBY-T-057), with the same defaults:
+  kPrior and kNext (constants.xml:580,585) page the open window's body; read only while a shell
+  window is open. In play they are also UAZeroingUp and UAZeroingDown
+  (preset_X1MouseKey.xml:311,316), which the window force-disables while open (NIMBY-T-058).
+  Nesting follows the Ears precedent (NimbyEarplugs/Data/Inputs.xml): the <sorting> block sits
+  INSIDE <inputs>, beside <actions>; group "nimby" is declared in every NIMBY addon with the same
+  name and label.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbySharedPageUp" loc="NIMBY: page the window up" />
+            <input name="UANimbySharedPageDown" loc="NIMBY: page the window down" />
+        </actions>
+        <sorting name="nimby" loc="NIMBY">
+            <input name="UANimbySharedPageUp" />
+            <input name="UANimbySharedPageDown" />
+        </sorting>
+    </inputs>
+    <preset>
+        <input name="UANimbySharedPageUp">
+            <btn name="kPrior" />
+        </input>
+        <input name="UANimbySharedPageDown">
+            <btn name="kNext" />
+        </input>
+    </preset>
+</modded_inputs>

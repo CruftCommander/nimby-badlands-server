@@ -103,13 +103,13 @@ class NimbyGreetClientFiles
     {
         if (scale >= 1.4)
         {
-            return NimbyGreetRules.TEXT_SCALE_LARGER;
+            return NimbySharedRules.TEXT_SCALE_LARGER;
         }
         if (scale >= 1.15)
         {
-            return NimbyGreetRules.TEXT_SCALE_LARGE;
+            return NimbySharedRules.TEXT_SCALE_LARGE;
         }
-        return NimbyGreetRules.TEXT_SCALE_NORMAL;
+        return NimbySharedRules.TEXT_SCALE_NORMAL;
     }
 
     protected static void EnsureDir()

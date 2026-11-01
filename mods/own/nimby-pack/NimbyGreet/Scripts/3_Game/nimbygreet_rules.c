@@ -4,13 +4,11 @@
 // Plan : docs/plans/2026-10-21-greet-plan.md v0.4: G1 (ids), G4 (dismissal), G5
 //        (chunking, delays), G9 (caps), G10 (links), G14 (languages), G17 (files).
 //        A cap or constant change is a plan change first.
-// Phase 0: CHUNK_BYTES is 1,000 because an RPC string arrives intact at 1,000 bytes and
-//        throws "String CORRUPTED" on Read at 1,100 and above (NIMBY-T-037); the UTF-8
-//        safe cut (ChunkEnd, SplitChunks) keeps every chunk on a character boundary.
-//        string.Length and Substring count bytes, LengthUtf8 and SubstringUtf8 count
-//        characters (1_Core/DayZ/proto/EnString.c:137,199,206,212); string.Get(index)
-//        returns the byte at index as a one-byte string (EnString.c:448) and ToAscii
-//        (:86) gives its value, so a continuation byte (10xxxxxx) can be recognized.
+// Plan 11: CHUNK_BYTES, the chunk math and the UTF-8 safe cut (ChunkCount, MaxChunkCount,
+//        IsContinuationByte, ChunkEnd, SplitChunks, FillBytes) and the text-size steps moved to
+//        NimbySharedRules and NimbySharedChunks (NimbyShared, Plan 11 Phase 1, October 31, 2026).
+//        Greet keeps its own caps and ids; MAX_PAYLOAD_BYTES is the cap Greet hands the codec.
+//        string.LengthUtf8 and SubstringUtf8 count characters (1_Core/DayZ/proto/EnString.c:206,212).
 // Style: one statement per line.
 // -----------------------------------------------------------------------------
 
@@ -42,8 +40,6 @@ class NimbyGreetRules
     static const int ENGINE_STRING_BYTES = 1023;
     static const int ENGINE_STRING_WARN_BYTES = 1020;
 
-    // G5: bytes per chunk (NIMBY-T-037, measured cap in (1,000, 1,100]).
-    static const int CHUNK_BYTES = 1000;
     // G5: the reassembled Language JSON may not exceed this many bytes: MAX_TOTAL_CHARS at four
     // bytes a character plus the keys, quotes and escapes of 16 sections. Anything larger is a
     // forged or broken response and is dropped.
@@ -96,11 +92,6 @@ class NimbyGreetRules
     static const int MAX_FRAMES = 8;
     static const int MIN_FRAME_MS = 50;
 
-    // G16: text scale steps.
-    static const float TEXT_SCALE_NORMAL = 1.0;
-    static const float TEXT_SCALE_LARGE = 1.25;
-    static const float TEXT_SCALE_LARGER = 1.5;
-
     // G3, G4, G17: file names under $profile:NimbyGreet\.
     static const string DIR = "$profile:NimbyGreet";
     static const string FILE_TEXT = "$profile:NimbyGreet\\greet.json";
@@ -138,95 +129,7 @@ class NimbyGreetRules
         return text.SubstringUtf8(0, cap);
     }
 
-    // ---- chunking (G5) -----------------------------------------------------------------------
-
-    // How many chunks of CHUNK_BYTES a serialized payload of the given byte length needs. 0 for 0.
-    static int ChunkCount(int bytes)
-    {
-        if (bytes <= 0)
-        {
-            return 0;
-        }
-        return (bytes + CHUNK_BYTES - 1) / CHUNK_BYTES;
-    }
-
-    // The most chunks any legitimate response can carry.
-    static int MaxChunkCount()
-    {
-        return ChunkCount(MAX_PAYLOAD_BYTES);
-    }
-
-    // True when the byte at index is a UTF-8 continuation byte (0x80 to 0xBF). False outside the string.
-    static bool IsContinuationByte(string text, int index)
-    {
-        if (index < 0)
-        {
-            return false;
-        }
-        if (index >= text.Length())
-        {
-            return false;
-        }
-        int code = text.Get(index).ToAscii();
-        if (code < 0)
-        {
-            code = code + 256;
-        }
-        if (code < 128)
-        {
-            return false;
-        }
-        if (code >= 192)
-        {
-            return false;
-        }
-        return true;
-    }
-
-    // Exclusive end offset of a chunk that starts at start, holds at most maxBytes bytes, and never
-    // ends inside a multi-byte character. Returns the text length when the rest fits.
-    static int ChunkEnd(string text, int start, int maxBytes)
-    {
-        int length = text.Length();
-        if (maxBytes <= 0)
-        {
-            return start;
-        }
-        int end = start + maxBytes;
-        if (end >= length)
-        {
-            return length;
-        }
-        while (end > start)
-        {
-            if (!IsContinuationByte(text, end))
-            {
-                return end;
-            }
-            end = end - 1;
-        }
-        // A run of continuation bytes longer than the chunk is not UTF-8; cut at the byte limit.
-        return start + maxBytes;
-    }
-
-    // Splits text into chunks of at most maxBytes bytes on character boundaries. Returns the count.
-    static int SplitChunks(string text, int maxBytes, out array<string> chunks)
-    {
-        chunks = new array<string>;
-        int length = text.Length();
-        int start = 0;
-        while (start < length)
-        {
-            int end = ChunkEnd(text, start, maxBytes);
-            if (end <= start)
-            {
-                break;
-            }
-            chunks.Insert(text.Substring(start, end - start));
-            start = end;
-        }
-        return chunks.Count();
-    }
+    // ---- self-test helper -------------------------------------------------------------------
 
     // unit repeated count times.
     static string Repeat(string unit, int count)
@@ -239,24 +142,6 @@ class NimbyGreetRules
             i = i + 1;
         }
         return result;
-    }
-
-    // unit repeated until the text holds bytes bytes, then cut on a character boundary at or below bytes.
-    static string FillBytes(string unit, int bytes)
-    {
-        int unitBytes = unit.Length();
-        if (unitBytes <= 0)
-        {
-            return "";
-        }
-        if (bytes <= 0)
-        {
-            return "";
-        }
-        int count = (bytes + unitBytes - 1) / unitBytes;
-        string text = Repeat(unit, count);
-        int end = ChunkEnd(text, 0, bytes);
-        return text.Substring(0, end);
     }
 
     // ---- dismissal (G4) ----------------------------------------------------------------------

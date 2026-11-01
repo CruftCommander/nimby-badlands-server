@@ -22,6 +22,12 @@
     ],
     "addons": [
         {
+            "folder": "NimbyShared",
+            "pboName": "NimbyShared",
+            "prefix": "NimbyShared",
+            "logPrefix": "Shared"
+        },
+        {
             "folder": "NimbyAutorun",
             "pboName": "NimbyAutorun",
             "prefix": "NimbyAutorun",
@@ -56,6 +62,19 @@
             "pboName": "NimbyGreet",
             "prefix": "NimbyGreet",
             "logPrefix": "Greet"
+        },
+        {
+            "folder": "NimbyAdmin",
+            "pboName": "NimbyAdmin",
+            "prefix": "NimbyAdmin",
+            "logPrefix": "Admin"
+        },
+        {
+            "folder": "NimbyAdminServer",
+            "pboName": "NimbyAdminServer",
+            "prefix": "NimbyAdminServer",
+            "logPrefix": "AdminServer",
+            "serverOnly": true
         }
     ],
     "dev": {
@@ -78,7 +97,8 @@
             "Unknown type",
             "Undefined function",
             "Scripted variables corrupted",
-            "\\[NIMBY\\]\\[[^\\]]+\\]\\[SelfTest\\] FAIL"
+            "\\[NIMBY\\]\\[[^\\]]+\\]\\[SelfTest\\] FAIL",
+            "Warning Message: Addon 'Nimby[^']*' requires addon"
         ],
         "readyPatterns": [
             "Init sequence finished",

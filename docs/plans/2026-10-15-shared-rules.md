@@ -1,8 +1,8 @@
 # NIMBY pack shared rules
 
-Version 1.6. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.6 amendment (October 27, 2026, drafted for Jeff's review in a pull request: section 2.2, `main` changes only through a pull request with the four `static-gate` checks, and cross-addon `fix/*` branches, from the CI ruling of October 27; section 9.2 step 6, the launcher check, from NIMBY-T-061, ruled by Jeff Fabish October 27, 2026; section 5 and the registry, the Menu addon dropped as obsolete, ruled by Jeff Fabish October 27, 2026); v1.5 amendment (October 26, 2026: section 7.1, the CallLater rule from NIMBY-T-052, ruled by Jeff Fabish October 26, 2026; Greet added to the list below; one rule added); v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
+Version 1.9. Status: v1.0 approved by Jeff Fabish, October 15, 2026; v1.9 amendment (October 31, 2026, night, drafted for Jeff's review in a pull request: section 8, the self-test component of a server-only PBO; section 4.1, the Central Scrutinizer row names both PBOs; the `NimbyAdmin` and `NimbyAdminServer` stubs and `pack.json` rows land with it, as section 3 foresaw; no rule changed); v1.8 amendment (October 31, 2026, late evening, drafted for Jeff's review in a pull request, from the Plan 11 recon: section 8.1, a server-only PBO may use both halves of the codec; section 5, the page keys move from Greet to NimbyShared, ruled by Jeff Fabish October 31, 2026); v1.7 amendment (October 31, 2026, drafted for Jeff's review in a pull request, from his rulings at the Central Scrutinizer kickoff: section 8.1, the one permitted cross-addon reference, `NimbyShared`; NimbyShared rows in 2.1 and 4.1; the Central Scrutinizer worktree folder in 2.1; the planned NimbyKit identifiers row in 4.1 withdrawn, the kit absorbed into Central Scrutinizer Phase 2 (Plan 3, N17)); v1.6 amendment (October 27, 2026, drafted for Jeff's review in a pull request: section 2.2, `main` changes only through a pull request with the four `static-gate` checks, and cross-addon `fix/*` branches, from the CI ruling of October 27; section 9.2 step 6, the launcher check, from NIMBY-T-061, ruled by Jeff Fabish October 27, 2026; section 5 and the registry, the Menu addon dropped as obsolete, ruled by Jeff Fabish October 27, 2026); v1.5 amendment (October 26, 2026: section 7.1, the CallLater rule from NIMBY-T-052, ruled by Jeff Fabish October 26, 2026; Greet added to the list below; one rule added); v1.4 amendment (October 25, 2026: Greet rows in 2.1, 4.1, and 5; no rule changed); v1.3 amendment (October 20, 2026: RPC registry row for `6550103`, the Legs settings RPC added in round 3; no rule changed); v1.1 amendment (content addons, section 6.1; key bindings, section 5; six new addons split by what a Bohemia update breaks) and v1.2 amendment (names: Hands, Ears, Central Scrutinizer; configurable key bindings and the Menu addon, section 5) approved by Jeff Fabish, October 16, 2026. Owner: Jeff Fabish.
 
-These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), Ears (`NimbyEarplugs`), and Greet (`NimbyGreet`) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
+These rules govern the in-house mod plans in `docs/plans/` - Legs (`NimbyAutorun`), Hands (`NimbyHands`), Central Scrutinizer (`NimbyAdmin`), Puff (`NimbySmoke`), Buzz (`NimbySmokeFx`), Sprout (`NimbyGrow`), Scrawl (`NimbyNotes`), Tack (`NimbyTack`), Ears (`NimbyEarplugs`), Greet (`NimbyGreet`), and the shared addon NimbyShared (`NimbyShared`, Plan 11) - and the orchestrator session that coordinates them. Each plan links here instead of carrying its own copy, so there is one text to keep current. A plan that needs an exception to a rule records the exception in its own decisions table.
 
 ## 1. Introduction
 
@@ -30,7 +30,7 @@ Each mod works on its own branch in its own git worktree under `D:\GitHub\nimby-
 | --- | --- | --- |
 | Legs | `feat/autorun` | `D:\GitHub\nimby-badlands-server-wt\feat-autorun` |
 | Hands | `feat/hands` | `D:\GitHub\nimby-badlands-server-wt\feat-hands` |
-| Central Scrutinizer | `feat/nimby-admin` | `D:\GitHub\nimby-badlands-server-wt\feat-nimby-admin` |
+| Central Scrutinizer | `feat/nimby-admin` | `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (cut from `feat/nimby-shared`, Plan 3 v0.7) |
 | Puff | `feat/puff` | `D:\GitHub\nimby-badlands-server-wt\feat-puff` |
 | Buzz | `feat/buzz` | `D:\GitHub\nimby-badlands-server-wt\feat-buzz` |
 | Sprout | `feat/sprout` | `D:\GitHub\nimby-badlands-server-wt\feat-sprout` |
@@ -38,8 +38,9 @@ Each mod works on its own branch in its own git worktree under `D:\GitHub\nimby-
 | Tack | `feat/tack` | `D:\GitHub\nimby-badlands-server-wt\feat-tack` |
 | Ears | `feat/ears` | `D:\GitHub\nimby-badlands-server-wt\feat-ears` |
 | Greet | `feat/greet` | `D:\GitHub\nimby-badlands-server-wt\greet` |
+| NimbyShared | `feat/nimby-shared` | `D:\GitHub\nimby-badlands-server-wt\nimby-shared` (created October 31, 2026) |
 
-The fleet convention is `...-wt\feat-<name>`; the Greet worktree was created as `...-wt\greet` on October 25, 2026, matching the newer `ears-r1`, `scrawl-r1`, and `tack-placement` folders rather than the table, so the row records the folder that exists.
+The fleet convention is `...-wt\feat-<name>`; the Greet worktree was created as `...-wt\greet` on October 25, 2026, matching the newer `ears-r1`, `scrawl-r1`, and `tack-placement` folders rather than the table, so the row records the folder that exists. From October 31, 2026 new worktrees use the short form (`nimby-shared`, `nimby-admin`). Orchestrator-owned edits travel on a `docs/*` branch in their own worktree (`docs-cs-kickoff`, October 31, 2026).
 
 ### 2.2. Commit and push policy
 
@@ -64,7 +65,7 @@ Only the orchestrator edits these files. A session that needs a change there ask
 | `scripts/Start-NimbyTestServer.ps1` | The interactive test server every plan's tests run on |
 | `docs/plans/2026-10-15-shared-rules.md` | This file |
 
-Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `testServer` before any worktree branches; the `NimbyAdmin` rows at Central Scrutinizer Phase 0; the Hands rename at Hands Phase 2; one row each for `NimbySmoke`, `NimbySmokeFx`, `NimbyGrow`, `NimbyNotes`, `NimbyTack`, and `NimbyEarplugs` at that addon's Phase 1; the `NimbyGreet` row and the three media include patterns (`*.mp4`, `*.edds`, `*.paa`) at Greet Phase 0.
+Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `testServer` before any worktree branches; the `NimbyShared` row first in `addons`, with a stub addon that passes the self-test gate, in the Plan 11 kickoff pull request (October 31, 2026); the `NimbyAdmin` and `NimbyAdminServer` rows at Central Scrutinizer Phase 0; the Hands rename at Hands Phase 2; one row each for `NimbySmoke`, `NimbySmokeFx`, `NimbyGrow`, `NimbyNotes`, `NimbyTack`, and `NimbyEarplugs` at that addon's Phase 1; the `NimbyGreet` row and the three media include patterns (`*.mp4`, `*.edds`, `*.paa`) at Greet Phase 0.
 
 ## 4. Identifiers
 
@@ -74,7 +75,7 @@ Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `te
 | --- | --- | --- | --- | --- |
 | Legs | Legs | `NimbyAutorun` | `[NIMBY][Autorun]` | `65501xx` (`6550101` toggle, `6550102` server cancellation, `6550103` settings: server to the owning client, `stopOnSwim`, round 3 October 20, 2026) |
 | Hands | Hands (Gimme until October 16, 2026) | `NimbyHands` | `[NIMBY][Hands]` | `65502xx` (reserved; Hands uses the action framework today) |
-| Central Scrutinizer | Central Scrutinizer (Golden God until October 16, 2026) | `NimbyAdmin` | `[NIMBY][Admin]` | `65503xx` (`6550350`-`6550399` reserved for observation feeds, N9) |
+| Central Scrutinizer | Central Scrutinizer (Golden God until October 16, 2026) | `NimbyAdmin` (client) and `NimbyAdminServer` (server-only, `-servermod=`, plan N7) | `[NIMBY][Admin]` on both; the server PBO's self-test component is `AdminServer` (section 8) | `65503xx` (`6550350`-`6550399` reserved for observation feeds, N9) |
 | Puff | Puff | `NimbySmoke` | `[NIMBY][Smoke]` | `65504xx` (reserved; Puff uses the action framework and a script event) |
 | Buzz | Buzz | `NimbySmokeFx` | `[NIMBY][SmokeFx]` | `65508xx` (`6550801` effect sync, server to owning client) |
 | Sprout | Sprout | `NimbyGrow` | `[NIMBY][Grow]` | `65505xx` (reserved) |
@@ -82,6 +83,7 @@ Known `pack.json` edits and their timing: Nasdara mission in `bootCheck` and `te
 | Tack | Tack | `NimbyTack` | `[NIMBY][Tack]` | `65509xx` (reserved; action framework) |
 | Ears | Ears (Hush until October 16, 2026) | `NimbyEarplugs` | `[NIMBY][Earplugs]` | `65507xx` (reserved; client only) |
 | Greet | Greet | `NimbyGreet` | `[NIMBY][Greet]` | `65511xx` (`6551101` request, client to server; `6551102` chunk and `6551103` done, server to the owning client; plan G5) |
+| NimbyShared | none (not player-facing) | `NimbyShared` | `[NIMBY][Shared]` | none; the chunk codec takes the consumer's ids as parameters (Plan 11, C1 and C7) |
 | Menu (dropped) | Menu | `NimbyMenu` | `[NIMBY][Menu]` | `65510xx` (retired, not reused; Menu dropped as obsolete, Jeff, October 27, 2026) |
 
 A display name changes only `mod.cpp`, Workshop text, string tables, and menu titles. Code prefixes, log prefixes, and RPC ids MUST NOT change for a display-name decision.
@@ -105,6 +107,7 @@ Enforce Script has no runtime log level. Each addon MUST read one flag file at m
 | Ears toggle | N (`kN`); `bin/constants.xml:507`; in `bin/preset_X1MouseKey.xml` only as the modifier of the developer brush inputs (`kN` plus wheel, `:881-890`), so a plain press is free | Decided by Jeff (E2), October 16, 2026; was End on October 15 |
 | Puff, Buzz, Sprout, Scrawl, Tack | None; action-menu entries only | Decided |
 | Greet open window | Insert (`kInsert`); `bin/constants.xml:586`; 0 uses in `bin/preset_X1MouseKey.xml`, so a plain press is free. `kF12` is free in game but is Steam's screenshot key and is excluded | Decided by Jeff (G7, Q2), October 25, 2026 |
+| NIMBY window page up and page down | Page Up (`kPrior`) and Page Down (`kNext`); `bin/constants.xml:580,585`. In play they are `UAZeroingUp` and `UAZeroingDown` (`preset_X1MouseKey.xml:311,316`), which every `NimbySharedWindow` force-disables while open (NIMBY-T-058). Declared once, in `NimbyShared/Data/Inputs.xml`, as `UANimbySharedPageUp` and `UANimbySharedPageDown` (Controls label "NIMBY: page the window up/down"); whichever NIMBY window is open reads them. They were Greet's `UANimbyGreetPageUp/Down` (NIMBY-T-057) until Plan 11 Phase 1; a player who rebound those rebinds once | Decided by Jeff, October 31, 2026 (Plan 11 recon, question 1) |
 
 Every NIMBY key binding is player-configurable in game (decided by Jeff, October 16, 2026). Now: every binding is declared in the addon's `Data/Inputs.xml` with a NIMBY group name so it appears in the vanilla Options > Controls page and the player rebinds it there; no script reads a hardcoded key, and every plan's test table has a rebind case (Ears EP-005 is the first proof). The planned shared `NimbyMenu` addon (one NIMBY options page) was dropped as obsolete by Jeff on October 27, 2026: the vanilla Controls page under the NIMBY tab already covers every binding. Its RPC block `65510xx` stays retired.
 
@@ -161,7 +164,7 @@ The tooling below is Plan 0 - shared tooling, owned by the orchestrator and merg
 | Server-mod output | `Build-NimbyPack.ps1` | A second output folder for `-servermod=` PBOs that the Workshop item never contains (section 8.1) |
 | `includePatterns` | `pack.json` | Add `*.layout`; a client menu's layout files MUST be inside the completeness check |
 | Dev harness | `mods/own/dev/NimbyDevHarness/` | Built only with `-Dev`, signed with a separate dev key, never listed in `pack.json` `addons`; the only place forged-request tests live |
-| Self-test | each addon | A `$profile:<Prefix>\selftest` flag runs the addon's engine-free validators at mission start and prints `[NIMBY][<Prefix>][SelfTest] PASS|FAIL <case>`; the boot check fails on any FAIL |
+| Self-test | each addon | A `$profile:<Prefix>\selftest` flag runs the addon's engine-free validators at mission start and prints `[NIMBY][<Prefix>][SelfTest] PASS|FAIL <case>`; the boot check fails on any FAIL. The gate counts one component per `pack.json` `logPrefix`, so a mod split into a client PBO and a server-only PBO gives the server PBO its own component (`AdminServer` for `NimbyAdminServer`, October 31, 2026) while its production lines keep the mod's log prefix |
 
 ### 8.1. Client and server PBO split
 
@@ -173,6 +176,8 @@ Decided by Jeff, October 15, 2026, for Central Scrutinizer. Server-only code (pe
 - HostHavoc support for `-servermod=` is verified in Central Scrutinizer Phase 0 before any server-only code is written.
 
 Legs, Hands, Puff, Buzz, Sprout, Scrawl, Tack, Ears, and Greet stay single-PBO unless their plan records otherwise. Between client PBOs the same reference rule applies: no Puff script MAY reference a Buzz class, so Buzz can be removed without touching Puff.
+
+One exception, ruled by Jeff Fabish on October 31, 2026 (Plan 11, C3): a client PBO MAY reference classes of the shared addon `NimbyShared` (the window shell and the chunk codec) and MUST list `NimbyShared` in its `requiredAddons[]`. `NimbyShared` references no addon. A server-only PBO MAY use the codec, both halves (`NimbySharedChunks` and `NimbySharedChunkSender`), and MUST NOT reference the window shell or the pause-menu registry (amended October 31, 2026, late evening, from the Plan 11 recon: the sender calls `RPCSingleParam` and Central Scrutinizer's server PBO is its first user). A `feat/*` branch for a consumer MUST NOT modify `NimbyShared`; a change to it lands through its own `feat/nimby-shared-*` branch and pull request, and every consumer re-runs its menu rows against the merged result. The removability rule still holds for everything else: removing Greet or Central Scrutinizer never touches `NimbyShared`, and `NimbyShared` is removed only when no consumer remains.
 
 ### 8.2. Tooling as built (October 15, 2026)
 

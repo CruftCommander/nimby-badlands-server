@@ -1,0 +1,11 @@
+NimbyAdminServer (Central Scrutinizer, server half) - original work by Jeff Fabish for
+NIMBY | HARDCORE | BADLANDS | 1pp. Written from scratch against vanilla DayZ 1.30; no code
+from Community Framework, Community Online Tools, or VPP Admin Tools. Server-only: loaded
+with -servermod=, never part of the Workshop item. Will modify the vanilla MissionBase and
+MissionServer classes (Bohemia Interactive) for the self-test hook, connection-time ban
+checks, and the RPC router. No media.
+
+Changes, newest first:
+
+- October 31, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
+  builds with the pack.json row; the body lands from feat/nimby-admin.

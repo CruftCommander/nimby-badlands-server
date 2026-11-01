@@ -10,7 +10,8 @@
 //           A request re-reads the file when the copy is older than rereadSeconds, so an
 //           edit reaches the next joiner without a restart and a burst of joins costs one read.
 //           Each request is rate-limited per identity (requestCooldownSeconds), answered
-//           with the picked language's JSON in CHUNK_BYTES chunks and a done record, or
+//           with the picked language's JSON in CHUNK_BYTES chunks and a done record (sent by
+//           NimbySharedChunkSender, Plan 11 C7), or
 //           with a bare done when the client is dismissed (G4) or there is no text.
 // Note    : NIMBY-T-042: the engine prints its own "SCRIPT (E): JSON ERROR" on a malformed
 //           file no matter what this file does. scripts/Test-GreetText.ps1 is what keeps a
@@ -441,7 +442,7 @@ modded class MissionServer extends MissionBase
                 NimbyGreetDone refused = new NimbyGreetDone();
                 refused.reason = "cooldown";
                 refused.retryAfterSeconds = cooldown - (now - last);
-                player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(refused));
+                NimbySharedChunkSender.SendDone(player, sender, NimbyGreetRules.RPC_DONE, requestId, 0, NimbyGreetDone.ToJson(refused));
                 return;
             }
         }
@@ -455,7 +456,7 @@ modded class MissionServer extends MissionBase
         if (!m_NimbyGreetFile)
         {
             done.reason = "no-text";
-            player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
+            NimbySharedChunkSender.SendDone(player, sender, NimbyGreetRules.RPC_DONE, requestId, 0, NimbyGreetDone.ToJson(done));
             NimbyGreetLog.Info("serve id=" + requestId.ToString() + " chunks=0 reason=no-text asked=" + asked + " manual=" + NimbyGreetLog.Bool(manual) + " " + who);
             return;
         }
@@ -473,7 +474,7 @@ modded class MissionServer extends MissionBase
         if (!open)
         {
             done.reason = "dismissed";
-            player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
+            NimbySharedChunkSender.SendDone(player, sender, NimbyGreetRules.RPC_DONE, requestId, 0, NimbyGreetDone.ToJson(done));
             string dismissedLine = "serve id=" + requestId.ToString() + " chunks=0 reason=dismissed version=" + m_NimbyGreetFile.version.ToString();
             dismissedLine = dismissedLine + " dismissedVersion=" + dismissedVersion.ToString() + " asked=" + asked + " " + who;
             NimbyGreetLog.Info(dismissedLine);
@@ -483,26 +484,20 @@ modded class MissionServer extends MissionBase
         if (!m_NimbyGreetSerialized.Find(served, payload))
         {
             done.reason = "no-text";
-            player.NimbyGreetSendDone(sender, requestId, 0, NimbyGreetDone.ToJson(done));
+            NimbySharedChunkSender.SendDone(player, sender, NimbyGreetRules.RPC_DONE, requestId, 0, NimbyGreetDone.ToJson(done));
             NimbyGreetLog.Info("serve id=" + requestId.ToString() + " chunks=0 reason=no-text (language " + served + " not serialized) " + who);
             return;
         }
-        array<string> chunks;
-        int count = NimbyGreetRules.SplitChunks(payload, NimbyGreetRules.CHUNK_BYTES, chunks);
-        int i = 0;
-        while (i < count)
-        {
-            player.NimbyGreetSendChunk(sender, requestId, i, chunks.Get(i));
-            i = i + 1;
-        }
+        // Plan 11 C7: the done record carries the byte count and hash, so it is filled before the
+        // send; NimbySharedChunkSender sends the chunks, then the done, as before.
         done.totalBytes = payload.Length();
         done.hash = payload.Hash();
         string doneJson = NimbyGreetDone.ToJson(done);
-        if (doneJson.Length() > NimbyGreetRules.CHUNK_BYTES)
+        if (doneJson.Length() > NimbySharedRules.CHUNK_BYTES)
         {
             NimbyGreetLog.Info("done record is " + doneJson.Length().ToString() + " bytes, above CHUNK_BYTES; the client will drop it");
         }
-        player.NimbyGreetSendDone(sender, requestId, count, doneJson);
+        int count = NimbySharedChunkSender.Send(player, sender, NimbyGreetRules.RPC_CHUNK, NimbyGreetRules.RPC_DONE, requestId, payload, doneJson);
         string serveLine = "serve id=" + requestId.ToString() + " asked=" + asked + " served=" + served + " version=" + m_NimbyGreetFile.version.ToString();
         serveLine = serveLine + " chunks=" + count.ToString() + " bytes=" + payload.Length().ToString() + " manual=" + NimbyGreetLog.Bool(manual) + " " + who;
         NimbyGreetLog.Info(serveLine);

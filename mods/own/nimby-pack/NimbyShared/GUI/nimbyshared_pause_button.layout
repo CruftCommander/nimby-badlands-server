@@ -1,4 +1,4 @@
-ButtonWidgetClass nimbygreetbtn {
+ButtonWidgetClass nimbysharedbtn {
  visible 1
  ignorepointer 0
  color 0 0 0 0
@@ -9,7 +9,7 @@ ButtonWidgetClass nimbygreetbtn {
  hexactsize 0
  vexactsize 1
  {
-  PanelWidgetClass nimbygreetbtn_panel {
+  PanelWidgetClass nimbysharedbtn_panel {
    ignorepointer 1
    color 0 0 0 0
    position 0 0
@@ -20,7 +20,7 @@ ButtonWidgetClass nimbygreetbtn {
    vexactsize 0
    style DayZDefaultPanel
   }
-  TextWidgetClass nimbygreetbtn_label {
+  TextWidgetClass nimbysharedbtn_label {
    clipchildren 0
    ignorepointer 1
    size 1 0.55
@@ -30,7 +30,7 @@ ButtonWidgetClass nimbygreetbtn {
    vexactpos 1
    hexactsize 0
    vexactsize 0
-   text "#STR_NimbyGreet_PauseButton"
+   text ""
    font "gui/fonts/sdf_MetronLight72"
    "text halign" center
    "text valign" center

@@ -1,0 +1,18 @@
+NimbyShared - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+The shared client addon of the @NIMBY pack: the window shell (a UIScriptedMenu base class), a
+pause-menu button registry over the vanilla DayZ 1.30 InGameMenu class (Bohemia Interactive),
+the two page keys every NIMBY window reads, and the chunked RPC codec, all extracted from
+NimbyGreet (plan docs/plans/2026-10-31-nimby-shared-plan.md). Will modify the vanilla
+InGameMenu and MissionBase classes. No third-party mod code; no media; no string table.
+
+Changes, newest first:
+
+- October 31, 2026, Plan 11 Phase 1: the body. NimbySharedWindow (from NimbyGreetMenu), the
+  pause-menu registry (from Greet's modded InGameMenu), NimbySharedChunks,
+  NimbySharedChunkReceiver and NimbySharedChunkSender (from NimbyGreetRules, NimbyGreetFetch
+  and Greet's send loop), the window, section-button and pause-button layouts (from Greet's),
+  and the page keys UANimbySharedPageUp and UANimbySharedPageDown (replacing Greet's
+  UANimbyGreetPageUp and UANimbyGreetPageDown, same default keys). The chunk and receiver
+  self-test cases moved here from Greet with their names unchanged.
+- October 31, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
+  builds with the pack.json row; the body lands from feat/nimby-shared.

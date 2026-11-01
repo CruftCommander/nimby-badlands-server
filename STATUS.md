@@ -1,6 +1,6 @@
 # Status
 
-Updated October 27, 2026. For how things got here, read the git log and `docs/operations/`;
+Updated October 31, 2026 (the Not yet built section; the rest is October 27). For how things got here, read the git log and `docs/operations/`;
 the decision record is the Notion hub "DayZ Badlands Server - Project Hub".
 
 ## Live
@@ -44,9 +44,13 @@ the decision record is the Notion hub "DayZ Badlands Server - Project Hub".
 
 ## Not yet built
 
-- **NimbyKit** (test-item kit): brief at `docs/plans/2026-10-26-testkit-brief.md`; a separate
-  server-only addon, live only in announced test windows. Needs an identifiers row in shared
-  rules 4.1 first (orchestrator-owned).
-- **Central Scrutinizer** (admin tool): takes the next build slot after the kit; no other
-  Phase 0 runs in parallel with it.
+- **NimbyShared** (shared window shell and chunk codec, Plan 11,
+  `docs/plans/2026-10-31-nimby-shared-plan.md`): in flight on `feat/nimby-shared` since
+  October 31, 2026. Extracted from Greet first; Greet is refactored onto it with no visible
+  change and ships in its own PR with the next live patch.
+- **Central Scrutinizer** (admin tool, Plan 3 v0.7): takes the build slot after NimbyShared
+  Phase 1; its menu is a `NimbySharedWindow`. No other Phase 0 runs in parallel with it.
+- **NimbyKit** (test-item kit): not built as its own addon. Absorbed into Central
+  Scrutinizer Phase 2 as `spawn.kit` (Jeff, October 31, 2026; Plan 3 N17); the brief stays
+  as the record of the item list.
 - **Tweaker** (vanilla tweaks), **Beards** (model project): on the mod board, not scheduled.

@@ -1,6 +1,6 @@
 # Next actions
 
-Updated October 28, 2026, 23:10 Central.
+Updated October 31, 2026 (item 0 is October 28, item 7 is October 31; the rest is October 27).
 
 0. **Patch 1 is blocked on NIMBY-T-063 (Hands step 2 crashes the server).** PR #12
    (`fix/hands-t063-tack-t065`, three commits) holds the step 1 wait that works, the Tack
@@ -41,8 +41,12 @@ Updated October 28, 2026, 23:10 Central.
    back (S6-08 to S6-11 on live). Record in the six-addon session doc.
 5. Greet NIMBY-T-059 diagnostic build (client render cap on long bodies).
 6. Hands NIMBY-T-010 two-client rows (S6-20 to S6-23) when the second client is available.
-7. NimbyKit: orchestrator adds the identifiers row to shared rules 4.1, then build per
-   `docs/plans/2026-10-26-testkit-brief.md`.
+7. NimbyShared, then Central Scrutinizer (Jeff, October 31, 2026). The Claude Code seat in
+   `D:\GitHub\nimby-badlands-server-wt\nimby-shared` runs Plan 11 Phase 0 (recon and the
+   move list, then the orchestrator's go) and Phase 1 (the addon, the Greet refactor, the
+   Greet regression rows SH-01 to SH-14); PR to `main`. Central Scrutinizer Phase 0 (Plan 3
+   v0.7) starts when Plan 11 Phase 1 passes, in a `nimby-admin` worktree cut from
+   `feat/nimby-shared`. NimbyKit is absorbed as `spawn.kit` (Plan 3 N17); no separate build.
 8. Jeff: rule on the Halloween overlay (recommended: skip this year). If wanted, port
    `halloweenOffline.sakhal` rows, log each in `LOOT-CHANGELOG.md`, apply at a restart,
    revert after November 6.

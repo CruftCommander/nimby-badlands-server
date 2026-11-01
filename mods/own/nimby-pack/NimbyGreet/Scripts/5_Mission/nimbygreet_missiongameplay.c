@@ -29,7 +29,9 @@
 
 modded class MissionGameplay extends MissionBase
 {
-    protected ref NimbyGreetFetch m_NimbyGreetFetch;
+    protected ref NimbySharedChunkReceiver m_NimbyGreetFetch;   // Plan 11 C7: the NimbyShared receiver
+    protected bool m_NimbyGreetFetchManual;
+    protected ref NimbyGreetDone m_NimbyGreetFetchDone;
     protected ref NimbyGreetSeen m_NimbyGreetSeen;
     protected ref NimbyGreetPrefs m_NimbyGreetPrefs;
     // The persistent handle, not the raw UAInput: vanilla keeps GetPersistentWrapper() and
@@ -57,7 +59,8 @@ modded class MissionGameplay extends MissionBase
     {
         super.OnInit();
         NimbyGreetDeferred.s_Connection = NimbyGreetDeferred.s_Connection + 1;   // NIMBY-T-052
-        m_NimbyGreetFetch = new NimbyGreetFetch();
+        m_NimbyGreetFetch = new NimbySharedChunkReceiver(NimbyGreetRules.MAX_PAYLOAD_BYTES);
+        NimbySharedPauseButtons.Register(new NimbyGreetPauseEntry());   // G7, Plan 11 C6
         m_NimbyGreetSeen = NimbyGreetClientFiles.LoadSeen();
         m_NimbyGreetPrefs = NimbyGreetClientFiles.LoadPrefs();
         if (GetUApi())
@@ -190,7 +193,9 @@ modded class MissionGameplay extends MissionBase
         m_NimbyGreetOpenPending = false;
         m_NimbyGreetPendingSource = source;
         string language = NimbyGreetRequestLanguage();
-        m_NimbyGreetFetch.Begin(requestId, language, manual, GetGame().GetTickTime());
+        m_NimbyGreetFetch.Begin(requestId, GetGame().GetTickTime());
+        m_NimbyGreetFetchManual = manual;
+        m_NimbyGreetFetchDone = null;
         player.NimbyGreetSendRequest(requestId, language, m_NimbyGreetSeen.dismissedVersion, m_NimbyGreetSeen.neverShow, manual);
         // The handler acts only on the request still in flight, so an older timeout is a no-op.
         g_Game.GetCallQueue(CALL_CATEGORY_GUI).CallLater(NimbyGreetDeferred.Fire, NimbyGreetRules.FETCH_TIMEOUT_MS, false, NimbyGreetDeferred.FETCH_TIMEOUT, NimbyGreetDeferred.s_Connection, requestId);
@@ -211,7 +216,9 @@ modded class MissionGameplay extends MissionBase
         string gaveUp = "fetch gave up id=" + requestId.ToString() + " received=" + m_NimbyGreetFetch.m_Received.ToString() + " of " + m_NimbyGreetFetch.m_ChunkCount.ToString();
         gaveUp = gaveUp + " doneSeen=" + NimbyGreetLog.Bool(m_NimbyGreetFetch.m_DoneSeen) + " source=" + m_NimbyGreetPendingSource + " (Insert sends a new request)";
         NimbyGreetLog.Info(gaveUp);
-        m_NimbyGreetFetch.Begin(0, "", false, 0.0);
+        m_NimbyGreetFetch.Begin(0, 0.0);
+        m_NimbyGreetFetchManual = false;
+        m_NimbyGreetFetchDone = null;
     }
 
     void NimbyGreetOnChunk(int requestId, int index, string text)
@@ -243,12 +250,21 @@ modded class MissionGameplay extends MissionBase
         {
             NimbyGreetLog.Info("done record unreadable id=" + requestId.ToString() + ": " + error);
         }
+        bool readable = done != null;
+        int totalBytes = 0;
+        int hash = 0;
+        if (readable)
+        {
+            totalBytes = done.totalBytes;
+            hash = done.hash;
+        }
         string why;
-        if (!m_NimbyGreetFetch.AcceptDone(requestId, chunkCount, done, GetGame().GetTickTime(), why))
+        if (!m_NimbyGreetFetch.AcceptDone(requestId, chunkCount, readable, totalBytes, hash, GetGame().GetTickTime(), why))
         {
             NimbyGreetLog.Debug("done dropped id=" + requestId.ToString() + " why=" + why);
             return;
         }
+        m_NimbyGreetFetchDone = done;
         string doneLine = "done id=" + requestId.ToString() + " chunkCount=" + chunkCount.ToString() + " version=" + done.version.ToString();
         doneLine = doneLine + " served=" + done.servedLanguage + " reason=" + done.reason + " received=" + m_NimbyGreetFetch.m_Received.ToString();
         NimbyGreetLog.Debug(doneLine);
@@ -260,8 +276,8 @@ modded class MissionGameplay extends MissionBase
 
     protected void NimbyGreetOnPayloadComplete()
     {
-        NimbyGreetDone done = m_NimbyGreetFetch.m_Done;
-        bool manual = m_NimbyGreetFetch.m_Manual;
+        NimbyGreetDone done = m_NimbyGreetFetchDone;
+        bool manual = m_NimbyGreetFetchManual;
         if (m_NimbyGreetFetch.m_ChunkCount == 0)
         {
             if (done.reason == "cooldown")
