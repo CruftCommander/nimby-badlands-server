@@ -57,6 +57,7 @@ class NimbyAdminServerCore
     protected static ref map<string, ref NimbyAdminServerSession> s_Sessions;
     protected static ref map<string, ref NimbyAdminServerBucket> s_Rates;
     protected static ref NimbyAdminServerBucket s_Aggregate;
+    protected static ref NimbyAdminServerBucket s_DenialAggregate;
     protected static int s_NextSession = 1;
 
     // ---- lifecycle (MissionServer, nimbyadminserver_missionserver.c) ----------------------------
@@ -66,6 +67,7 @@ class NimbyAdminServerCore
         s_Sessions = new map<string, ref NimbyAdminServerSession>;
         s_Rates = new map<string, ref NimbyAdminServerBucket>;
         s_Aggregate = new NimbyAdminServerBucket();
+        s_DenialAggregate = new NimbyAdminServerBucket();
         NimbyAdminServerFiles.EnsureDirs();
         s_Config = NimbyAdminServerFiles.LoadConfig();
         NimbyAdminServerDiscord.Init(s_Config);
@@ -336,14 +338,15 @@ class NimbyAdminServerCore
         }
     }
 
-    // A denied or invalid request: one audit result record (bounded per sender), one gated line,
+    // A denied or invalid request: one audit result record (bounded per sender and in aggregate),
+    // one gated line,
     // and the result to the sender (plan line 3).
     protected static void Reject(NimbyAdminServerActor actor, NimbyAdminServerSession session, int requestId, string command, int code, string reason)
     {
         string resultName = NimbyAdminRules.CodeName(code);
         NimbyAdminLog.Gated("reject:" + actor.biId, "request " + resultName + " id=" + requestId.ToString() + " command=" + command + " reason=" + reason + " " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
         float now = GetGame().GetTickTime();
-        if (session.denials.Take(now, NimbyAdminServerRules.DENIAL_RECORDS_PER_SECOND, NimbyAdminServerRules.DENIAL_RECORDS_BURST))
+        if (NimbyAdminServerRules.DenialRecordAllowed(session.denials, s_DenialAggregate, now))
         {
             NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, command, "result");
             record.result = resultName;

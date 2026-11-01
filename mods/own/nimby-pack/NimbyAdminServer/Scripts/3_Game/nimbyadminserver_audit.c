@@ -5,10 +5,13 @@
 //           append succeeded; "result" follows. A denied or invalid request writes one "result"
 //           record (plan line 3). One OpenFile per record (APPEND, FPrintln, CloseFile), so a
 //           crash loses at most the record being written.
-// Verify  : FPrintln and CloseFile return nothing (EnSystem.c:481, :443), so after the close the
-//           day file is opened again and its last line compared with the record just written;
-//           Append is true only on a match (review finding 4, October 31, 2026). One extra read
-//           per record, at admin-command rates.
+// Verify  : FPrintln and CloseFile return nothing (EnSystem.c:481, :443), so after an intent
+//           record the day file is opened again and its last line compared with the record just
+//           written; Append is true only on a match (review finding 4, October 31, 2026). One
+//           extra read per intent, at admin-command rates; result records are not read back
+//           (they gate nothing). The readback reads the whole day file: 1.30 has no seek or size
+//           call. Denied and invalid records are capped per sender and in aggregate (core), which
+//           bounds how far non-admins can grow the file.
 // Limit   : the readback proves the record reached the file, not that it survives a crash or a
 //           power cut (recon R5, kept as a stated limitation).
 // Engine  : OpenFile with FileMode.APPEND and READ (1_Core/DayZ/proto/EnSystem.c:417, :382-386),
@@ -129,7 +132,12 @@ class NimbyAdminServerAudit
         return NimbyAdminServerRules.DIR_AUDIT + "\\audit-" + isoUtc.Substring(0, 10) + ".log";
     }
 
-    // False when the record could not be appended; the caller blocks the state change.
+    // False when the record could not be appended; the caller blocks the state change. Only an
+    // intent record is read back (finding 4): it is the one append whose result gates a state
+    // change, and only an authorized admin can cause one, at the sender rate. A result record's
+    // return value gates nothing, so it is not read back; this keeps the readback, which reads
+    // the whole day file (1.30 has no seek or size call, EnSystem.c:397-531), off the paths a
+    // non-admin can drive (security review of 1180702).
     static bool Append(NimbyAdminServerAuditRecord record)
     {
         if (record.ts == "")
@@ -137,26 +145,13 @@ class NimbyAdminServerAudit
             record.ts = NowUtc();
         }
         string path = PathFor(record.ts);
-        FileHandle handle = OpenFile(path, FileMode.APPEND);
-        if (handle == 0)
+        string why = WriteLine(path, record.ToJson(), record.phase == "intent");
+        if (why != "")
         {
             if (!s_Failing)
             {
                 s_Failing = true;
-                NimbyAdminLog.Info("audit unavailable: cannot open " + path + " for append");
-            }
-            return false;
-        }
-        string json = record.ToJson();
-        FPrintln(handle, json);
-        CloseFile(handle);
-        string last;
-        if (!ReadLastLine(path, last) || !IsLastRecord(last, json))
-        {
-            if (!s_Failing)
-            {
-                s_Failing = true;
-                NimbyAdminLog.Info("audit unavailable: the record just appended could not be read back from " + path);
+                NimbyAdminLog.Info("audit unavailable: " + why);
             }
             return false;
         }
@@ -166,6 +161,30 @@ class NimbyAdminServerAudit
             NimbyAdminLog.Info("audit available again: " + path);
         }
         return true;
+    }
+
+    // Appends one line; with verify, re-opens the file and requires its last line to be that
+    // line. "" on success, else why (names the path, never the content). Also the self-test's
+    // engine case, on a scratch file.
+    static string WriteLine(string path, string json, bool verify)
+    {
+        FileHandle handle = OpenFile(path, FileMode.APPEND);
+        if (handle == 0)
+        {
+            return "cannot open " + path + " for append";
+        }
+        FPrintln(handle, json);
+        CloseFile(handle);
+        if (!verify)
+        {
+            return "";
+        }
+        string last;
+        if (!ReadLastLine(path, last) || !IsLastRecord(last, json))
+        {
+            return "the record just appended could not be read back from " + path;
+        }
+        return "";
     }
 
     // The last non-empty line of the file; false when it cannot be opened or holds none.

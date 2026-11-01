@@ -439,6 +439,48 @@ class NimbyAdminServerSelfTest
         noList.Load(0, problem);
         failures += Case(results, "bans: an unreadable bans.json with no .lkg is no usable list (ruling 3)", noList.m_Source == "none" && noList.m_EditsRefused && noList.NoUsableList());
         failures += ShapeCases(results);
+        failures += EngineCases(results);
+        return failures;
+    }
+
+    // The one engine case (security review of 1180702): the finding 4 readback reads lines with
+    // FGets, and a line FGets cut short would block every command. A real audit record stays near
+    // 1,000 bytes at most; this writes and reads back 1,500 bytes through the same WriteLine, on a
+    // scratch file in this addon's self-test folder, deleted after.
+    static const string ENGINE_FILE = "$profile:NimbyAdminServer\\selftest-audit.tmp";
+
+    protected static int EngineCases(array<string> results)
+    {
+        int failures = 0;
+        if (FileExist(ENGINE_FILE))
+        {
+            DeleteFile(ENGINE_FILE);
+        }
+        string longLine = "{\"id\":\"" + NimbySharedChunks.FillBytes("x", 1491) + "\"}";
+        string first = NimbyAdminServerAudit.WriteLine(ENGINE_FILE, "{\"id\":\"1\"}", true);
+        string second = NimbyAdminServerAudit.WriteLine(ENGINE_FILE, longLine, true);
+        string third = NimbyAdminServerAudit.WriteLine(ENGINE_FILE, "{\"id\":\"3\"}", true);
+        failures += Case(results, "engine: an appended line of " + longLine.Length().ToString() + " bytes reads back whole as the last line", first == "" && second == "" && longLine.Length() == 1500);
+        failures += Case(results, "engine: after it a short line is the last line", third == "");
+        DeleteFile(ENGINE_FILE);
+        NimbyAdminServerBucket sender = new NimbyAdminServerBucket();
+        NimbyAdminServerBucket all = new NimbyAdminServerBucket();
+        int kept = 0;
+        int n = 0;
+        while (n < 100)
+        {
+            if (NimbyAdminServerRules.DenialRecordAllowed(sender, all, 50.0))
+            {
+                kept = kept + 1;
+            }
+            n = n + 1;
+        }
+        int allLeft = 0;
+        while (all.Take(50.0, NimbyAdminServerRules.DENIAL_RECORDS_AGGREGATE_PER_SECOND, NimbyAdminServerRules.DENIAL_RECORDS_AGGREGATE_BURST))
+        {
+            allLeft = allLeft + 1;
+        }
+        failures += Case(results, "denial records: one sender keeps 30 and spends 30 of the 120 aggregate", kept == 30 && allLeft == 90);
         return failures;
     }
 

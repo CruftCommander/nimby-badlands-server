@@ -26,9 +26,13 @@ class NimbyAdminServerRules
     static const int RATE_BURST = 10;
     static const float AGGREGATE_PER_SECOND = 40.0;
     static const int AGGREGATE_BURST = 80;
-    // Denied and invalid audit records per sender: 30 a minute (recon 4.3, disk bound).
+    // Denied and invalid audit records per sender: 30 a minute (recon 4.3, disk bound). In
+    // aggregate over all senders: 120 a minute (security review of 1180702: bounds the day file a
+    // finding 4 readback reads; at most about 173,000 such records a day).
     static const float DENIAL_RECORDS_PER_SECOND = 0.5;
     static const int DENIAL_RECORDS_BURST = 30;
+    static const float DENIAL_RECORDS_AGGREGATE_PER_SECOND = 2.0;
+    static const int DENIAL_RECORDS_AGGREGATE_BURST = 120;
     // Replay window per sender per connection (recon 4.3 step 7; review finding 1, October 31,
     // 2026): the last SEEN_MAX accepted ids, no time-based expiry.
     static const int SEEN_MAX = 256;
@@ -238,6 +242,17 @@ class NimbyAdminServerRules
             return LIMIT_AGGREGATE;
         }
         return "";
+    }
+
+    // The denied and invalid audit-record limit: the sender's bucket first, then the aggregate
+    // (the finding 5 order, so one sender cannot spend the aggregate for everyone else).
+    static bool DenialRecordAllowed(NimbyAdminServerBucket sender, NimbyAdminServerBucket aggregate, float now)
+    {
+        if (!sender.Take(now, DENIAL_RECORDS_PER_SECOND, DENIAL_RECORDS_BURST))
+        {
+            return false;
+        }
+        return aggregate.Take(now, DENIAL_RECORDS_AGGREGATE_PER_SECOND, DENIAL_RECORDS_AGGREGATE_BURST);
     }
 
     // Review finding 6: the role sync line is written once per connection (the session's first
