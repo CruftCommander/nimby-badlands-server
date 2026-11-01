@@ -699,7 +699,6 @@ class NimbyHandsServer
     static bool MoveStep2(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
     {
         string idText = transfer.id.ToString();
-        s_Step2CanaryTripped = false;
         // Build 16: the copies, taken before the first native. Build 17: the baselines are the
         // STAGED copies when the transfer has them (production always does; a forged entry too,
         // through RecordStaged), so a slot damaged between STAGED and this call reads CHANGED at
@@ -806,6 +805,34 @@ class NimbyHandsServer
         }
         NimbyHandsLog.Info("id=" + idText + " canary tick: " + verdict + ", staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString() + " giverProcessing=" + NimbyHandsLog.Bool(processing));
         Quarantine(transfer, idText, "step 2 poll, " + agoMs.ToString() + " ms after STAGED", transfer.itemAtStaged, transfer.receiverAtStaged, transfer.giverId, transfer.receiverId, transfer.itemTextAtStaged);
+        return true;
+    }
+
+    // Build 18 (November 1, 2026): one canary at a named step of the final poll tick (after IsFree,
+    // after each native group in CollectStep2Facts). Pointer compares against the STAGED copies;
+    // an ok step writes one debug line, the first CHANGED writes the Info line, quarantines the
+    // entry and sets the trip flag, so RunStep2 stops before the move. Returns true when tripped
+    // (by this step or an earlier one in the same tick).
+    static bool StepCanary(NimbyHandsWorldTransfer transfer, string point)
+    {
+        if (!transfer || !transfer.staged)
+        {
+            return false;
+        }
+        if (s_Step2CanaryTripped)
+        {
+            return true;
+        }
+        string idText = transfer.id.ToString();
+        string verdict = CompareBaselines(transfer, transfer.giverAtStaged, transfer.itemAtStaged, transfer.receiverAtStaged);
+        if (verdict == NimbyHandsRules.CANARY_OK)
+        {
+            NimbyHandsLog.Debug("id=" + idText + " canary " + point + ": ok");
+            return false;
+        }
+        s_Step2CanaryTripped = true;
+        NimbyHandsLog.Info("id=" + idText + " canary " + point + ": " + verdict);
+        Quarantine(transfer, idText, "step 2 " + point, transfer.itemAtStaged, transfer.receiverAtStaged, transfer.giverId, transfer.receiverId, transfer.itemTextAtStaged);
         return true;
     }
 
@@ -1100,6 +1127,7 @@ class NimbyHandsServer
             int agoMs = nowMs - transfer.stagedAtMs;
             // Build 17 (November 1, 2026): the canary runs before anything reads the giver. On a
             // CHANGED tick the entry is quarantined and this tick leaves it alone.
+            s_Step2CanaryTripped = false;
             if (TickCanary(transfer, agoMs))
             {
                 continue;
@@ -1108,6 +1136,13 @@ class NimbyHandsServer
             // reads IsProcessing and the action commands on the giver; those natives passed in
             // CollectStep2Facts on every run since the client-driven step 1.
             bool giverIdle = IsFree(transfer.giver, true);
+            // Build 18 (November 1, 2026): run 202718 read every tick canary ok and the MoveStep2 entry
+            // canary CHANGED, so the giver slot is damaged inside this tick, in IsFree or in
+            // CollectStep2Facts. One canary after each step names the one.
+            if (StepCanary(transfer, "after IsFree"))
+            {
+                continue;
+            }
             int verdict = NimbyHandsRules.Step2Verdict(agoMs, NimbyHandsConstants.STEP2_DELAY_MS, giverIdle);
             if (verdict == NimbyHandsRules.STEP2_WAIT)
             {
@@ -1132,6 +1167,8 @@ class NimbyHandsServer
             NimbyHandsLog.Debug("step 2 skipped id=" + id.ToString() + " (request no longer staged)");
             return;
         }
+        // Build 18: the dev harness enters here directly, so the trip flag is reset here as well.
+        s_Step2CanaryTripped = false;
         NimbyHandsMoveItemToPlayer.RunStep2(transfer);
     }
 

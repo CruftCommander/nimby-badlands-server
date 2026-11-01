@@ -458,6 +458,12 @@ class NimbyHandsMoveItemToPlayer
         InventoryLocation src = new InventoryLocation;
         InventoryLocation dst = new InventoryLocation;
         NimbyHandsRequestFacts facts = CollectStep2Facts(transfer, src, dst);
+        if (NimbyHandsServer.Step2CanaryTripped())
+        {
+            // Build 18: a step canary inside the facts found the damage; the entry is quarantined
+            // and nothing here reads or writes the transfer again, and the move does not run.
+            return;
+        }
         string refusal = NimbyHandsRules.CheckRequest(facts, NimbyHandsRules.STEP2);
         if (refusal != "")
         {
@@ -502,6 +508,9 @@ class NimbyHandsMoveItemToPlayer
         PlayerBase giver = transfer.giver;
         PlayerBase receiver = transfer.receiver;
         f.forcedRefusal = NimbyHandsServer.TakeForcedStep2Refusal();
+        // Build 18 (November 1, 2026): a canary after each native group of this function; run 202718
+        // placed the damage to the giver slot between the top of the final poll tick and MoveStep2.
+        NimbyHandsServer.StepCanary(transfer, "after TakeForcedStep2Refusal");
         if (f.forcedRefusal)
         {
             return f;
@@ -513,7 +522,9 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.giverParty = CheckPlayer("giver", giver);
+        NimbyHandsServer.StepCanary(transfer, "after CheckPlayer giver");
         f.receiverParty = CheckPlayer("receiver", receiver);
+        NimbyHandsServer.StepCanary(transfer, "after CheckPlayer receiver");
         if (f.giverParty != "" || f.receiverParty != "")
         {
             return f;
@@ -521,6 +532,7 @@ class NimbyHandsMoveItemToPlayer
         f.samePlayer = giver == receiver;
         f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != transfer.expectedGiverId;
         f.receiverReplaced = transfer.hasExpected && transfer.expectedReceiverId != "" && NimbyHandsActionData.IdentityId(receiver) != transfer.expectedReceiverId;
+        NimbyHandsServer.StepCanary(transfer, "after IdentityId");
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
             return f;
@@ -531,11 +543,13 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         FillReach(f, giver, receiver, transfer.reach);
+        NimbyHandsServer.StepCanary(transfer, "after FillReach");
         if (!f.withinReach)
         {
             return f;
         }
         f.locationKnown = transfer.item.GetInventory().GetCurrentInventoryLocation(src);
+        NimbyHandsServer.StepCanary(transfer, "after GetCurrentInventoryLocation");
         if (!f.locationKnown)
         {
             return f;
@@ -548,6 +562,7 @@ class NimbyHandsMoveItemToPlayer
         NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: location read");
         f.itemAtSource = NimbyHandsServer.IsAtStagedLocation(transfer, src);
         NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: at source=" + NimbyHandsLog.Bool(f.itemAtSource));
+        NimbyHandsServer.StepCanary(transfer, "after IsAtStagedLocation");
         f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
         if (!f.itemAtSource || f.itemReplaced)
         {
@@ -555,14 +570,18 @@ class NimbyHandsMoveItemToPlayer
         }
         f.giverBusy = false;
         f.receiverHasSpace = receiver.GetInventory().FindFreeLocationFor(transfer.item, transfer.destinationFlags, dst);
+        NimbyHandsServer.StepCanary(transfer, "after FindFreeLocationFor");
         f.destinationText = NimbyHandsServer.DescribeLocation(dst);
+        NimbyHandsServer.StepCanary(transfer, "after DescribeLocation dst");
         if (!f.receiverHasSpace)
         {
             return f;
         }
         f.giverHasSpace = true;
         f.engineAllows = GameInventory.LocationCanMoveEntity(src, dst);
+        NimbyHandsServer.StepCanary(transfer, "after LocationCanMoveEntity");
         f.reserved = false;
+        NimbyHandsServer.StepCanary(transfer, "after facts written");
         return f;
     }
 
