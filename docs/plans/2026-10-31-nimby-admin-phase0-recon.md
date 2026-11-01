@@ -290,3 +290,8 @@ Next (Part 3): unchanged from the 00:25 status.
 - FAIL: the three dev-harness rows (forged requests do not reach the router), the Discord evidence (duplicate posts; a 404 classed `other`, not `client`); proof 2 PARTIAL; proof 4 script PASS, visual NOT CONFIRMED.
 - Next, after Jeff's go/no-go: the fix round (harness, Discord `?wait=true` and timeout-only retry, sandstorm visual), then a rerun. Details in the test record, section Gate session.
 
+## Status, November 1, 2026, 17:40 (Phase 0 gate closed, waiting on Jeff's go/no-go)
+
+- Fix round and two reruns after the gate session: harness forge format (`a974118`), Discord `wait=true` and timeout-only retry (`678c70a`), sandstorm per the vanilla dev command (`d516b1a`), harness arguments as locals for the 164200 argument-slot behavior (`23b4e46`). Final gate build `@NIMBY-20261101-163708`, 865/865 on the replica.
+- Every gate row passes on its required result; item 3 proofs 1, 2, 3 and 5 PASS; proof 4's visual is not verifiable in Phase 0 and moved to Phase 3 (Plan 3 v0.10). The test record carries the open items and a verdict paragraph recommending go for Phase 1.
+
