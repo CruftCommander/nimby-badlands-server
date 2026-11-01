@@ -360,6 +360,7 @@ class NimbyAdminServerCore
             NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES), "result");
             record.result = resultName;
             record.reason = reason;
+            record.denied = true;
             NimbyAdminServerAudit.Append(record);
         }
         else
@@ -393,6 +394,7 @@ class NimbyAdminServerCore
         record.result = "ok";
         record.reason = "denial record limit";
         record.effects = s_Suppressed.EffectsJson();
+        record.denied = true;
         int total = s_Suppressed.Total();
         int senders = s_Suppressed.Senders();
         bool appended = NimbyAdminServerAudit.Append(record);

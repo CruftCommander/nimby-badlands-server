@@ -235,10 +235,49 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "audit: an effects object is valid JSON text", effects.ToJson() == "{\"offset\":\"behind\",\"n\":2}");
         failures += Case(results, "audit readback: the record read back matches, also with a CR or LF left on", NimbyAdminServerAudit.IsLastRecord(denied, denied) && NimbyAdminServerAudit.IsLastRecord(denied + "\r", denied) && NimbyAdminServerAudit.IsLastRecord(denied + "\r\n", denied));
         failures += Case(results, "audit readback: another record, a cut record, or nothing does not match (finding 4)", !NimbyAdminServerAudit.IsLastRecord(intent, denied) && !NimbyAdminServerAudit.IsLastRecord(denied.Substring(0, denied.Length() - 1), denied) && !NimbyAdminServerAudit.IsLastRecord("", denied) && !NimbyAdminServerAudit.IsLastRecord("", ""));
+        failures += Case(results, "audit files: a record marked denied is the same JSON shape as an unmarked one", denied == DeniedCopy(record));
+        failures += AuditFileCases(results);
         string payload = NimbyAdminServerRules.DiscordPayload("@everyone hi \"x\"");
         failures += Case(results, "discord: mentions are disabled and text escaped", payload == "{\"content\":\"@everyone hi \\\"x\\\"\",\"allowed_mentions\":{\"parse\":[]}}");
         string longPayload = NimbyAdminServerRules.DiscordPayload(NimbySharedChunks.FillBytes("x", 3000));
         failures += Case(results, "discord: text is cut to 1,900 bytes", longPayload.Length() == 1900 + 46);
+        return failures;
+    }
+
+    protected static string DeniedCopy(NimbyAdminServerAuditRecord record)
+    {
+        bool was = record.denied;
+        record.denied = true;
+        string json = record.ToJson();
+        record.denied = was;
+        return json;
+    }
+
+    protected static NimbyAdminServerAuditRecord FileCase(string phase, bool denied)
+    {
+        NimbyAdminServerAuditRecord record = new NimbyAdminServerAuditRecord();
+        record.phase = phase;
+        record.ts = "2026-11-01T12:00:00Z";
+        record.denied = denied;
+        return record;
+    }
+
+    // Re-review finding 13: the file-selection rule. Before the fix every record went to the one
+    // day file the intent readback reads.
+    protected static int AuditFileCases(array<string> results)
+    {
+        int failures = 0;
+        string commandPath = NimbyAdminServerRules.DIR_AUDIT + "\\audit-2026-11-01.log";
+        string deniedPath = NimbyAdminServerRules.DIR_AUDIT + "\\audit-denied-2026-11-01.log";
+        NimbyAdminServerAuditRecord intent = FileCase("intent", false);
+        NimbyAdminServerAuditRecord ran = FileCase("result", false);
+        NimbyAdminServerAuditRecord refused = FileCase("result", true);
+        NimbyAdminServerAuditRecord summary = FileCase("result", true);
+        summary.command = "audit.suppressed";
+        NimbyAdminServerAuditRecord markedIntent = FileCase("intent", true);
+        failures += Case(results, "audit files: an intent and its executed result go to audit-<date>.log", NimbyAdminServerAudit.PathFor(intent.ts, NimbyAdminServerAudit.StreamFor(intent)) == commandPath && NimbyAdminServerAudit.PathFor(ran.ts, NimbyAdminServerAudit.StreamFor(ran)) == commandPath);
+        failures += Case(results, "audit files: a denied or invalid result and a suppression summary go to audit-denied-<date>.log", NimbyAdminServerAudit.PathFor(refused.ts, NimbyAdminServerAudit.StreamFor(refused)) == deniedPath && NimbyAdminServerAudit.PathFor(summary.ts, NimbyAdminServerAudit.StreamFor(summary)) == deniedPath);
+        failures += Case(results, "audit files: an intent record always goes to the command file the readback reads", NimbyAdminServerAudit.StreamFor(markedIntent) == NimbyAdminServerAudit.STREAM_COMMAND);
         return failures;
     }
 

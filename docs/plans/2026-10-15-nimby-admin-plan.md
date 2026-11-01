@@ -1,11 +1,13 @@
 # Plan 3 - Central Scrutinizer (`NimbyAdmin`)
 
-Draft v0.8, October 31, 2026 (night; v0.7 the same day). Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (branch `feat/nimby-admin`, cut from `feat/nimby-shared` once Plan 11 Phase 1 passes, rebased onto `main` after Plan 11 merges), coordinated by the orchestrator; a Codex session reviews the security contract read-only at the Phase 0 gate (N18). Status: Phase 0 Stop B (the vertical slice) in progress on `feat/nimby-admin` after the recon was accepted on October 31, 2026. Plan 0 (shared tooling) has been on `main` since October 15, 2026.
+Draft v0.9, November 1, 2026 (v0.8 and v0.7 October 31). Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-admin` (branch `feat/nimby-admin`, cut from `feat/nimby-shared` once Plan 11 Phase 1 passes, rebased onto `main` after Plan 11 merges), coordinated by the orchestrator; a Codex session reviews the security contract read-only at the Phase 0 gate (N18). Status: Phase 0 Stop B (the vertical slice) in progress on `feat/nimby-admin` after the recon was accepted on October 31, 2026. Plan 0 (shared tooling) has been on `main` since October 15, 2026.
 
 Target: NIMBY | HARDCORE | BADLANDS | 1pp, HostHavoc, DayZ 1.30.164200 / Nasdara (release 1 was qualified on 1.30.164078; the live binary moved to 164200 on October 22, 2026).
 Release: independent, gated (see [shared rules, 9.2](2026-10-15-shared-rules.md)).
 
 Central Scrutinizer is the in-house admin tool for every server admin (today Jeff and Jay; roles per N3): player management, spawning, and world control from an in-game menu, every action audited locally and posted to Discord. It is written from scratch against vanilla DayZ 1.30 with no CF dependency and zero save footprint. The feasibility study (`docs/design/nimby-admin-feasibility.md`) holds the reasoning and cost; where the two differ, this plan is authoritative. The October 16, 2026 addendum (`docs/design/central-scrutinizer-feasibility-addendum.md`, v0.2) assesses player intelligence, the companion service, the map, spectate, and in-game configuration; Jeff ruled its decisions Q1-Q6 the same day (hub decisions D32-D37): the companion is Eyes, its own mod-board row, and nothing from the addendum is in this plan beyond the N9 seams and Phase 5.
+
+Changes since v0.8 (Phase 0 Codex re-review finding 13, ruled by the orchestrator November 1, 2026): the audit journal is two files per UTC day. Denied and invalid records and the `audit.suppressed` summaries go to `audit-denied-<YYYY-MM-DD>.log`; the intent and result records of executed commands stay in `audit-<YYYY-MM-DD>.log`, the only file the intent readback reads, so traffic a non-admin can drive never lengthens it (Audit record section).
 
 Changes since v0.7 (Phase 0 recon `2026-10-31-nimby-admin-phase0-recon.md`, commit `7583397`, accepted by the orchestrator October 31, 2026, with Jeff's answers to its eight questions): the six recon plan lines applied, each marked "accepted by the orchestrator, October 31, 2026": gate row 1 evidence (session hello), the two-client gate session, one audit record for a denied or invalid request, ban enforcement at connection moved to Phase 1, Discord backoff on any error class (recon R6), and the 164200 reference. New `config.json` field `permissionsReloadSeconds` (recon question 5). The request `args` use the seat's `key=value` codec, never client JSON (question 6, recon R8). No decision from v0.1-v0.7 is reopened.
 
@@ -60,7 +62,7 @@ flowchart LR
     Router -- "authorized, deduped, rate-limited" --> Handlers[Command handlers]
     Handlers -- "vanilla API calls" --> World[Players, items, vehicles, weather]
     Handlers -- "intent and result records" --> Audit[Audit journal]
-    Audit -- "JSON line" --> File["$profile:NimbyAdmin\audit-&lt;date&gt;.log"]
+    Audit -- "JSON line" --> File["$profile:NimbyAdmin\audit\audit-&lt;date&gt;.log<br/>and audit-denied-&lt;date&gt;.log"]
     Audit -- "queued, bounded" --> Webhook[Discord webhook]
     Router -- "result or denial to sender only" --> Menu
     Sync[Admin state sync] -- "role at connect and on change" --> Menu
@@ -136,7 +138,18 @@ flowchart LR
 | `createdUtc` | `string` | Yes | ISO 8601 UTC |
 | `text` | `string` | Yes | Escaped free text, maximum 500 characters |
 
-Audit record (one JSON object per line; two per command that reaches its handler, `intent` then `result`; a denied or invalid request writes one `result` record and no `intent`, because nothing changed - accepted by the orchestrator, October 31, 2026, recon plan line 3):
+Audit record (one JSON object per line; two per command that reaches its handler, `intent` then `result`; a denied or invalid request writes one `result` record and no `intent`, because nothing changed - accepted by the orchestrator, October 31, 2026, recon plan line 3).
+
+Audit files (v0.9, re-review finding 13, November 1, 2026): two files per UTC day under `$profile:NimbyAdmin\audit\`, the same JSON shape in both.
+
+| File | Holds | Read back |
+| --- | --- | --- |
+| `audit-<YYYY-MM-DD>.log` | The `intent` and `result` records of every command that reached its handler, and the system records of the bootstrap owner write | Each `intent` record, before the command runs; the readback reads only this file |
+| `audit-denied-<YYYY-MM-DD>.log` | The one `result` record of a denied or invalid request (capped per sender and in aggregate, owners and admins always recorded), and the `audit.suppressed` summaries of what the caps held back | Never; nothing waits on it |
+
+An `intent` record always goes to the first file. A command's audit trail is in the first file; who was refused, and why, is in the second.
+
+Record fields:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |

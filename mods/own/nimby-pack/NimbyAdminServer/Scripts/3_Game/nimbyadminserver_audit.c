@@ -1,17 +1,20 @@
 // -----------------------------------------------------------------------------
 // NimbyAdminServer - the audit journal (Plan 3 v0.8, audit record table; recon 6).
-// Purpose : One JSON object per line in $profile:NimbyAdmin\audit\audit-<YYYY-MM-DD>.log (UTC).
-//           A command that reaches its handler writes "intent" first and runs only when that
-//           append succeeded; "result" follows. A denied or invalid request writes one "result"
-//           record (plan line 3). One OpenFile per record (APPEND, FPrintln, CloseFile), so a
-//           crash loses at most the record being written.
+// Purpose : One JSON object per line, in two files per UTC day under $profile:NimbyAdmin\audit\
+//           (Plan 3 v0.9, re-review finding 13, November 1, 2026). audit-<YYYY-MM-DD>.log holds
+//           the intent and result records of commands that reached their handler (and the
+//           system records of the bootstrap). audit-denied-<YYYY-MM-DD>.log holds the one result
+//           record of a denied or invalid request (plan line 3) and the audit.suppressed
+//           summaries. Same JSON shape in both. A command writes "intent" first and runs only
+//           when that append succeeded; "result" follows. One OpenFile per record (APPEND,
+//           FPrintln, CloseFile), so a crash loses at most the record being written.
 // Verify  : FPrintln and CloseFile return nothing (EnSystem.c:481, :443), so after an intent
 //           record the day file is opened again and its last line compared with the record just
 //           written; Append is true only on a match (review finding 4, October 31, 2026). One
 //           extra read per intent, at admin-command rates; result records are not read back
-//           (they gate nothing). The readback reads the whole day file: 1.30 has no seek or size
-//           call. Denied and invalid records are capped per sender and in aggregate (core), which
-//           bounds how far non-admins can grow the file.
+//           (they gate nothing). The readback reads the whole command file (1.30 has no seek or
+//           size call), which only executed commands grow: denied and invalid records, which a
+//           non-admin can drive, go to the denied file and never lengthen the readback.
 // Limit   : the readback proves the record reached the file, not that it survives a crash or a
 //           power cut (recon R5, kept as a stated limitation).
 // Engine  : OpenFile with FileMode.APPEND and READ (1_Core/DayZ/proto/EnSystem.c:417, :382-386),
@@ -36,6 +39,9 @@ class NimbyAdminServerAuditRecord
     string result;
     string effects;
     string reason;
+    // Not serialized: a denied or invalid request's record, or a suppression summary, goes to the
+    // denied file (StreamFor).
+    bool denied;
 
     string ToJson()
     {
@@ -112,7 +118,11 @@ class NimbyAdminServerJsonObject
 
 class NimbyAdminServerAudit
 {
-    protected static bool s_Failing;
+    static const string STREAM_COMMAND = "command";
+    static const string STREAM_DENIED = "denied";
+
+    protected static bool s_FailingCommand;
+    protected static bool s_FailingDenied;
 
     static string NowUtc()
     {
@@ -127,9 +137,31 @@ class NimbyAdminServerAudit
         return NimbyAdminServerRules.FormatIsoUtc(year, month, day, hour, minute, second);
     }
 
-    static string PathFor(string isoUtc)
+    // Re-review finding 13: the file-selection rule. An intent record always goes to the command
+    // file, so the readback only ever reads that file; a record marked denied goes to the denied
+    // file; everything else (the result of an executed command, a bootstrap record) to the
+    // command file.
+    static string StreamFor(NimbyAdminServerAuditRecord record)
     {
-        return NimbyAdminServerRules.DIR_AUDIT + "\\audit-" + isoUtc.Substring(0, 10) + ".log";
+        if (record.phase == "intent")
+        {
+            return STREAM_COMMAND;
+        }
+        if (record.denied)
+        {
+            return STREAM_DENIED;
+        }
+        return STREAM_COMMAND;
+    }
+
+    static string PathFor(string isoUtc, string stream)
+    {
+        string name = "\\audit-";
+        if (stream == STREAM_DENIED)
+        {
+            name = "\\audit-denied-";
+        }
+        return NimbyAdminServerRules.DIR_AUDIT + name + isoUtc.Substring(0, 10) + ".log";
     }
 
     // False when the record could not be appended; the caller blocks the state change. Only an
@@ -144,23 +176,41 @@ class NimbyAdminServerAudit
         {
             record.ts = NowUtc();
         }
-        string path = PathFor(record.ts);
+        string stream = StreamFor(record);
+        string path = PathFor(record.ts, stream);
         string why = WriteLine(path, record.ToJson(), record.phase == "intent");
+        bool wasFailing = s_FailingCommand;
+        if (stream == STREAM_DENIED)
+        {
+            wasFailing = s_FailingDenied;
+        }
         if (why != "")
         {
-            if (!s_Failing)
+            if (!wasFailing)
             {
-                s_Failing = true;
                 NimbyAdminLog.Info("audit unavailable: " + why);
             }
+            SetFailing(stream, true);
             return false;
         }
-        if (s_Failing)
+        if (wasFailing)
         {
-            s_Failing = false;
             NimbyAdminLog.Info("audit available again: " + path);
         }
+        SetFailing(stream, false);
         return true;
+    }
+
+    // One unavailable / available-again line pair per file, so a failure of one file does not
+    // hide or repeat the other's.
+    protected static void SetFailing(string stream, bool failing)
+    {
+        if (stream == STREAM_DENIED)
+        {
+            s_FailingDenied = failing;
+            return;
+        }
+        s_FailingCommand = failing;
     }
 
     // Appends one line; with verify, re-opens the file and requires its last line to be that

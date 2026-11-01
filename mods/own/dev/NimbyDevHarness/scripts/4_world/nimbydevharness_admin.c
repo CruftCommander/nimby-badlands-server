@@ -7,7 +7,8 @@
 //           real PlayerBase.OnRPC (4_World/DayZ/Entities/ManBase/PlayerBase.c:5727) with a
 //           connected player's real identity, so the router, the stores and the audit journal
 //           all run as for a real packet. It names only NimbyAdminRules (client half, 3_Game).
-//           It reads the outcome from the audit file and from the players' positions.
+//           It reads the outcome from the two audit day files (audit- and audit-denied-, Plan 3
+//           v0.9) and from the players' positions.
 // Arming  : $profile:NimbyDevHarness\forge holds "admin" and a line "admin-owner=<steam64>" (the
 //           owner in permissions.json); the cases run once, 10 s after the second player is in
 //           the world. The word "sandstorm" arms the item 3 row 4 case on the first connect.
@@ -188,6 +189,12 @@ class NimbyDevHarnessAdmin
         return "$profile:NimbyAdmin\\audit\\audit-" + Today() + ".log";
     }
 
+    // Re-review finding 13: denied and invalid records go to their own day file.
+    protected static string DeniedAuditPath()
+    {
+        return "$profile:NimbyAdmin\\audit\\audit-denied-" + Today() + ".log";
+    }
+
     // Step ids: the server's highest accepted id for this identity plus FORGE_OFFSET, read once
     // per step, plus n.
     protected static void BeginStep()
@@ -210,8 +217,18 @@ class NimbyDevHarnessAdmin
     // The audit lines this run wrote for one request id and actor.
     protected static array<string> AuditFor(int requestId, PlayerBase actor)
     {
+        array<string> found = AuditIn(AuditPath(), requestId, actor);
+        foreach (string line : AuditIn(DeniedAuditPath(), requestId, actor))
+        {
+            found.Insert(line);
+        }
+        return found;
+    }
+
+    // The audit lines this run wrote for one request id and actor, in one file.
+    protected static array<string> AuditIn(string path, int requestId, PlayerBase actor)
+    {
         array<string> found = new array<string>;
-        string path = AuditPath();
         if (!FileExist(path))
         {
             return found;
@@ -338,7 +355,8 @@ class NimbyDevHarnessAdmin
         array<string> denied = AuditFor(s_IdDenied, s_Other);
         float otherMoved = vector.Distance(s_OtherBefore, s_Other.GetPosition());
         bool deniedOk = denied.Count() == 1 && CountWith(denied, "\"result\":\"denied\"") == 1 && CountWith(denied, "\"reason\":\"no role\"") == 1;
-        Record("non-admin forges a teleport", deniedOk && otherMoved < 0.5, "records=" + denied.Count().ToString() + " moved=" + otherMoved.ToString());
+        int inDeniedFile = AuditIn(DeniedAuditPath(), s_IdDenied, s_Other).Count();
+        Record("non-admin forges a teleport", deniedOk && inDeniedFile == 1 && otherMoved < 0.5, "records=" + denied.Count().ToString() + " inDeniedFile=" + inDeniedFile.ToString() + " moved=" + otherMoved.ToString());
         array<string> notOwner = AuditFor(s_IdNotOwner, s_Other);
         Record("request aimed at another player's body is refused before read", notOwner.Count() == 0, "records=" + notOwner.Count().ToString() + " (expect a sender-not-owner line in the script log)");
         PlayerIdentity owner = s_Owner.GetIdentity();

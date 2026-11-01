@@ -35,7 +35,9 @@ Changes, newest first:
 - November 1, 2026 (feat/nimby-admin, Central Scrutinizer re-review finding 1 and the
   orchestrator ruling): the admin cases forge from the server's highest accepted id plus
   1,000,000 (was 1024); the 127-per-run cap stays, so the harness ids, which the server's
-  highest-ids set keeps, take at most 127 of its 256 slots.
+  highest-ids set keeps, take at most 127 of its 256 slots; re-review finding 13, the admin
+  cases read both audit day files (audit- and audit-denied-), and the non-admin forge case also
+  requires its denied record in audit-denied-<date>.log.
 - October 31, 2026 (feat/nimby-admin, Central Scrutinizer review finding 1 and the orchestrator
   ruling): the admin cases forge from the server's highest accepted id plus 1024 per identity
   per step (NimbyAdminHighWater), at most 127 forged ids per run (SKIP beyond), and match audit

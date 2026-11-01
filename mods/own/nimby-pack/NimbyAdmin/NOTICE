@@ -6,9 +6,10 @@ Interactive) for the self-test hook, the menu, and the RPC plumbing. No media.
 
 Changes, newest first:
 
-- November 1, 2026 (Phase 0 re-review fixes, feat/nimby-admin; docs/reviews/2026-11-01-central-
-  scrutinizer-phase0-codex-rereview.md): finding 1, the NimbyAdminHighWater comment names the
-  new harness offset (highest plus 1,000,000); no behavior change in the client half.
+- November 1, 2026 (Phase 0 re-review fixes, feat/nimby-admin;
+  docs/reviews/2026-11-01-central-scrutinizer-phase0-codex-rereview.md): finding 1, the
+  NimbyAdminHighWater comment names the new harness offset (highest plus 1,000,000); no behavior
+  change in the client half.
 - October 31, 2026 (Phase 0 review fixes, feat/nimby-admin; the Codex review of 439b729,
   docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md): finding 1,
   NimbyAdminHighWater (the server's highest accepted request id per connection, written only on
