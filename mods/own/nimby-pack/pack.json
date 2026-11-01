@@ -22,6 +22,12 @@
     ],
     "addons": [
         {
+            "folder": "NimbyShared",
+            "pboName": "NimbyShared",
+            "prefix": "NimbyShared",
+            "logPrefix": "Shared"
+        },
+        {
             "folder": "NimbyAutorun",
             "pboName": "NimbyAutorun",
             "prefix": "NimbyAutorun",
