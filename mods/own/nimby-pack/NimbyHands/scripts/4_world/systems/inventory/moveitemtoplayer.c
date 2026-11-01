@@ -467,6 +467,13 @@ class NimbyHandsMoveItemToPlayer
         // (NimbyHandsServer.MoveStep2; HumanInventory.c:243-251, Inventory.c:1057-1066). The
         // EEItemLocationChanged inside the first writes CONFIRMED; its return value is the result.
         bool moved = NimbyHandsServer.MoveStep2(transfer, src, dst);
+        if (NimbyHandsServer.Step2CanaryTripped())
+        {
+            // Build 16: a canary found the engine had written into the transfer during the natives.
+            // MoveStep2 wrote the verdict from its copies and quarantined the entry; nothing here may
+            // read or write the transfer again (its giver, detail and itemText may be overwritten).
+            return;
+        }
         if (NimbyHandsState.IsTerminal(transfer.state))
         {
             return;

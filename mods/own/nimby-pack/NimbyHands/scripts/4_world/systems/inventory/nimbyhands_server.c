@@ -40,6 +40,9 @@
 //           Sent through the call queue, never from inside the writer: a terminal state
 //           is often written inside EEItemLocationChanged, that is, inside the engine's
 //           own move (NIMBY-T-063, October 29, 2026).
+// Canary  : Build 16 (November 1, 2026, NIMBY-T-063): MoveStep2 compares giver, item and receiver
+//           with copies taken before the first step 2 native, after each native, and quarantines
+//           a transfer the engine has written into (see MoveStep2 and Canary).
 // Persists: Nothing. Every member is static server memory for the mission.
 // -----------------------------------------------------------------------------
 class NimbyHandsWorldTransfer : NimbyHandsTransfer
@@ -509,14 +512,47 @@ class NimbyHandsServer
     // debug lines read the item and the two locations only, the reservation lines read the item
     // only, and Man.UpdateInventoryMenu (a menu refresh hint the vanilla TakeToDstImpl sends) is
     // not called. The junctures are read by Dispatch, before the hand event.
+    //
+    // Build 16 (November 1, 2026): the canary. The minidumps of crashes 13 and 14 show the object
+    // alive and intact except three zero words written during these natives (the low half of
+    // giver, the high half of detail's buffer pointer, the low half of itemText). Before the first
+    // native the three object references and the three strings the log needs are copied into
+    // locals; after LogReservations, after LocationSyncMoveEntity (outside its callback) and after
+    // SendServerMove the fields are compared with the copies (pointer compares only) and one
+    // "canary after <native>: ok|CHANGED ..." line is written. After a CHANGED canary nothing
+    // writes the transfer again: no state, no detail, no toast. The verdict line is written from
+    // the copies, the registry forgets the entry (so the poll and the timeout stop reading it),
+    // and the object stays in s_InFlight for the rest of the mission, because its destructor
+    // would free the overwritten detail buffer. The natives after the first CHANGED still run:
+    // they do not touch the transfer, and SendServerMove is what tells both clients about the
+    // move. The run then produces a log instead of a crash, and the log names the native.
+    protected static bool s_Step2CanaryTripped;
+
+    static bool Step2CanaryTripped()
+    {
+        return s_Step2CanaryTripped;
+    }
+
     static bool MoveStep2(NimbyHandsWorldTransfer transfer, InventoryLocation src, InventoryLocation dst)
     {
         string idText = transfer.id.ToString();
+        s_Step2CanaryTripped = false;
+        // Build 16: the copies. Taken before the first native; nothing below reads these fields
+        // again except through Canary's pointer compares.
+        PlayerBase giverBefore = transfer.giver;
+        EntityAI itemBefore = transfer.item;
+        PlayerBase receiverBefore = transfer.receiver;
+        string giverId = transfer.giverId;
+        string receiverId = transfer.receiverId;
+        string itemText = transfer.itemText;
+        string firstNative = "entry (debug off, LogReservations not run)";
         if (NimbyHandsLog.IsDebug())
         {
             NimbyHandsLog.Debug("id=" + idText + " step 2 move: src=" + DescribeLocation(src) + " dst=" + DescribeLocation(dst));
-            LogReservations(idText, transfer.item, src, dst);
+            LogReservations(idText, itemBefore, src, dst);
+            firstNative = "LogReservations";
         }
+        Canary(transfer, idText, firstNative, giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
         s_Step2MoveId = transfer.id;
         s_Step2Landed = false;
         bool moved = GameInventory.LocationSyncMoveEntity(src, dst);
@@ -524,10 +560,17 @@ class NimbyHandsServer
         s_Step2MoveId = 0;
         s_Step2Landed = false;
         NimbyHandsLog.Debug("id=" + idText + " step 2 move: LocationSyncMoveEntity=" + NimbyHandsLog.Bool(moved) + " signal=" + NimbyHandsLog.Bool(landed));
+        Canary(transfer, idText, "LocationSyncMoveEntity", giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
         if (moved && dst.IsValid())
         {
             InventoryInputUserData.SendServerMove(null, InventoryCommandType.SYNC_MOVE, src, dst);
             NimbyHandsLog.Debug("id=" + idText + " step 2 move: SendServerMove sent");
+            Canary(transfer, idText, "SendServerMove", giverBefore, itemBefore, receiverBefore, giverId, receiverId, itemText);
+        }
+        if (s_Step2CanaryTripped)
+        {
+            // Build 16: the transfer is quarantined; MoveStep2 wrote the verdict from the copies.
+            return moved;
         }
         // The bookkeeping the signal handler used to do, now outside the engine's callback:
         // CONFIRMED when the move reported success, the signal fired, and the item's hierarchy
@@ -537,6 +580,42 @@ class NimbyHandsServer
             Advance(transfer, NimbyHandsState.CONFIRMED, "signal=EEItemLocationChanged dst=" + DescribeItemLocation(transfer.item));
         }
         return moved;
+    }
+
+    // Build 16: one canary. Compares the transfer's giver, item and receiver with the copies
+    // taken before the first native (pointer compares; no read through either side, no read of
+    // detail) and writes the line. The first CHANGED also writes the verdict line from the
+    // copies and quarantines the transfer: the registry forgets the entry without writing it,
+    // the object stays held in s_InFlight (never released, never destroyed), no toast is sent.
+    // Later canaries in the same move still write their line, so the log shows whether the
+    // fields changed again. Returns true when this canary found a change.
+    protected static bool Canary(NimbyHandsWorldTransfer transfer, string idText, string nativeName, PlayerBase giverBefore, EntityAI itemBefore, PlayerBase receiverBefore, string giverId, string receiverId, string itemText)
+    {
+        bool giverSame = transfer.giver == giverBefore;
+        bool itemSame = transfer.item == itemBefore;
+        bool receiverSame = transfer.receiver == receiverBefore;
+        string verdict = NimbyHandsRules.Step2Canary(giverSame, itemSame, receiverSame);
+        NimbyHandsLog.Info("id=" + idText + " canary after " + nativeName + ": " + verdict);
+        if (verdict == NimbyHandsRules.CANARY_OK)
+        {
+            return false;
+        }
+        if (!s_Step2CanaryTripped)
+        {
+            s_Step2CanaryTripped = true;
+            // Where the item is, read through the copy of the item reference (intact in both
+            // minidumps; the same read passed immediately before the fatal write in crashes 13 and 14).
+            bool delivered = itemBefore != null && receiverBefore != null && itemBefore.GetHierarchyRootPlayer() == receiverBefore;
+            NimbyHandsLog.Info("id=" + idText + " canary verdict: engine wrote into the live transfer during " + nativeName + "; delivered=" + NimbyHandsLog.Bool(delivered) + " giver=" + giverId + " receiver=" + receiverId + " item=" + itemText + "; entry forgotten, object quarantined, no state, detail or toast written");
+            bool forgotten = Registry().Forget(transfer);
+            int inFlight = 0;
+            if (s_InFlight)
+            {
+                inFlight = s_InFlight.Count();
+            }
+            NimbyHandsLog.Info("id=" + idText + " quarantined; forgotten=" + NimbyHandsLog.Bool(forgotten) + " in flight=" + inFlight.ToString());
+        }
+        return true;
     }
 
     // The engine's juncture locks (Game.c:757-759): on the item, between the giver and the

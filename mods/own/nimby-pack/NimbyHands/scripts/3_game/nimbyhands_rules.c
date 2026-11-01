@@ -225,6 +225,20 @@ class NimbyHandsTransfers
         return true;
     }
 
+    // Removes a registered entry without writing the transfer: no state, no detail. For the step 2
+    // canary (build 16, November 1, 2026): a transfer the engine has written into during the step
+    // 2 natives must never be written again, and must leave the registry so the step 2 poll and
+    // the bounded timeout stop reading it. Returns false for an unregistered transfer.
+    bool Forget(NimbyHandsTransfer transfer)
+    {
+        if (!IsRegistered(transfer))
+        {
+            return false;
+        }
+        m_ByItem.Remove(transfer.itemKey);
+        return true;
+    }
+
     protected void Evict(NimbyHandsTransfer transfer)
     {
         NimbyHandsTransfer current = m_ByItem.Get(transfer.itemKey);
@@ -567,6 +581,34 @@ class NimbyHandsRules
             return STEP2_HELD;
         }
         return STEP2_RUN;
+    }
+
+    // ---- the step 2 canary (build 16, November 1, 2026) -------------------------------------
+    // The minidumps of crashes 13 and 14 show three 4-byte zero words written into the live
+    // NimbyHandsWorldTransfer during the step 2 natives (the low half of giver, the high half of
+    // detail's buffer pointer, the low half of itemText), after every read before MoveStep2 passed.
+    // MoveStep2 copies giver, item and receiver into locals before the first native and compares
+    // the fields with the copies after each native: pointer compares only, never a read through
+    // either side and never a read of detail. This is the verdict for that log line. CANARY_OK is
+    // the only verdict after which the transfer may be written again.
+    static const string CANARY_OK = "ok";
+
+    static string Step2Canary(bool giverSame, bool itemSame, bool receiverSame)
+    {
+        if (giverSame && itemSame && receiverSame)
+        {
+            return CANARY_OK;
+        }
+        return "CHANGED giver=" + SameOrChanged(giverSame) + " item=" + SameOrChanged(itemSame) + " receiver=" + SameOrChanged(receiverSame);
+    }
+
+    protected static string SameOrChanged(bool same)
+    {
+        if (same)
+        {
+            return "same";
+        }
+        return "changed";
     }
 
     // ---- the client-driven step 1 (NIMBY-T-063, October 31, 2026) -------------------------
@@ -995,6 +1037,15 @@ class NimbyHandsRules
         registry.Move(second, REFUSED, "no space");
         failures += Case(results, "registry is empty after every terminal state", registry.Count() == 0);
 
+        NimbyHandsTransfer written = new NimbyHandsTransfer();
+        registry.Begin(written, "1:300", "Take", 8000);
+        registry.Move(written, REQUESTED, "");
+        registry.Move(written, STAGED, "landed");
+        failures += Case(results, "forget on an unregistered transfer is refused", !registry.Forget(stray));
+        failures += Case(results, "forget removes the registered entry", registry.Forget(written) && !registry.IsInFlight("1:300") && registry.Count() == 0);
+        failures += Case(results, "forgotten transfer keeps its state and detail", written.state == STAGED && written.detail == "landed");
+        failures += Case(results, "forgotten transfer is no longer registered", !registry.IsRegistered(written) && !registry.Forget(written));
+
         failures += Case(results, "healthy party passes", CheckParty("giver", true, true, true, true, false, false, false) == "");
         failures += Case(results, "missing party refuses", CheckParty("receiver", false, true, true, true, false, false, false) == "receiver missing");
         failures += Case(results, "disconnected party refuses", CheckParty("giver", true, false, true, true, false, false, false) == "giver disconnected");
@@ -1197,6 +1248,11 @@ class NimbyHandsRules
         failures += Case(results, "step 2 gate: old enough but giver busy holds", Step2Verdict(50, 50, false) == STEP2_HELD);
         failures += Case(results, "step 2 gate: old enough and giver idle runs", Step2Verdict(50, 50, true) == STEP2_RUN);
         failures += Case(results, "step 2 gate: busy giver holds however old", Step2Verdict(4000, 50, false) == STEP2_HELD);
+        failures += Case(results, "step 2 canary: every reference the same is ok", Step2Canary(true, true, true) == CANARY_OK);
+        failures += Case(results, "step 2 canary: a changed giver is named", Step2Canary(false, true, true) == "CHANGED giver=changed item=same receiver=same");
+        failures += Case(results, "step 2 canary: a changed item is named", Step2Canary(true, false, true) == "CHANGED giver=same item=changed receiver=same");
+        failures += Case(results, "step 2 canary: a changed receiver is named", Step2Canary(true, true, false) == "CHANGED giver=same item=same receiver=changed");
+        failures += Case(results, "step 2 canary: every change is named", Step2Canary(false, false, false) == "CHANGED giver=changed item=changed receiver=changed");
         return failures;
     }
 
