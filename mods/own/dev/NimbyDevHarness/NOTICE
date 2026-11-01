@@ -32,6 +32,12 @@ How it runs (server only):
 
 Changes, newest first:
 
+- November 1, 2026, evening (feat/nimby-admin, Central Scrutinizer gate-session fix round): the
+  admin forge writes the request Param4 with one Write of the object (RequestContext), the
+  counterpart of the router's single ctx.Read; Param4.Serialize wrote the four fields one by
+  one, which the router refused as unreadable, so no forged admin request reached it in the gate
+  session. Each forge prints one [Forge] sent line with the id, the command, the sender identity
+  and the target body's identity. Boot case admin-forge-context-reads-back-as-the-router.
 - November 1, 2026, afternoon (feat/nimby-admin, Central Scrutinizer third-pass finding 14):
   before forging, the admin cases check id headroom (HasIdHeadroom): each identity's highest
   plus 2 x (1,000,000 + 127) must fit a positive 32-bit int, because each identity reads a new

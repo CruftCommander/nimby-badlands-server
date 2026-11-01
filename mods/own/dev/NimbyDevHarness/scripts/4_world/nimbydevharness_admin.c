@@ -159,10 +159,44 @@ class NimbyDevHarnessAdmin
             return;
         }
         s_Forged = s_Forged + 1;
+        ScriptReadWriteContext ctx = RequestContext(protocol, requestId, command, args);
+        // Gate session of November 1, 2026: one line per forge, so a rerun shows which body and
+        // which identity each forged request used.
+        Print(PREFIX + "[Forge] sent id=" + requestId.ToString() + " command=" + command + " sender=" + IdentityText(sender) + " target=" + IdentityText(targetObject.GetIdentity()));
+        targetObject.OnRPC(sender, NimbyAdminRules.RPC_REQUEST, ctx.GetReadContext());
+    }
+
+    protected static string IdentityText(PlayerIdentity identity)
+    {
+        if (!identity)
+        {
+            return "(none)";
+        }
+        return "(" + identity.GetId() + ", " + identity.GetPlainId() + ")";
+    }
+
+    // The forged request in a context the router reads with one ctx.Read(Param4): one Write of the
+    // Param4 object, the counterpart of that Read (1_Core/DayZ/proto/Serializer.c:57-58). Gate
+    // session of November 1, 2026: Param4.Serialize wrote the four fields one by one, which the
+    // router's Read of the whole object refused as unreadable (boot case
+    // admin-forge-context-reads-back-as-the-router).
+    static ScriptReadWriteContext RequestContext(int protocol, int requestId, string command, string args)
+    {
         ScriptReadWriteContext ctx = new ScriptReadWriteContext;
         Param4<int, int, string, string> request = new Param4<int, int, string, string>(protocol, requestId, command, args);
-        request.Serialize(ctx.GetWriteContext());   // the same field order RPCSingleParam writes (1_Core/DayZ/param.c:134-137)
-        targetObject.OnRPC(sender, NimbyAdminRules.RPC_REQUEST, ctx.GetReadContext());
+        ctx.GetWriteContext().Write(request);
+        return ctx;
+    }
+
+    // Reads a context back the way the router does (one ctx.Read of a Param4) and compares.
+    static bool ReadsBackAsRouter(ScriptReadWriteContext ctx, int protocol, int requestId, string command, string args)
+    {
+        Param4<int, int, string, string> got = new Param4<int, int, string, string>(0, 0, "", "");
+        if (!ctx.GetReadContext().Read(got))
+        {
+            return false;
+        }
+        return got.param1 == protocol && got.param2 == requestId && got.param3 == command && got.param4 == args;
     }
 
     protected static string Pad2(int value)

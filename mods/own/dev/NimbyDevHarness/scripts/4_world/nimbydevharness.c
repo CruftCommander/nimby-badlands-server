@@ -413,6 +413,8 @@ class NimbyDevHarness
         int twoSteps = int.MAX - 2 * (NimbyDevHarnessAdmin.FORGE_OFFSET + NimbyDevHarnessAdmin.MAX_FORGES_PER_RUN);
         bool edge = NimbyDevHarnessAdmin.HasIdHeadroom(oneStep, 1) && !NimbyDevHarnessAdmin.HasIdHeadroom(oneStep + 1, 1) && NimbyDevHarnessAdmin.HasIdHeadroom(twoSteps, 2) && !NimbyDevHarnessAdmin.HasIdHeadroom(twoSteps + 1, 2) && NimbyDevHarnessAdmin.HasIdHeadroom(0, 2) && !NimbyDevHarnessAdmin.HasIdHeadroom(-1, 2);
         Record("admin-id-headroom-at-the-boundary", edge, "one step fits up to " + oneStep.ToString() + ", two steps up to " + twoSteps.ToString());
+        ScriptReadWriteContext forged = NimbyDevHarnessAdmin.RequestContext(1, 7, "player.teleportTo", "target=x;session=2");
+        Record("admin-forge-context-reads-back-as-the-router", NimbyDevHarnessAdmin.ReadsBackAsRouter(forged, 1, 7, "player.teleportTo", "target=x;session=2"), "one ctx.Read(Param4) of the forged context gives back protocol 1, id 7, the command and the args");
         Record("admin-id-headroom-refuses-int-max", !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 1) && !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 2), "a client hello with id 2147483647 leaves no headroom");
         Delete(s_Wrench);
         Delete(s_Pliers);
