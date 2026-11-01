@@ -256,7 +256,9 @@ class NimbyAdminServerRules
     }
 
     // The denied and invalid audit-record limit: the sender's bucket first, then the aggregate
-    // (the finding 5 order, so one sender cannot spend the aggregate for everyone else).
+    // (the finding 5 order, so one sender cannot spend the aggregate for everyone else). The
+    // sender bucket is keyed by BI id in the core, so a reconnect does not refill it; what the
+    // limit holds back is counted and summarized (NimbyAdminServerSuppressed).
     static bool DenialRecordAllowed(NimbyAdminServerBucket sender, NimbyAdminServerBucket aggregate, float now)
     {
         if (!sender.Take(now, DENIAL_RECORDS_PER_SECOND, DENIAL_RECORDS_BURST))
@@ -264,6 +266,14 @@ class NimbyAdminServerRules
             return false;
         }
         return aggregate.Take(now, DENIAL_RECORDS_AGGREGATE_PER_SECOND, DENIAL_RECORDS_AGGREGATE_BURST);
+    }
+
+    // An actor who holds a role is never held back by the denial-record limits: a denied command
+    // from an owner or admin is the record that matters most, and the sender rate already bounds
+    // it (security review of 84a6fca).
+    static bool DenialRecordExempt(string role)
+    {
+        return NimbyAdminRules.IsKnownRole(role);
     }
 
     // Review finding 6: the role sync line is written once per connection (the session's first
@@ -891,6 +901,77 @@ class NimbyAdminServerSeen
             }
         }
         return lowest;
+    }
+}
+
+// The denied and invalid records the limits held back since the last summary (security review
+// of 84a6fca): counted per Steam64, written as one audit record at most once a minute, so the
+// suppression is itself on the record. Engine-free; self-tested.
+class NimbyAdminServerSuppressed
+{
+    static const int MAX_LISTED = 10;
+    static const float SUMMARY_SECONDS = 60.0;
+
+    protected ref map<string, int> m_Counts = new map<string, int>;
+    protected ref array<string> m_Order = new array<string>;
+    protected int m_Total;
+
+    void Add(string steam64)
+    {
+        int count = 0;
+        if (m_Counts.Find(steam64, count))
+        {
+            m_Counts.Set(steam64, count + 1);
+        }
+        else
+        {
+            m_Counts.Set(steam64, 1);
+            m_Order.Insert(steam64);
+        }
+        m_Total = m_Total + 1;
+    }
+
+    int Total()
+    {
+        return m_Total;
+    }
+
+    int Senders()
+    {
+        return m_Order.Count();
+    }
+
+    void Clear()
+    {
+        m_Counts.Clear();
+        m_Order.Clear();
+        m_Total = 0;
+    }
+
+    // {"suppressed":N,"senders":M,"listed":[{"steam64":"..","count":n},...]}, the first
+    // MAX_LISTED senders in the order they were first held back.
+    string EffectsJson()
+    {
+        string listed = "";
+        int i = 0;
+        while (i < m_Order.Count() && i < MAX_LISTED)
+        {
+            string steam64 = m_Order.Get(i);
+            NimbyAdminServerJsonObject entry = new NimbyAdminServerJsonObject();
+            entry.Add("steam64", steam64);
+            entry.AddInt("count", m_Counts.Get(steam64));
+            if (listed != "")
+            {
+                listed = listed + ",";
+            }
+            listed = listed + entry.ToJson();
+            i = i + 1;
+        }
+        NimbyAdminServerJsonObject effects = new NimbyAdminServerJsonObject();
+        effects.AddInt("suppressed", m_Total);
+        effects.AddInt("senders", m_Order.Count());
+        effects.Raw("listed", "[" + listed + "]");
+        return effects.ToJson();
     }
 }
 

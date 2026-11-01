@@ -22,11 +22,12 @@ Changes, newest first:
   array even when the key is absent; finding 4, after each intent append the day file is read
   back and the append counts only when its last line is the record just written (crash
   durability stays a stated limitation, R5), result records are not read back, and denied or
-  invalid records are also capped at 120 a minute in aggregate; findings 5 and 6, the sender's
-  bucket is checked before an aggregate token is spent (Admit), and the role sync line is
-  written once per connection and on a role change while every hello still gets its reply;
-  finding 7, client text reaches an ordinary log line only through NimbyAdminLog.Safe or
-  CommandForLog, an unknown command logging as <unknown len=N>.
+  invalid records of a player without a role are capped at 30 a minute per BI id and 120 a
+  minute in aggregate, with what the caps hold back written as one audit.suppressed record a
+  minute; findings 5 and 6, the sender's bucket is checked before an aggregate token is spent
+  (Admit), and the role sync line is written once per connection and on a role change while
+  every hello still gets its reply; finding 7, client text reaches an ordinary log line only
+  through NimbyAdminLog.Safe or CommandForLog, an unknown command logging as <unknown len=N>.
 - October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the server half - config.json,
   permissions.json and bans.json stores with .lkg and the refuse-edits state, the first-owner
   bootstrap, the audit journal, the Discord queue over the vanilla RestApi, the session table,

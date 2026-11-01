@@ -482,6 +482,31 @@ class NimbyAdminServerSelfTest
             allLeft = allLeft + 1;
         }
         failures += Case(results, "denial records: one sender keeps 30 and spends 30 of the 120 aggregate", kept == 30 && allLeft == 90);
+        failures += Case(results, "denial records: an owner or admin is never held back, a player without a role is", NimbyAdminServerRules.DenialRecordExempt("owner") && NimbyAdminServerRules.DenialRecordExempt("admin") && !NimbyAdminServerRules.DenialRecordExempt("none"));
+        NimbyAdminServerSuppressed held = new NimbyAdminServerSuppressed();
+        held.Add("76561190000000021");
+        held.Add("76561190000000021");
+        held.Add("76561190000000021");
+        held.Add("76561190000000022");
+        string summary = held.EffectsJson();
+        failures += Case(results, "denial records: held-back records are counted per sender for the summary", held.Total() == 4 && held.Senders() == 2 && summary.IndexOf("{\"suppressed\":4,\"senders\":2,\"listed\":[{\"steam64\":\"76561190000000021\",\"count\":3}") == 0);
+        NimbyAdminServerSuppressed many = new NimbyAdminServerSuppressed();
+        int s = 0;
+        while (s < 12)
+        {
+            many.Add("765611900000001" + (10 + s).ToString());
+            s = s + 1;
+        }
+        string manyJson = many.EffectsJson();
+        int listedCount = 0;
+        int at = manyJson.IndexOf("\"count\"");
+        while (at >= 0)
+        {
+            listedCount = listedCount + 1;
+            at = manyJson.IndexOfFrom(at + 1, "\"count\"");
+        }
+        many.Clear();
+        failures += Case(results, "denial records: the summary lists at most 10 senders and Clear empties it", listedCount == NimbyAdminServerSuppressed.MAX_LISTED && manyJson.IndexOf("\"senders\":12") > 0 && many.Total() == 0 && many.Senders() == 0);
         return failures;
     }
 

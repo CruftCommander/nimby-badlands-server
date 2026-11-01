@@ -15,8 +15,9 @@
 //           dropped with one gated line, an id below the floor is "stale"; a protocol other than
 //           1 is refused.
 // Logs    : every refusal a client can cause is gated per sender (NimbyAdminLog.Gated); denied and
-//           invalid audit records are bounded per sender (30 a minute) and in aggregate (120 a
-//           minute). Client text reaches an ordinary log line only through NimbyAdminLog.Safe (in
+//           invalid audit records are bounded per sender by BI id (30 a minute) and in aggregate
+//           (120 a minute) unless the actor holds a role; what the limits hold back is written as
+//           one audit.suppressed record a minute. Client text reaches an ordinary log line only through NimbyAdminLog.Safe (in
 //           WhoFrom) or CommandForLog (an unknown command logs as <unknown len=N>), review
 //           finding 7; the audit journal keeps the command, JSON-escaped and cut to 32 bytes.
 // Gates   : server only (recon R11). The client half's PlayerBase override passes 6550301 to super.
@@ -39,7 +40,6 @@ class NimbyAdminServerSession
     string lastRole = "";
     int pushSequence;
     ref NimbyAdminServerSeen seen = new NimbyAdminServerSeen();
-    ref NimbyAdminServerBucket denials = new NimbyAdminServerBucket();
 }
 
 class NimbyAdminServerActor
@@ -61,6 +61,9 @@ class NimbyAdminServerCore
     protected static ref map<string, ref NimbyAdminServerBucket> s_Rates;
     protected static ref NimbyAdminServerBucket s_Aggregate;
     protected static ref NimbyAdminServerBucket s_DenialAggregate;
+    protected static ref map<string, ref NimbyAdminServerBucket> s_DenialRates;
+    protected static ref NimbyAdminServerSuppressed s_Suppressed;
+    protected static float s_SuppressedSince;
     protected static int s_NextSession = 1;
 
     // ---- lifecycle (MissionServer, nimbyadminserver_missionserver.c) ----------------------------
@@ -71,6 +74,8 @@ class NimbyAdminServerCore
         s_Rates = new map<string, ref NimbyAdminServerBucket>;
         s_Aggregate = new NimbyAdminServerBucket();
         s_DenialAggregate = new NimbyAdminServerBucket();
+        s_DenialRates = new map<string, ref NimbyAdminServerBucket>;
+        s_Suppressed = new NimbyAdminServerSuppressed();
         NimbyAdminServerFiles.EnsureDirs();
         s_Config = NimbyAdminServerFiles.LoadConfig();
         NimbyAdminServerDiscord.Init(s_Config);
@@ -174,6 +179,7 @@ class NimbyAdminServerCore
             return;
         }
         NimbyAdminServerDiscord.Tick(now);
+        WriteSuppressedSummaryIfDue(now);
     }
 
     // MissionServer.InvokeOnConnect (5_Mission/DayZ/mission/missionServer.c:435), at new and ready.
@@ -349,14 +355,56 @@ class NimbyAdminServerCore
         string resultName = NimbyAdminRules.CodeName(code);
         NimbyAdminLog.Gated("reject:" + actor.biId, "request " + resultName + " id=" + requestId.ToString() + " command=" + NimbyAdminServerRules.CommandForLog(command) + " reason=" + reason + " " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
         float now = GetGame().GetTickTime();
-        if (NimbyAdminServerRules.DenialRecordAllowed(session.denials, s_DenialAggregate, now))
+        bool exempt = NimbyAdminServerRules.DenialRecordExempt(s_Permissions.RoleOf(actor.steam64));
+        if (exempt || NimbyAdminServerRules.DenialRecordAllowed(DenialBucketFor(actor.biId), s_DenialAggregate, now))
         {
             NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES), "result");
             record.result = resultName;
             record.reason = reason;
             NimbyAdminServerAudit.Append(record);
         }
+        else
+        {
+            if (s_Suppressed.Total() == 0)
+            {
+                s_SuppressedSince = now;
+            }
+            s_Suppressed.Add(actor.steam64);
+        }
         SendResult(actor, requestId, code, reason);
+    }
+
+    // Keyed by BI id, like s_Rates, so a reconnect does not refill it (security review of 84a6fca).
+    protected static NimbyAdminServerBucket DenialBucketFor(string biId)
+    {
+        NimbyAdminServerBucket bucket;
+        if (!s_DenialRates.Find(biId, bucket))
+        {
+            bucket = new NimbyAdminServerBucket();
+            s_DenialRates.Set(biId, bucket);
+        }
+        return bucket;
+    }
+
+    // One audit record for what the denial-record limits held back, SUMMARY_SECONDS after the
+    // first held-back record; never subject to the limits itself.
+    protected static void WriteSuppressedSummaryIfDue(float now)
+    {
+        if (s_Suppressed.Total() == 0)
+        {
+            return;
+        }
+        if (now - s_SuppressedSince < NimbyAdminServerSuppressed.SUMMARY_SECONDS)
+        {
+            return;
+        }
+        NimbyAdminServerAuditRecord record = SystemRecord("audit.suppressed", "result");
+        record.result = "ok";
+        record.reason = "denial record limit";
+        record.effects = s_Suppressed.EffectsJson();
+        NimbyAdminServerAudit.Append(record);
+        NimbyAdminLog.Info("denied or invalid audit records held back suppressed=" + s_Suppressed.Total().ToString() + " senders=" + s_Suppressed.Senders().ToString() + "; one audit.suppressed record written");
+        s_Suppressed.Clear();
     }
 
     protected static NimbyAdminServerAuditRecord ActorRecord(NimbyAdminServerActor actor, int requestId, string command, string phase)
