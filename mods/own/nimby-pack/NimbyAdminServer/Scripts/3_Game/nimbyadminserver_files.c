@@ -151,6 +151,9 @@ class NimbyAdminServerStore
     protected bool m_HaveGood;
     protected bool m_HaveBad;
     protected bool m_ReadFailed;
+    // Re-review finding 3: set on every successful load and every .lkg recovery, never cleared;
+    // a store that has it is never a first install, whatever files are on disk now.
+    protected bool m_EverLoaded;
 
     // Parse text into an active set; overridden per store.
     protected bool ParseText(string text, out map<string, string> active, out array<string> notes, out string error)
@@ -171,7 +174,7 @@ class NimbyAdminServerStore
         if (!m_Io.Read(m_Path, text))
         {
             bool primaryExists = m_Io.Exists(m_Path);
-            if (!primaryExists && !m_Io.Exists(m_LkgPath) && !m_HaveGood)
+            if (!primaryExists && !m_Io.Exists(m_LkgPath) && !m_HaveGood && !m_EverLoaded)
             {
                 m_Source = NimbyAdminServerSource.NONE;
                 m_EditsRefused = false;
@@ -222,6 +225,7 @@ class NimbyAdminServerStore
             m_Active = active;
             m_LastGoodText = text;
             m_HaveGood = true;
+            m_EverLoaded = true;
             m_HaveBad = false;
             m_LastBadText = "";
             m_Source = NimbyAdminServerSource.FILE;
@@ -258,6 +262,7 @@ class NimbyAdminServerStore
         if (source == NimbyAdminServerSource.LKG)
         {
             m_Active = lkgActive;
+            m_EverLoaded = true;
         }
         else if (source == NimbyAdminServerSource.NONE)
         {
@@ -275,11 +280,11 @@ class NimbyAdminServerStore
         return m_Io.Exists(m_Path);
     }
 
-    // Review finding 3: the bootstrap owner file is written only when neither the primary nor
-    // .lkg exists.
+    // Review finding 3 and the re-review: the bootstrap owner file is written only when neither
+    // the primary nor .lkg exists and this store never loaded a file or recovered from .lkg.
     bool IsFirstInstall()
     {
-        return !m_Io.Exists(m_Path) && !m_Io.Exists(m_LkgPath);
+        return !m_EverLoaded && !m_Io.Exists(m_Path) && !m_Io.Exists(m_LkgPath);
     }
 
     // Why a parsed file was refused as a whole (finding 8: "version 0 is not 1", "admins missing").

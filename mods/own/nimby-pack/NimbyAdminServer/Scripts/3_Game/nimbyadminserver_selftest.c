@@ -406,6 +406,21 @@ class NimbyAdminServerSelfTest
         bool wrote = lkg.WriteBootstrapFile(why);
         failures += Case(results, "store: a missing primary with a .lkg loads the .lkg, refuses edits, and grants no bootstrap", lkg.m_Source == "lkg" && lkg.m_EditsRefused && lkg.RoleOf("76561190000000011") == "owner" && lkg.RoleOf(BOOT_A) == "none" && !lkg.IsFirstInstall() && !wrote && missing.m_Files.Contains(p) == false);
 
+        // Re-review finding 3: primary missing, recovered from .lkg, then the backup disappears.
+        // Before the fix the reload took the first-install branch: source none, edits allowed,
+        // and the bootstrap file could be written.
+        NimbyAdminServerFakeIo vanish = new NimbyAdminServerFakeIo();
+        vanish.m_Files.Set(pl, OWNER_B);
+        NimbyAdminServerPermissionStore recovered = PermStore(vanish);
+        recovered.Load(0, problem);
+        recovered.ApplyBootstrap();
+        bool fromLkg = recovered.m_Source == "lkg" && recovered.m_EditsRefused;
+        vanish.m_Files.Remove(pl);
+        recovered.Load(10, problem);
+        recovered.ApplyBootstrap();
+        bool wroteLate = recovered.WriteBootstrapFile(why);
+        failures += Case(results, "store: a .lkg recovery whose backup then disappears still refuses edits and never bootstraps", fromLkg && recovered.m_Source == "lkg" && recovered.m_EditsRefused && !recovered.IsFirstInstall() && !wroteLate && !vanish.m_Files.Contains(p) && recovered.RoleOf(BOOT_A) == "none" && recovered.RoleOf("76561190000000011") == "owner");
+
         NimbyAdminServerFakeIo locked = new NimbyAdminServerFakeIo();
         locked.m_Files.Set(p, OWNER_B);
         locked.m_Unreadable.Insert(p);
@@ -447,6 +462,9 @@ class NimbyAdminServerSelfTest
         NimbyAdminServerBanStore bans = BanStore(banMissing);
         bans.Load(0, problem);
         failures += Case(results, "bans: a missing bans.json with a .lkg loads the .lkg and refuses edits", bans.m_Source == "lkg" && bans.m_EditsRefused && bans.m_Active.Count() == 1 && !bans.NoUsableList());
+        banMissing.m_Files.Remove(NimbyAdminServerRules.FILE_BANS_LKG);
+        bans.Load(10, problem);
+        failures += Case(results, "bans: a .lkg recovery whose backup then disappears still refuses edits", bans.m_Source == "lkg" && bans.m_EditsRefused && bans.m_Active.Count() == 1 && !bans.IsFirstInstall());
         NimbyAdminServerFakeIo banLocked = new NimbyAdminServerFakeIo();
         banLocked.m_Files.Set(NimbyAdminServerRules.FILE_BANS, BANS_ONE);
         banLocked.m_Unreadable.Insert(NimbyAdminServerRules.FILE_BANS);

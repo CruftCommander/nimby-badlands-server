@@ -10,7 +10,10 @@ Changes, newest first:
 - November 1, 2026 (Phase 0 re-review fixes, feat/nimby-admin; docs/reviews/2026-11-01-central-
   scrutinizer-phase0-codex-rereview.md): finding 1, the replay window keeps the 256 highest
   accepted ids per connection, not the 256 most recent; eviction removes the lowest id, so an
-  evicted id is always below the floor and is stale, never accepted again.
+  evicted id is always below the floor and is stale, never accepted again; finding 3, a store
+  that ever loaded a file or recovered from .lkg is never a first install again (m_EverLoaded),
+  so a backup that disappears after a .lkg recovery keeps edits refused and never writes the
+  bootstrap owner file.
 - October 31, 2026 (Phase 0 review fixes, feat/nimby-admin; the Codex review of 439b729,
   docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md): finding 1, the replay
   window (the last 256 accepted ids per connection, a floor once full, no time expiry; "stale"
