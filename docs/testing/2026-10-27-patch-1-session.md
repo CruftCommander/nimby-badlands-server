@@ -453,6 +453,16 @@ Jeff's ruling (November 1, 23:10 Central): keep one guard canary rather than non
 - **Removed.** `TickCanary` and its call at the top of each `Step2Tick` entry; `StepCanary` and its twelve calls in `CollectStep2Facts`; the `MoveStep2` canaries after `LogReservations`, `LocationSyncMoveEntity` and `SendServerMove`; `s_Step2CanaryTripped` and `Step2CanaryTripped()` and their resets in `Step2Tick` and `OnStep2`; the two trip checks in `RunStep2`. Self-test counts unchanged (Hands 192, DevHarness 19). One canary line per transfer instead of 18.
 - **What this build tests.** Nothing about the transfer path changes; what goes is the per-tick and per-step instrumentation. Readings: CONFIRMED three of three with `canary after entry: ok` on each clears the unwind; a CHANGED entry canary now stops the move and quarantines (the item stays in the giver's cargo, no toast), which is the guard's intended behavior and would reopen the hunt.
 
+## Rows on @NIMBY-20261031-231216 (two-client, `-NoDev`, build 23, October 31, 2026)
+
+Build 23:12 (`build-20261031-231216`, dd941ff, `SUMMARY PASS`, 685 of 685: Hands 192, DevHarness 19): the build 23 design section. Local gate on dd941ff: Pester 208 passed, 0 failed; `Test-NimbyRepo.ps1` exit 0. Boot log: the store probe unchanged; the harness two-player step 2 case wrote one `canary after entry: ok`. Mirrored to purgatory (15 of 15).
+
+| Test | Plan row | Check | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| S6-30 | Hands HD-001 (T-010, TGA-035) | One player holds the kit wrench and offers (O); the other uses Take. Three repetitions in one run (L to D, D to L, L to D) | **PASS, three of three: CONFIRMED with one guard canary per transfer.** `canary after entry: ok` once per transfer (3 canary lines in the run), no quarantine, no crash, clean shutdown (`~DayZGame()` 23:21) | Run `testserver-20261031-231454`, 23:14 to 23:21. id=1 (L gives, wrench): `wait free waited=800`, `REQUESTED ... via=client` (23:20:08.807), `STAGED` (09.307, +500 ms), `step 2 poll: staged 50 ms ago`, `canary after entry: ok`, **`state=CONFIRMED`** (09.358). id=2 (D gives) CONFIRMED 23:20:16.071 (waited 801); id=3 (L gives) CONFIRMED 23:20:31.055 (waited 801). Server stopped by Enter 23:21 |
+
+**The unwind is complete (builds 20 to 23, four confirm runs, twelve of twelve CONFIRMED).** What the tree carries from the hunt now: the build 19 fix (every compound member assignment through locals, `NimbyHandsRules.Replaced`), the store probe and its cases, the guard canary with the quarantine, the client-driven step 1 (build 12), the poll-read landing (build 13), the step 2 poll at `STEP2_DELAY_MS` (ruled kept), one native per debug line, the toast by identity id, bookkeeping outside the callback. Gone: the build 10 dispatch plumbing, the build 14 idle gate, the build 15 hold, the build 17 pool, the tick and step canaries. Next: `origin/main` (PRs #13 and #14) merged into the branch as its own build with its own confirm run, so the PR gate runs again; then S6-30 twenty repetitions and S6-31 onward.
+
 ## Not in tonight's plan
 
 - Receiver killed between step 1 and step 2, and the corpse-delivery ruling Jeff owes (TGA-041): needs a third player.
