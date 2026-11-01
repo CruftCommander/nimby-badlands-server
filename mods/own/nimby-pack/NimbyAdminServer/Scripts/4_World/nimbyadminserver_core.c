@@ -248,11 +248,10 @@ class NimbyAdminServerCore
             rate = new NimbyAdminServerBucket();
             s_Rates.Set(sender.GetId(), rate);
         }
-        bool aggregateOk = s_Aggregate.Take(now, NimbyAdminServerRules.AGGREGATE_PER_SECOND, NimbyAdminServerRules.AGGREGATE_BURST);
-        bool senderOk = rate.Take(now, s_Config.requestsPerSecond, NimbyAdminServerRules.RATE_BURST);
-        if (!aggregateOk || !senderOk)
+        string limited = NimbyAdminServerRules.Admit(rate, s_Aggregate, now, s_Config.requestsPerSecond, NimbyAdminServerRules.RATE_BURST);
+        if (limited != "")
         {
-            NimbyAdminLog.Gated("rate:" + key, "rate-limited " + NimbyAdminLog.Who(sender) + " aggregate=" + NimbyAdminLog.Bool(!aggregateOk));
+            NimbyAdminLog.Gated("rate:" + key, "rate-limited " + NimbyAdminLog.Who(sender) + " aggregate=" + NimbyAdminLog.Bool(limited == NimbyAdminServerRules.LIMIT_AGGREGATE));
             return;
         }
         Param4<int, int, string, string> request = new Param4<int, int, string, string>(0, 0, "", "");
@@ -418,10 +417,16 @@ class NimbyAdminServerCore
         {
             return;
         }
+        bool logIt = NimbyAdminServerRules.ShouldLogRoleSync(session.lastRole, role);
         session.pushSequence = session.pushSequence + 1;
         session.lastRole = role;
         Param3<int, int, string> push = new Param3<int, int, string>(NimbyAdminRules.PUSH_ROLE, session.pushSequence, role);
         GetGame().RPCSingleParam(player, NimbyAdminRules.RPC_PUSH, push, true, session.identity);
+        if (!logIt)
+        {
+            NimbyAdminLog.Debug("role sync repeated session=" + session.number.ToString() + " role=" + role + " reason=" + reason);
+            return;
+        }
         NimbyAdminLog.Info("role sync " + NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64) + " role=" + role + " source=" + RoleSource(session.steam64) + " session=" + session.number.ToString() + " reason=" + reason);
     }
 
@@ -441,7 +446,8 @@ class NimbyAdminServerCore
     // ---- handlers ----------------------------------------------------------------------------------
 
     // Ruling 8: the client asks after OnPlayerLoaded; the answer is a role push (no audit record:
-    // nothing changes and nothing sensitive is returned).
+    // nothing changes and nothing sensitive is returned). Review finding 6: a repeated hello is
+    // answered every time but logged only when the role changed (PushRole).
     protected static void HandleHello(NimbyAdminServerActor actor, NimbyAdminServerSession session, string role)
     {
         PushRole(session, role, "hello");

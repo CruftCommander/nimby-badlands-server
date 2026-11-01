@@ -219,6 +219,38 @@ class NimbyAdminServerRules
         return requested.ToInt() == current;
     }
 
+    // ---- limits and log rules -------------------------------------------------------------------
+
+    static const string LIMIT_SENDER = "sender";
+    static const string LIMIT_AGGREGATE = "aggregate";
+
+    // Review finding 5 (October 31, 2026): the sender's own bucket first; an aggregate token is
+    // spent only for a request the sender's bucket allowed, so one flooding sender cannot drain
+    // the aggregate for everyone else. "" admitted, else LIMIT_SENDER or LIMIT_AGGREGATE.
+    static string Admit(NimbyAdminServerBucket sender, NimbyAdminServerBucket aggregate, float now, float senderRate, int senderBurst)
+    {
+        if (!sender.Take(now, senderRate, senderBurst))
+        {
+            return LIMIT_SENDER;
+        }
+        if (!aggregate.Take(now, AGGREGATE_PER_SECOND, AGGREGATE_BURST))
+        {
+            return LIMIT_AGGREGATE;
+        }
+        return "";
+    }
+
+    // Review finding 6: the role sync line is written once per connection (the session's first
+    // push) and again only when the role changes; the role reply itself is always sent.
+    static bool ShouldLogRoleSync(string lastPushedRole, string role)
+    {
+        if (lastPushedRole == "")
+        {
+            return true;
+        }
+        return lastPushedRole != role;
+    }
+
     // ---- time -----------------------------------------------------------------------------------
 
     static string Pad2(int value)

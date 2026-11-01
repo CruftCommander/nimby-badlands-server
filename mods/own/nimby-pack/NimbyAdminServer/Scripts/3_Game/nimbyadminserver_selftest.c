@@ -254,6 +254,35 @@ class NimbyAdminServerSelfTest
         }
         failures += Case(results, "rate: a burst of 50 in one frame takes 10", taken == 10);
         failures += Case(results, "rate: one token returns after 0.3 s at 5 a second", bucket.Take(100.3, 5.0, 10) && bucket.Take(100.3, 5.0, 10) == false);
+        NimbyAdminServerBucket flooder = new NimbyAdminServerBucket();
+        NimbyAdminServerBucket aggregate = new NimbyAdminServerBucket();
+        int admitted = 0;
+        int tries = 0;
+        while (tries < 100)
+        {
+            if (NimbyAdminServerRules.Admit(flooder, aggregate, 200.0, 5.0, 10) == "")
+            {
+                admitted = admitted + 1;
+            }
+            tries = tries + 1;
+        }
+        int left = 0;
+        while (aggregate.Take(200.0, NimbyAdminServerRules.AGGREGATE_PER_SECOND, NimbyAdminServerRules.AGGREGATE_BURST))
+        {
+            left = left + 1;
+        }
+        failures += Case(results, "rate: a flooding sender spends aggregate tokens only for its 10 admitted requests (finding 5)", admitted == 10 && left == NimbyAdminServerRules.AGGREGATE_BURST - 10);
+        NimbyAdminServerBucket quiet = new NimbyAdminServerBucket();
+        NimbyAdminServerBucket empty = new NimbyAdminServerBucket();
+        int drained = 0;
+        while (empty.Take(300.0, NimbyAdminServerRules.AGGREGATE_PER_SECOND, NimbyAdminServerRules.AGGREGATE_BURST))
+        {
+            drained = drained + 1;
+        }
+        failures += Case(results, "rate: an empty aggregate refuses with the aggregate reason", NimbyAdminServerRules.Admit(quiet, empty, 300.0, 5.0, 10) == NimbyAdminServerRules.LIMIT_AGGREGATE);
+        failures += Case(results, "hello: the first role sync of a connection is logged (finding 6)", NimbyAdminServerRules.ShouldLogRoleSync("", "none") && NimbyAdminServerRules.ShouldLogRoleSync("", "owner"));
+        failures += Case(results, "hello: a repeated hello with the same role is not logged", NimbyAdminServerRules.ShouldLogRoleSync("none", "none") == false && NimbyAdminServerRules.ShouldLogRoleSync("admin", "admin") == false);
+        failures += Case(results, "hello: a role change is logged", NimbyAdminServerRules.ShouldLogRoleSync("none", "admin") && NimbyAdminServerRules.ShouldLogRoleSync("owner", "none"));
         failures += ReplayCases(results);
         NimbyAdminArgs args;
         string why;
