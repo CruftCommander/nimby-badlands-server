@@ -462,6 +462,30 @@ class NimbyAdminServerSelfTest
         bool wroteLate = recovered.WriteBootstrapFile(why);
         failures += Case(results, "store: a .lkg recovery whose backup then disappears still refuses edits and never bootstraps", fromLkg && recovered.m_Source == "lkg" && recovered.m_EditsRefused && !recovered.IsFirstInstall() && !wroteLate && !vanish.m_Files.Contains(p) && recovered.RoleOf(BOOT_A) == "none" && recovered.RoleOf("76561190000000011") == "owner");
 
+        // Third-pass residual of finding 3: an unreadable (or invalid) primary, no .lkg, no prior
+        // load, so recovery ends with source none; then the primary is deleted. Before the fix the
+        // reload took the first-install branch (edits allowed, bootstrap writable).
+        NimbyAdminServerFakeIo blind = new NimbyAdminServerFakeIo();
+        blind.m_Files.Set(p, OWNER_B);
+        blind.m_Unreadable.Insert(p);
+        NimbyAdminServerPermissionStore never = PermStore(blind);
+        never.Load(0, problem);
+        bool noneFirst = never.m_Source == "none" && never.m_EditsRefused;
+        blind.m_Files.Remove(p);
+        blind.m_Unreadable.Clear();
+        never.Load(10, problem);
+        bool wroteBlind = never.WriteBootstrapFile(why);
+        failures += Case(results, "store: an unreadable primary with no .lkg, then deleted, still refuses edits and never bootstraps", noneFirst && never.m_Source == "none" && never.m_EditsRefused && !never.IsFirstInstall() && !wroteBlind && !blind.m_Files.Contains(p));
+        NimbyAdminServerFakeIo junk = new NimbyAdminServerFakeIo();
+        junk.m_Files.Set(p, BAD_V2);
+        NimbyAdminServerPermissionStore invalid = PermStore(junk);
+        invalid.Load(0, problem);
+        bool invalidFirst = invalid.m_Source == "none" && invalid.m_EditsRefused;
+        junk.m_Files.Remove(p);
+        invalid.Load(10, problem);
+        bool wroteJunk = invalid.WriteBootstrapFile(why);
+        failures += Case(results, "store: an invalid primary with no .lkg, then deleted, still refuses edits and never bootstraps", invalidFirst && invalid.m_EditsRefused && !invalid.IsFirstInstall() && !wroteJunk && !junk.m_Files.Contains(p));
+
         NimbyAdminServerFakeIo locked = new NimbyAdminServerFakeIo();
         locked.m_Files.Set(p, OWNER_B);
         locked.m_Unreadable.Insert(p);
