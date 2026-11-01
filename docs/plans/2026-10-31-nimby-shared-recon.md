@@ -280,3 +280,24 @@ Asked one at a time, each with a recommendation.
 1. Page Up and Page Down for every NIMBY window: (A) move the two inputs to NimbyShared as `UANimbySharedPageUp` and `UANimbySharedPageDown`, Controls label "NIMBY: page the window up/down", read by whichever shell window is open; same default keys, but a player who rebound Greet's page keys since October 26 loses that rebinding, and the Controls label changes. (B) Move the declaration to NimbyShared but keep the names `UANimbyGreetPageUp/Down`: bindings survive, the names lie. (C) Keep them in Greet; Central Scrutinizer declares its own pair on other default keys (rule 5). Recommended: A.
 2. Debug-line suffix (risk 5, plan line 5): recommended yes.
 3. SH-12 evidence (plan line 3): recommended the self-test cases plus one recorded live attempt.
+
+## Status, October 31, 2026, 21:20 (WRAPPING)
+
+Done:
+
+- Phase 1 code on `feat/nimby-shared` (`19672f7`): NimbyShared body, Greet refactored onto it, no copy of a moved function in Greet.
+- Plan 11 v0.2, Greet plan v0.5, Greet `NOTICE` (`80bd577`, path fix after it); Phase 1 record `docs/testing/2026-10-31-nimby-shared-phase1.md` (`d26889a`).
+- Boot check `SUMMARY PASS` on `build\@NIMBY-20261031-210751` and `build\@NIMBY-20261031-210953` (NimbyShared 53 of 53, Greet 87 of 87, total 645, 0 `SCRIPT (E)`); `Test-NimbyRepo.ps1` `SUMMARY PASS failures=0`.
+- SH-01 PASS; SH-13 PASS (loud FAIL); SH-14 PASS on the file set, wording question open; SH-12 self-test part PASS.
+
+Running:
+
+- Test server on port 2302 from `build\@NIMBY-20261031-210953`, profile `profiles\nimby-shared-p1` (Russian SH-11 fixture, both debug flags), `DayZServer_x64` PID 22660. Its input is held open by a Git Bash `sleep` whose MSYS pid is in `logs\p1-holder.pid`. To stop it gracefully (RCON `#shutdown`, then the summary): in Git Bash from the worktree root, `kill $(cat logs/p1-holder.pid)`.
+
+Next:
+
+1. Jeff runs the client rows SH-02 to SH-12 and SH-15, SH-16 against `build\@NIMBY-20261031-210953` with `$profile:NimbyShared\debug` and `$profile:NimbyGreet\debug` in the client profile, and pastes the lines and screenshots.
+2. The seat records each row with its `.rpt` line in the Phase 1 record, stops the server as above, and runs `Read-NimbyTestRun.ps1` on the run.
+3. When every row is green: draft the PR description in a "PR description" section of this file; the PR is Jeff's call.
+
+Blocked: SH-14 evidence wording (record, "Open for the orchestrator").
