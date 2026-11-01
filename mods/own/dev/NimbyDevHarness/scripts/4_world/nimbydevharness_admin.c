@@ -41,6 +41,10 @@ class NimbyDevHarnessAdmin
     static const int STEP_MS = 3000;
     static const int FORGE_OFFSET = 1000000;
     static const int MAX_FORGES_PER_RUN = 127;
+    // Steps that read a new base for the same identity: the second client in steps 1 and 4, the
+    // owner in steps 2 and 3. Each step's base is the highest the server published, which then
+    // includes the previous step's forged ids.
+    static const int FORGE_STEPS_PER_IDENTITY = 2;
     // Step 1: 2, step 2: 6, step 3: 2 (one id twice), step 4: 50.
     static const int PLANNED_FORGES = 60;
 
@@ -50,6 +54,7 @@ class NimbyDevHarnessAdmin
     protected static ref map<string, PlayerIdentity> s_Identities;
     protected static int s_NextSession = 1;
     protected static int s_Forged;
+    protected static bool s_NoHeadroom;
     protected static bool s_Aborted;
     protected static string s_RunStart;
     protected static ref map<string, int> s_StepBase;
@@ -140,6 +145,10 @@ class NimbyDevHarnessAdmin
 
     protected static void Forge(PlayerBase targetObject, PlayerIdentity sender, int protocol, int requestId, string command, string args)
     {
+        if (s_NoHeadroom)
+        {
+            return;
+        }
         if (s_Forged >= MAX_FORGES_PER_RUN)
         {
             if (!s_Aborted)
@@ -195,8 +204,23 @@ class NimbyDevHarnessAdmin
         return "$profile:NimbyAdmin\\audit\\audit-denied-" + Today() + ".log";
     }
 
+    // Third-pass finding 14: whether steps more step bases above highest, each the published
+    // highest plus FORGE_OFFSET with up to MAX_FORGES_PER_RUN ids above it, stay positive 32-bit
+    // ints (int.MAX, 1_Core/DayZ/proto/EnConvert.c:27). Compared by subtraction, because the sum
+    // itself would wrap. A negative highest (none is accepted) or no step has no headroom.
+    static bool HasIdHeadroom(int highest, int steps)
+    {
+        if (highest < 0 || steps < 1)
+        {
+            return false;
+        }
+        int perStep = FORGE_OFFSET + MAX_FORGES_PER_RUN;
+        return highest <= int.MAX - steps * perStep;
+    }
+
     // Step ids: the server's highest accepted id for this identity plus FORGE_OFFSET, read once
-    // per step, plus n.
+    // per step, plus n. Backstop for finding 14: a step whose base has no headroom (a client
+    // raised its highest during the run) stops the run, once, and nothing more is forged.
     protected static void BeginStep()
     {
         s_StepBase = new map<string, int>;
@@ -208,7 +232,17 @@ class NimbyDevHarnessAdmin
         int base;
         if (!s_StepBase.Find(biId, base))
         {
-            base = NimbyAdminHighWater.Get(biId) + FORGE_OFFSET;
+            int highest = NimbyAdminHighWater.Get(biId);
+            if (!HasIdHeadroom(highest, 1))
+            {
+                if (!s_NoHeadroom)
+                {
+                    s_NoHeadroom = true;
+                    Print(PREFIX + "[Forge] SKIP admin: id headroom: highest " + highest.ToString() + " + " + FORGE_OFFSET.ToString() + " + " + MAX_FORGES_PER_RUN.ToString() + " does not fit a positive 32-bit int; the remaining forges are not sent");
+                }
+                return 0;
+            }
+            base = highest + FORGE_OFFSET;
             s_StepBase.Set(biId, base);
         }
         return base + n;
@@ -328,6 +362,7 @@ class NimbyDevHarnessAdmin
         s_Failures = 0;
         s_Forged = 0;
         s_Aborted = false;
+        s_NoHeadroom = false;
         s_RunStart = NowUtc();
         if (PLANNED_FORGES > MAX_FORGES_PER_RUN)
         {
@@ -337,6 +372,13 @@ class NimbyDevHarnessAdmin
         if (!FindPlayers())
         {
             Print(PREFIX + "[Forge] SKIP admin: need the owner (forge admin-owner=) and a second player in the world");
+            return;
+        }
+        int ownerHighest = NimbyAdminHighWater.Get(s_Owner.GetIdentity().GetId());
+        int otherHighest = NimbyAdminHighWater.Get(s_Other.GetIdentity().GetId());
+        if (!HasIdHeadroom(ownerHighest, FORGE_STEPS_PER_IDENTITY) || !HasIdHeadroom(otherHighest, FORGE_STEPS_PER_IDENTITY))
+        {
+            Print(PREFIX + "[Forge] SKIP admin: id headroom: highest owner=" + ownerHighest.ToString() + " other=" + otherHighest.ToString() + "; " + FORGE_STEPS_PER_IDENTITY.ToString() + " x (" + FORGE_OFFSET.ToString() + " + " + MAX_FORGES_PER_RUN.ToString() + ") above it does not fit a positive 32-bit int; nothing forged");
             return;
         }
         s_OwnerBefore = s_Owner.GetPosition();

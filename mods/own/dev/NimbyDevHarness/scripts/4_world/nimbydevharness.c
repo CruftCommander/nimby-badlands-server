@@ -408,6 +408,12 @@ class NimbyDevHarness
     // Deletes everything phase 1 spawned and prints the report.
     protected static void FinishBoot()
     {
+        // Third-pass finding 14: the admin cases' id headroom rule at its boundary.
+        int oneStep = int.MAX - (NimbyDevHarnessAdmin.FORGE_OFFSET + NimbyDevHarnessAdmin.MAX_FORGES_PER_RUN);
+        int twoSteps = int.MAX - 2 * (NimbyDevHarnessAdmin.FORGE_OFFSET + NimbyDevHarnessAdmin.MAX_FORGES_PER_RUN);
+        bool edge = NimbyDevHarnessAdmin.HasIdHeadroom(oneStep, 1) && !NimbyDevHarnessAdmin.HasIdHeadroom(oneStep + 1, 1) && NimbyDevHarnessAdmin.HasIdHeadroom(twoSteps, 2) && !NimbyDevHarnessAdmin.HasIdHeadroom(twoSteps + 1, 2) && NimbyDevHarnessAdmin.HasIdHeadroom(0, 2) && !NimbyDevHarnessAdmin.HasIdHeadroom(-1, 2);
+        Record("admin-id-headroom-at-the-boundary", edge, "one step fits up to " + oneStep.ToString() + ", two steps up to " + twoSteps.ToString());
+        Record("admin-id-headroom-refuses-int-max", !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 1) && !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 2), "a client hello with id 2147483647 leaves no headroom");
         Delete(s_Wrench);
         Delete(s_Pliers);
         Delete(s_DummyA);

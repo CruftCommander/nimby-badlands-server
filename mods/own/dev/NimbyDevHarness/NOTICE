@@ -32,6 +32,12 @@ How it runs (server only):
 
 Changes, newest first:
 
+- November 1, 2026, afternoon (feat/nimby-admin, Central Scrutinizer third-pass finding 14):
+  before forging, the admin cases check id headroom (HasIdHeadroom): each identity's highest
+  plus 2 x (1,000,000 + 127) must fit a positive 32-bit int, because each identity reads a new
+  base in two steps; otherwise the run reports SKIP admin: id headroom and forges nothing. A
+  step whose base lost headroom during the run stops it the same way (backstop). Two boot cases
+  test the rule at its boundary.
 - November 1, 2026 (feat/nimby-admin, Central Scrutinizer re-review finding 1 and the
   orchestrator ruling): the admin cases forge from the server's highest accepted id plus
   1,000,000 (was 1024); the 127-per-run cap stays, so the harness ids, which the server's
