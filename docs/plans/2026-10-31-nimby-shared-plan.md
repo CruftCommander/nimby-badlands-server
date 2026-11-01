@@ -1,6 +1,6 @@
 # Plan 11 - NimbyShared (`NimbyShared`)
 
-Draft v0.2, October 31, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-shared` (branch `feat/nimby-shared`, cut from `origin/main` at `3e1af5d` on October 31, 2026), coordinated by the orchestrator. Status: Phase 1 built on `feat/nimby-shared`; regression rows SH-01 to SH-16 in progress (`docs/testing/2026-11-xx-nimby-shared-phase1.md`).
+Draft v0.2, October 31, 2026. Owner: Jeff Fabish. Implementer: a Claude Code session in worktree `D:\GitHub\nimby-badlands-server-wt\nimby-shared` (branch `feat/nimby-shared`, cut from `origin/main` at `3e1af5d` on October 31, 2026), coordinated by the orchestrator. Status: Phase 1 built on `feat/nimby-shared`; regression rows SH-01 to SH-16 in progress (`docs/testing/2026-10-31-nimby-shared-phase1.md`).
 
 Changes since v0.1 (Phase 0 recon `2026-10-31-nimby-shared-recon.md`, accepted by the orchestrator October 31, 2026, with Jeff's rulings on its three questions): C5 to C8 record the shape as built, including refinements R1 (a panel-sized content slot instead of a WrapSpacer footer), R2 (the pause registry takes entry objects), and R3 (the receiver takes one cap); the page keys move to NimbyShared (question 1); the moved shell lines end in `menu=<id>` (question 2); SH-12's evidence is the moved receiver cases plus one recorded live attempt (question 3); the layout names, the diagram, the Phase 1 step 1 file list, and the SH-05, SH-06, SH-11, SH-12 evidence text are corrected; SH-15 and SH-16 are added. Shared rules v1.8 (sections 5 and 8.1) is the text this plan is written against.
 
@@ -69,7 +69,7 @@ Done October 31, 2026: `2026-10-31-nimby-shared-recon.md` (commit `a6eee5c`), ac
 2. Move the pieces per the table. Greet's `config.cpp` gains `"NimbyShared"` in `requiredAddons[]`. Nothing in Greet keeps a copy of a moved function.
 3. Self-tests per C8; `scripts/Build-NimbyPack.ps1` with the boot check green (`[NIMBY][Shared][SelfTest] PASS` and `[NIMBY][Greet][SelfTest] PASS` for every case, 0 `SCRIPT (E)`).
 4. Greet regression on the replica from the exact build, rows in the Tests table; the seat drives the build and the server, Jeff runs the client steps and pastes the lines.
-5. Update the Greet plan (v0.5: a one-paragraph note that the shell and codec live in NimbyShared, no decision reopened), this plan (v0.2 with the final method set), and `docs/testing/2026-11-xx-nimby-shared-phase1.md`.
+5. Update the Greet plan (v0.5: a one-paragraph note that the shell and codec live in NimbyShared, no decision reopened), this plan (v0.2 with the final method set), and `docs/testing/2026-10-31-nimby-shared-phase1.md`.
 
 Exit: every Tests row green; the Greet window indistinguishable from the release-1 build in the side-by-side screenshots Jeff takes at 1920x1080.
 
