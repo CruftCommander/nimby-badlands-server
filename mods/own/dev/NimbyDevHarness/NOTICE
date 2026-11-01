@@ -37,7 +37,11 @@ Changes, newest first:
   counterpart of the router's single ctx.Read; Param4.Serialize wrote the four fields one by
   one, which the router refused as unreadable, so no forged admin request reached it in the gate
   session. Each forge prints one [Forge] sent line with the id, the command, the sender identity
-  and the target body's identity. Boot case admin-forge-context-reads-back-as-the-router.
+  and the target body's identity. Boot case admin-forge-context-reads-back-as-the-router; the
+  sandstorm case follows the vanilla dev command (DayZGame.c:3415-3436): wind turned to the
+  storm's direction and rain held at 0 before Start (the gate session showed a thunderstorm),
+  and the check line is followed by the storm's position, direction, speed, remaining time and
+  each player's distance to it.
 - November 1, 2026, afternoon (feat/nimby-admin, Central Scrutinizer third-pass finding 14):
   before forging, the admin cases check id headroom (HasIdHeadroom): each identity's highest
   plus 2 x (1,000,000 + 127) must fit a positive 32-bit int, because each identity reads a new

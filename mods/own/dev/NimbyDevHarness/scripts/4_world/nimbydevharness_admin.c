@@ -519,10 +519,18 @@ class NimbyDevHarnessAdmin
             Print(PREFIX + "[Forge] FAIL sandstorm: no Weather or no SandstormController");
             return;
         }
+        // Gate session of November 1, 2026: Jeff saw a thunderstorm, not a sandstorm. The harness
+        // now follows the vanilla dev command (3_Game/DayZ/DayZGame.c:3415-3436): wind turned to
+        // the storm's direction (Weather.WindDirectionToAngle :340, GetWindDirection :199), overcast
+        // 0.8, wind 18, and rain held at 0 (GetRain :189), then Start.
+        SandstormController storm = weather.GetSandstorm();
+        float stormAngle = weather.WindDirectionToAngle(storm.GetDirection());
+        weather.GetWindDirection().Set(stormAngle, 10, 300);
         weather.GetOvercast().Set(0.8, 10, 300);
         weather.GetWindMagnitude().Set(18.0, 10, 300);
-        bool started = weather.GetSandstorm().Start(120, false);
-        Print(PREFIX + "[Forge] sandstorm: Start(120, false) returned " + NimbyDevHarness.Bool(started));
+        weather.GetRain().Set(0, 10, 300);
+        bool started = storm.Start(120, false);
+        Print(PREFIX + "[Forge] sandstorm: Start(120, false) returned " + NimbyDevHarness.Bool(started) + " windAngle=" + stormAngle.ToString());
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.SandstormCheck, 5000, false, started);
     }
 
@@ -535,7 +543,36 @@ class NimbyDevHarnessAdmin
             verdict = "PASS";
         }
         Print(PREFIX + "[Forge] " + verdict + " sandstorm: Start=" + NimbyDevHarness.Bool(started) + " active=" + NimbyDevHarness.Bool(active));
+        if (active)
+        {
+            // Where the front is, so a rerun can tell "not visible" from "not near the players"
+            // (Sandstorm.c:37, :47, :52, :57; valid only while active).
+            SandstormController storm = GetGame().GetWeather().GetSandstorm();
+            Print(PREFIX + "[Forge] sandstorm: position=" + storm.GetPosition().ToString() + " direction=" + storm.GetDirection().ToString() + " speed=" + storm.GetSpeed().ToString() + " remaining=" + storm.GetRemainingMovementDuration().ToString() + " s; " + SandstormPlayerDistances(storm.GetPosition()));
+        }
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.SandstormStop, 85000, false);
+    }
+
+    // Each connected player's horizontal distance to the storm's position, by Steam64.
+    protected static string SandstormPlayerDistances(vector stormAt)
+    {
+        array<Man> players = new array<Man>;
+        GetGame().GetPlayers(players);
+        string text = "players:";
+        foreach (Man man : players)
+        {
+            PlayerBase player = PlayerBase.Cast(man);
+            if (!player || !player.GetIdentity())
+            {
+                continue;
+            }
+            vector at = player.GetPosition();
+            float dx = at[0] - stormAt[0];
+            float dz = at[2] - stormAt[2];
+            float meters = Math.Sqrt(dx * dx + dz * dz);
+            text = text + " " + player.GetIdentity().GetPlainId() + "=" + meters.ToString() + "m";
+        }
+        return text;
     }
 
     static void SandstormStop()
