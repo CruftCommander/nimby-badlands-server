@@ -176,6 +176,7 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "roles: a fake owner-only capability registers and unregisters (N9 seam)", fakeOwner && !fakeAdmin && NimbyAdminServerRules.RoleGrants("owner", "selftest.fake") == false);
         failures += Case(results, "commands: hello needs no capability, teleport needs player.teleport", NimbyAdminServerRules.CapabilityFor("session.hello") == "" && NimbyAdminServerRules.CapabilityFor("player.teleportTo") == NimbyAdminServerRules.CAP_PLAYER_TELEPORT);
         failures += Case(results, "commands: an unknown command is not known", NimbyAdminServerRules.IsKnownCommand("player.kill") == false && NimbyAdminServerRules.IsKnownCommand("players.list"));
+        failures += Case(results, "log: a known command logs as itself, an unknown one only as its length (finding 7)", NimbyAdminServerRules.CommandForLog("players.list") == "players.list" && NimbyAdminServerRules.CommandForLog("x\n[NIMBY] y") == "<unknown len=11>");
         NimbyAdminServerBans bans = NimbyAdminServerBans.Empty();
         bans.bans.Insert(Ban("76561190000000003", ""));
         bans.bans.Insert(Ban("76561190000000004", "2026-11-01T00:00:00Z"));

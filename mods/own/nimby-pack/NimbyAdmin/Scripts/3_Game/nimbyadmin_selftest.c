@@ -181,6 +181,10 @@ class NimbyAdminSelfTest
         failures += Case(results, "log: the gate holds a second line inside the window", NimbyAdminLog.GateAllows(100.0, 105.0, 10.0) == false);
         failures += Case(results, "log: the gate allows a line after the window", NimbyAdminLog.GateAllows(100.0, 110.0, 10.0));
         failures += Case(results, "log: names are escaped after both ids", NimbyAdminLog.WhoFrom("a\"b", "BI", "7656") == "player=(BI, 7656) \"a\\\"b\"");
+        failures += Case(results, "log: Safe replaces line breaks with ? (finding 7)", NimbyAdminLog.Safe("a\nb\rc") == "a?b?c");
+        failures += Case(results, "log: Safe treats every byte below 0x20 and 0x7F as unsafe, and keeps 0x20 to 0x7E", NimbyAdminLog.IsUnsafeByte(0) && NimbyAdminLog.IsUnsafeByte(9) && NimbyAdminLog.IsUnsafeByte(31) && NimbyAdminLog.IsUnsafeByte(127) && !NimbyAdminLog.IsUnsafeByte(32) && !NimbyAdminLog.IsUnsafeByte(126));
+        failures += Case(results, "log: Safe caps at 64 bytes and keeps a two-byte character whole", NimbyAdminLog.Safe(NimbySharedChunks.FillBytes("x", 100)).Length() == 64 && NimbyAdminLog.Safe("aд\nb") == "aд?b");
+        failures += Case(results, "log: a forged name cannot add a line to WhoFrom", NimbyAdminLog.WhoFrom("x\n[NIMBY][Admin] fake", "BI\n", "7656").IndexOf("\n") < 0);
         return failures;
     }
 

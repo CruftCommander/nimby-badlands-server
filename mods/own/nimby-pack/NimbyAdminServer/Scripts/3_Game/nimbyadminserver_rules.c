@@ -186,6 +186,17 @@ class NimbyAdminServerRules
         return false;
     }
 
+    // Review finding 7: a command for an ordinary log line. A known command is a constant of this
+    // file; any other text is never logged, only its length.
+    static string CommandForLog(string command)
+    {
+        if (IsKnownCommand(command))
+        {
+            return command;
+        }
+        return "<unknown len=" + command.Length().ToString() + ">";
+    }
+
     // player.teleportTo: target (BI id, 1 to 64 bytes) and session (digits) are required.
     static string CheckTeleportArgs(NimbyAdminArgs args)
     {

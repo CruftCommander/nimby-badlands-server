@@ -15,7 +15,10 @@
 //           dropped with one gated line, an id below the floor is "stale"; a protocol other than
 //           1 is refused.
 // Logs    : every refusal a client can cause is gated per sender (NimbyAdminLog.Gated); denied and
-//           invalid audit records are bounded per sender (30 a minute).
+//           invalid audit records are bounded per sender (30 a minute) and in aggregate (120 a
+//           minute). Client text reaches an ordinary log line only through NimbyAdminLog.Safe (in
+//           WhoFrom) or CommandForLog (an unknown command logs as <unknown len=N>), review
+//           finding 7; the audit journal keeps the command, JSON-escaped and cut to 32 bytes.
 // Gates   : server only (recon R11). The client half's PlayerBase override passes 6550301 to super.
 // Vanilla : PlayerBase.OnRPC (4_World/DayZ/Entities/ManBase/PlayerBase.c:5727); Object.SetPosition,
 //           GetPosition, GetDirection, GetOrientation (3_Game/DayZ/Entities/Object.c:294,287,314,305);
@@ -275,7 +278,7 @@ class NimbyAdminServerCore
         string envelope = NimbyAdminRules.CheckEnvelope(request.param1, requestId, command, argsText);
         if (envelope != "")
         {
-            Reject(actor, session, requestId, NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES), NimbyAdminRules.CODE_INVALID, envelope);
+            Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, envelope);
             return;
         }
         if (!NimbyAdminServerRules.IsSteam64(actor.steam64))
@@ -286,7 +289,7 @@ class NimbyAdminServerCore
         string replay = session.seen.Check(requestId);
         if (replay == NimbyAdminServerSeen.DUPLICATE)
         {
-            NimbyAdminLog.Gated("dup:" + key, "duplicate id=" + requestId.ToString() + " command=" + command + " " + NimbyAdminLog.Who(sender));
+            NimbyAdminLog.Gated("dup:" + key, "duplicate id=" + requestId.ToString() + " command=" + NimbyAdminServerRules.CommandForLog(command) + " " + NimbyAdminLog.Who(sender));
             return;
         }
         if (replay == NimbyAdminServerSeen.STALE)
@@ -344,11 +347,11 @@ class NimbyAdminServerCore
     protected static void Reject(NimbyAdminServerActor actor, NimbyAdminServerSession session, int requestId, string command, int code, string reason)
     {
         string resultName = NimbyAdminRules.CodeName(code);
-        NimbyAdminLog.Gated("reject:" + actor.biId, "request " + resultName + " id=" + requestId.ToString() + " command=" + command + " reason=" + reason + " " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
+        NimbyAdminLog.Gated("reject:" + actor.biId, "request " + resultName + " id=" + requestId.ToString() + " command=" + NimbyAdminServerRules.CommandForLog(command) + " reason=" + reason + " " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
         float now = GetGame().GetTickTime();
         if (NimbyAdminServerRules.DenialRecordAllowed(session.denials, s_DenialAggregate, now))
         {
-            NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, command, "result");
+            NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES), "result");
             record.result = resultName;
             record.reason = reason;
             NimbyAdminServerAudit.Append(record);
