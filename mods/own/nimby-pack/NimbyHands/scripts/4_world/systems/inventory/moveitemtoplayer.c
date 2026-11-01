@@ -429,12 +429,6 @@ class NimbyHandsMoveItemToPlayer
         InventoryLocation src = new InventoryLocation;
         InventoryLocation dst = new InventoryLocation;
         NimbyHandsRequestFacts facts = CollectStep2Facts(transfer, src, dst);
-        if (NimbyHandsServer.Step2CanaryTripped())
-        {
-            // Build 18: a step canary inside the facts found the damage; the entry is quarantined
-            // and nothing here reads or writes the transfer again, and the move does not run.
-            return;
-        }
         string refusal = NimbyHandsRules.CheckRequest(facts, NimbyHandsRules.STEP2);
         if (refusal != "")
         {
@@ -446,11 +440,10 @@ class NimbyHandsMoveItemToPlayer
         // (NimbyHandsServer.MoveStep2; HumanInventory.c:243-251, Inventory.c:1057-1066). The
         // EEItemLocationChanged inside the first writes CONFIRMED; its return value is the result.
         bool moved = NimbyHandsServer.MoveStep2(transfer, src, dst);
-        if (NimbyHandsServer.Step2CanaryTripped())
+        if (NimbyHandsServer.IsQuarantined(transfer))
         {
-            // Build 16: a canary found the engine had written into the transfer during the natives.
-            // MoveStep2 wrote the verdict from its copies and quarantined the entry; nothing here may
-            // read or write the transfer again (its giver, detail and itemText may be overwritten).
+            // The guard canary at the entry of MoveStep2 quarantined the entry (a pointer test, no
+            // read through the transfer); nothing here may read or write it again.
             return;
         }
         if (NimbyHandsState.IsTerminal(transfer.state))
@@ -479,9 +472,6 @@ class NimbyHandsMoveItemToPlayer
         PlayerBase giver = transfer.giver;
         PlayerBase receiver = transfer.receiver;
         f.forcedRefusal = NimbyHandsServer.TakeForcedStep2Refusal();
-        // Build 18 (November 1, 2026): a canary after each native group of this function; run 202718
-        // placed the damage to the giver slot between the top of the final poll tick and MoveStep2.
-        NimbyHandsServer.StepCanary(transfer, "after TakeForcedStep2Refusal");
         if (f.forcedRefusal)
         {
             return f;
@@ -493,9 +483,7 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.giverParty = CheckPlayer("giver", giver);
-        NimbyHandsServer.StepCanary(transfer, "after CheckPlayer giver");
         f.receiverParty = CheckPlayer("receiver", receiver);
-        NimbyHandsServer.StepCanary(transfer, "after CheckPlayer receiver");
         if (f.giverParty != "" || f.receiverParty != "")
         {
             return f;
@@ -517,7 +505,6 @@ class NimbyHandsMoveItemToPlayer
         bool receiverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedReceiverId, receiverIdNow);
         f.giverReplaced = giverReplaced;
         f.receiverReplaced = receiverReplaced;
-        NimbyHandsServer.StepCanary(transfer, "after IdentityId");
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
             return f;
@@ -528,13 +515,11 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         FillReach(f, giver, receiver, transfer.reach);
-        NimbyHandsServer.StepCanary(transfer, "after FillReach");
         if (!f.withinReach)
         {
             return f;
         }
         f.locationKnown = transfer.item.GetInventory().GetCurrentInventoryLocation(src);
-        NimbyHandsServer.StepCanary(transfer, "after GetCurrentInventoryLocation");
         if (!f.locationKnown)
         {
             return f;
@@ -547,30 +532,24 @@ class NimbyHandsMoveItemToPlayer
         NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: location read");
         f.itemAtSource = NimbyHandsServer.IsAtStagedLocation(transfer, src);
         NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: at source=" + NimbyHandsLog.Bool(f.itemAtSource));
-        NimbyHandsServer.StepCanary(transfer, "after IsAtStagedLocation");
         EntityAI expectedItem = transfer.expectedItem;
         EntityAI item = transfer.item;
         bool itemReplaced = hasExpected && expectedItem != item;
         f.itemReplaced = itemReplaced;
-        NimbyHandsServer.StepCanary(transfer, "after itemReplaced");
         if (!f.itemAtSource || f.itemReplaced)
         {
             return f;
         }
         f.giverBusy = false;
         f.receiverHasSpace = receiver.GetInventory().FindFreeLocationFor(transfer.item, transfer.destinationFlags, dst);
-        NimbyHandsServer.StepCanary(transfer, "after FindFreeLocationFor");
         f.destinationText = NimbyHandsServer.DescribeLocation(dst);
-        NimbyHandsServer.StepCanary(transfer, "after DescribeLocation dst");
         if (!f.receiverHasSpace)
         {
             return f;
         }
         f.giverHasSpace = true;
         f.engineAllows = GameInventory.LocationCanMoveEntity(src, dst);
-        NimbyHandsServer.StepCanary(transfer, "after LocationCanMoveEntity");
         f.reserved = false;
-        NimbyHandsServer.StepCanary(transfer, "after facts written");
         return f;
     }
 

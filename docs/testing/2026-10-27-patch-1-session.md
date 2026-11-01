@@ -435,6 +435,24 @@ Observed by Jeff during this run, not a row: with several loot items on the grou
 - **Kept.** The quarantine keeps its guarantee without the hold: `Quarantine` inserts the object into a new `s_Quarantined` static array for the mission (its line now ends `quarantined=N` instead of `in flight=N`), so a damaged `detail` buffer is still never freed. The canaries, the probe, the client-driven step 1, the poll-read landing, the step 2 poll at 50 ms.
 - **What this build tests.** The freed-memory reading behind builds 15 and 17 was withdrawn on October 31 when the pool objects, allocated at boot, were damaged the same way; the cause was the store misfire. This build is the first since build 14 with a transfer allocated inside the Take prompt's frame and owned by nothing but the registry and the move object. Readings: CONFIRMED three of three with every canary `ok` clears the hold and the pool together; a crash, a quarantine, a `Scripted variables corrupted` line or an UNCONFIRMED stops the unwind here, and the hold comes back alone as build 23 (the pool stays out) to split the two.
 
+## Rows on @NIMBY-20261031-225443 (two-client, `-NoDev`, build 22, October 31, 2026)
+
+Build 22:54 (`build-20261031-225443`, a00ab16, `SUMMARY PASS`, 685 of 685: Hands 192, DevHarness 19): the build 22 design section. Local gate on a00ab16: Pester 208 passed, 0 failed; `Test-NimbyRepo.ps1` exit 0. Boot log: no `transfer pool` line; the store probe unchanged. Mirrored to purgatory (15 of 15).
+
+| Test | Plan row | Check | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| S6-30 | Hands HD-001 (T-010, TGA-035) | D holds the kit wrench and offers (O); L uses Take. Three repetitions in one run (D to L, L to D, D to L) | **PASS, three of three: CONFIRMED with a fresh transfer per request, no hold, no pool.** Every canary `ok` (18 per transfer, 54), no quarantine, no `Scripted variables corrupted`, no crash, clean shutdown (`~DayZGame()` 23:04:15) | Run `testserver-20261031-225748`, 22:57 to 23:04. id=1 (D gives, wrench): `wait free waited=802`, `REQUESTED ... via=client` (23:03:39.054), `STAGED` (39.567, +513 ms), `step 2 poll: staged 50 ms ago`, **`state=CONFIRMED`** (39.617); no `held;`, `released;`, `acquired` or `recycled` line. id=2 (L gives) CONFIRMED 23:03:48.900 (waited 750); id=3 (D gives) CONFIRMED 23:04:06.003 (waited 799). Server stopped by Enter 23:04 |
+
+Unwind step 3 cleared: the hold and the pool were not needed. Step 4 (the canaries) follows.
+
+## Build 23: the canaries reduced to one guard (unwind step 4, November 1, 2026)
+
+Jeff's ruling (November 1, 23:10 Central): keep one guard canary rather than none.
+
+- **Kept.** The four STAGED copies (`giverAtStaged`, `itemAtStaged`, `receiverAtStaged`, `itemTextAtStaged`, taken in `RecordStaged`), `CompareBaselines`, `NimbyHandsRules.Step2Canary` with `CANARY_OK` and its five cases, `Quarantine`, `s_Quarantined`, `Registry.Forget`, and one canary: at the entry of `MoveStep2`, before the first native, the live `giver`, `item` and `receiver` are compared with the STAGED copies (`canary after entry: ok|CHANGED ...`). A CHANGED quarantines the entry and **the move does not run** (`MoveStep2` returns false; `RunStep2` reads `NimbyHandsServer.IsQuarantined`, a pointer test against `s_Quarantined`, and stops). The probe and the `Replaced` cases.
+- **Removed.** `TickCanary` and its call at the top of each `Step2Tick` entry; `StepCanary` and its twelve calls in `CollectStep2Facts`; the `MoveStep2` canaries after `LogReservations`, `LocationSyncMoveEntity` and `SendServerMove`; `s_Step2CanaryTripped` and `Step2CanaryTripped()` and their resets in `Step2Tick` and `OnStep2`; the two trip checks in `RunStep2`. Self-test counts unchanged (Hands 192, DevHarness 19). One canary line per transfer instead of 18.
+- **What this build tests.** Nothing about the transfer path changes; what goes is the per-tick and per-step instrumentation. Readings: CONFIRMED three of three with `canary after entry: ok` on each clears the unwind; a CHANGED entry canary now stops the move and quarantines (the item stays in the giver's cargo, no toast), which is the guard's intended behavior and would reopen the hunt.
+
 ## Not in tonight's plan
 
 - Receiver killed between step 1 and step 2, and the corpse-delivery ruling Jeff owes (TGA-041): needs a third player.

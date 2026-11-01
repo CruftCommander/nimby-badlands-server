@@ -225,10 +225,10 @@ class NimbyHandsTransfers
         return true;
     }
 
-    // Removes a registered entry without writing the transfer: no state, no detail. For the step 2
-    // canary (build 16, November 1, 2026): a transfer the engine has written into during the step
-    // 2 natives must never be written again, and must leave the registry so the step 2 poll and
-    // the bounded timeout stop reading it. Returns false for an unregistered transfer.
+    // Removes a registered entry without writing the transfer: no state, no detail. For the guard
+    // canary (NimbyHandsServer.Quarantine): a transfer something has written into must never be
+    // written again, and must leave the registry so the step 2 poll and the bounded timeout stop
+    // reading it. Returns false for an unregistered transfer.
     bool Forget(NimbyHandsTransfer transfer)
     {
         if (!IsRegistered(transfer))
@@ -618,14 +618,14 @@ class NimbyHandsRules
         return "giver inventory busy; players did not become free within " + capMs.ToString() + " ms";
     }
 
-    // ---- the step 2 canary (build 16, November 1, 2026) -------------------------------------
-    // The minidumps of crashes 13 and 14 show three 4-byte zero words written into the live
-    // NimbyHandsWorldTransfer during the step 2 natives (the low half of giver, the high half of
-    // detail's buffer pointer, the low half of itemText), after every read before MoveStep2 passed.
-    // MoveStep2 copies giver, item and receiver into locals before the first native and compares
-    // the fields with the copies after each native: pointer compares only, never a read through
-    // either side and never a read of detail. This is the verdict for that log line. CANARY_OK is
-    // the only verdict after which the transfer may be written again.
+    // ---- the guard canary (build 16, November 1, 2026; kept as the one guard in build 23) ------
+    // The minidumps of crashes 13 to 15 (NIMBY-T-063) show three 4-byte zero words written into the
+    // live NimbyHandsWorldTransfer (the low half of giver, the high half of detail's buffer pointer,
+    // the low half of itemText) by the VM store misfire fixed in build 19. MoveStep2 compares the
+    // live giver, item and receiver with the copies taken at STAGED before its first native:
+    // pointer compares only, never a read through either side and never a read of detail. This is
+    // the verdict for that log line. CANARY_OK is the only verdict after which the transfer may be
+    // written again.
     static const string CANARY_OK = "ok";
 
     static string Step2Canary(bool giverSame, bool itemSame, bool receiverSame)
