@@ -5,9 +5,10 @@
 //           (3_Game/DayZ/tools/JsonFileLoader.c:69). An unchanged good text is not parsed again
 //           and an unchanged bad text is not parsed again (NIMBY-T-056), so a bad file costs one
 //           engine "JSON ERROR" line per distinct text. Every adopted parse refreshes the .lkg
-//           copy from the text just parsed. A corrupt file falls back to the set already in
-//           memory, then to .lkg, then to nothing; any fallback refuses edits until a clean
-//           re-read (N8). Writes are copy-based (recon 5.3, R4): there is no rename in 1.30.
+//           copy from the text just parsed. A corrupt, missing or unreadable file falls back to
+//           the set already in memory, then to .lkg, then to nothing; any fallback refuses edits
+//           until a clean re-read (N8; review findings 3 and 9). Writes are copy-based (recon
+//           5.3, R4): there is no rename in 1.30.
 // Engine  : FileExist, OpenFile, ReadFile, FPrint, CloseFile, MakeDirectory, DeleteFile, CopyFile
 //           (1_Core/DayZ/proto/EnSystem.c:397,417,425,462,443,525,528,531); JsonFileLoader.SaveFile
 //           (:42) and LoadFile (:7).
@@ -99,7 +100,42 @@ class NimbyAdminServerFiles
     }
 }
 
-// The common shape of the two access stores (N8).
+// The file operations a store uses, as one object so the self-test can put an in-memory fake in
+// their place (review finding 3: every recovery branch is self-tested without touching a file).
+class NimbyAdminServerStoreIo
+{
+    bool Exists(string path)
+    {
+        return FileExist(path);
+    }
+
+    bool Read(string path, out string text)
+    {
+        return NimbyAdminServerFiles.ReadText(path, text);
+    }
+
+    bool Write(string path, string text)
+    {
+        return NimbyAdminServerFiles.WriteText(path, text);
+    }
+
+    void Note(string line)
+    {
+        NimbyAdminLog.Info(line);
+    }
+}
+
+// The common shape of the two access stores (N8; review findings 3 and 9, October 31, 2026).
+// Load, in order:
+// - The primary cannot be read (missing or unreadable): when neither it nor .lkg exists and no
+//   good set is in memory, this is a true first install (source none, edits allowed, so the
+//   bootstrap owner file may be written). Otherwise it is a recovery: the set in memory is kept,
+//   else .lkg is loaded, else nothing; edits are refused. The state is set on every such load,
+//   never carried over from the last good load; the line is written once per failure.
+// - The text equals the last good text: the store is back on the file (a repair by restoring the
+//   exact good text clears recovery, finding 9).
+// - The text equals the last bad text: nothing changes and nothing is parsed again.
+// - Otherwise the text is parsed: adopted (and copied to .lkg), or a recovery as above.
 class NimbyAdminServerStore
 {
     string m_Name;
@@ -109,10 +145,12 @@ class NimbyAdminServerStore
     bool m_EditsRefused;
     float m_LoadedAt = -1000.0;
     ref map<string, string> m_Active = new map<string, string>;
+    ref NimbyAdminServerStoreIo m_Io = new NimbyAdminServerStoreIo();
     protected string m_LastGoodText = "";
     protected string m_LastBadText = "";
     protected bool m_HaveGood;
     protected bool m_HaveBad;
+    protected bool m_ReadFailed;
 
     // Parse text into an active set; overridden per store.
     protected bool ParseText(string text, out map<string, string> active, out array<string> notes, out string error)
@@ -130,13 +168,40 @@ class NimbyAdminServerStore
         problem = "";
         m_LoadedAt = now;
         string text;
-        bool exists = NimbyAdminServerFiles.ReadText(m_Path, text);
-        if (!exists)
+        if (!m_Io.Read(m_Path, text))
         {
-            return false;
+            bool primaryExists = m_Io.Exists(m_Path);
+            if (!primaryExists && !m_Io.Exists(m_LkgPath) && !m_HaveGood)
+            {
+                m_Source = NimbyAdminServerSource.NONE;
+                m_EditsRefused = false;
+                m_ReadFailed = false;
+                return false;
+            }
+            if (m_ReadFailed)
+            {
+                return false;
+            }
+            m_ReadFailed = true;
+            string readWhy = "missing";
+            if (primaryExists)
+            {
+                readWhy = "unreadable";
+            }
+            return Recover(readWhy, problem);
         }
+        m_ReadFailed = false;
         if (m_HaveGood && text == m_LastGoodText)
         {
+            bool repaired = m_Source != NimbyAdminServerSource.FILE;
+            m_Source = NimbyAdminServerSource.FILE;
+            m_EditsRefused = false;
+            m_HaveBad = false;
+            m_LastBadText = "";
+            if (repaired)
+            {
+                m_Io.Note(m_Name + " repaired; source=file entries=" + m_Active.Count().ToString());
+            }
             return false;
         }
         if (m_HaveBad && text == m_LastBadText)
@@ -151,30 +216,37 @@ class NimbyAdminServerStore
         {
             foreach (string note : notes)
             {
-                NimbyAdminLog.Info(m_Name + ": " + note);
+                m_Io.Note(m_Name + ": " + note);
             }
             bool changed = !SameSet(active, m_Active);
             m_Active = active;
             m_LastGoodText = text;
             m_HaveGood = true;
             m_HaveBad = false;
+            m_LastBadText = "";
             m_Source = NimbyAdminServerSource.FILE;
             m_EditsRefused = false;
-            if (!NimbyAdminServerFiles.WriteText(m_LkgPath, text))
+            if (!m_Io.Write(m_LkgPath, text))
             {
-                NimbyAdminLog.Info(m_Name + ".lkg not refreshed: write failed");
+                m_Io.Note(m_Name + ".lkg not refreshed: write failed");
             }
-            NimbyAdminLog.Info(m_Name + " loaded entries=" + m_Active.Count().ToString() + " source=file");
+            m_Io.Note(m_Name + " loaded entries=" + m_Active.Count().ToString() + " source=file");
             return changed;
         }
         m_LastBadText = text;
         m_HaveBad = true;
+        return Recover("invalid (" + NimbyAdminRules.CutBytes(error, 200) + ")", problem);
+    }
+
+    // N8 recovery: the set in memory, else .lkg, else nothing; edits refused in every case.
+    protected bool Recover(string why, out string problem)
+    {
         bool lkgOk = false;
         map<string, string> lkgActive;
         if (!m_HaveGood)
         {
             string lkgText;
-            if (NimbyAdminServerFiles.ReadText(m_LkgPath, lkgText))
+            if (m_Io.Read(m_LkgPath, lkgText))
             {
                 array<string> lkgNotes;
                 string lkgError;
@@ -193,14 +265,21 @@ class NimbyAdminServerStore
         }
         m_Source = source;
         m_EditsRefused = NimbyAdminServerSource.EditsRefused(source);
-        problem = m_Name + " invalid (" + NimbyAdminRules.CutBytes(error, 200) + "); using " + source + "; edits refused until repaired";
-        NimbyAdminLog.Info(problem);
+        problem = m_Name + " " + why + "; using " + source + "; edits refused until repaired";
+        m_Io.Note(problem);
         return before || m_Active.Count() > 0;
     }
 
     bool Exists()
     {
-        return FileExist(m_Path);
+        return m_Io.Exists(m_Path);
+    }
+
+    // Review finding 3: the bootstrap owner file is written only when neither the primary nor
+    // .lkg exists.
+    bool IsFirstInstall()
+    {
+        return !m_Io.Exists(m_Path) && !m_Io.Exists(m_LkgPath);
     }
 
     static bool SameSet(map<string, string> a, map<string, string> b)
@@ -272,14 +351,15 @@ class NimbyAdminServerPermissionStore extends NimbyAdminServerStore
         m_BootstrapActive = m_Bootstrap != "" && !NimbyAdminServerPermissions.HasOwner(m_Active);
     }
 
-    // First boot only (recon 5.4): the file does not exist and a bootstrap owner is configured.
-    // Written through the copy-based write; never over an existing file; refused in N8 state.
+    // First install only (recon 5.4, review finding 3): neither the file nor .lkg exists and a
+    // bootstrap owner is configured. Written through the copy-based write; never over an
+    // existing file; refused in N8 state.
     bool WriteBootstrapFile(out string why)
     {
         why = "";
-        if (Exists())
+        if (!IsFirstInstall())
         {
-            why = "permissions.json exists";
+            why = "permissions.json or its .lkg exists";
             return false;
         }
         if (m_EditsRefused)
@@ -300,7 +380,7 @@ class NimbyAdminServerPermissionStore extends NimbyAdminServerStore
             why = "serialize failed";
             return false;
         }
-        if (!NimbyAdminServerFiles.WriteText(m_Path, text))
+        if (!m_Io.Write(m_Path, text))
         {
             why = "write failed";
             return false;

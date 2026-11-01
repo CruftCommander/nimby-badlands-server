@@ -2,11 +2,48 @@
 // NimbyAdminServer - self-test (shared rules 8; component AdminServer). Engine-free cases for every
 // server decision: Steam64, config bounds (permissionsReloadSeconds at every edge, ruling 5), the
 // webhook split, permission and ban rows, roles and capabilities (with the fake capability, N9),
-// ban expiry and the ruling 3 admission rule, N8 source decisions, ISO time, JSON and Discord
+// ban expiry and the ruling 3 admission rule, N8 source decisions, the store recovery branches
+// over an in-memory file fake (review findings 3 and 9), ISO time, JSON and Discord
 // text, the retry schedule (ruling 7), the token bucket, the replay window (review finding 1),
 // teleport args and the session match. Lines: [NIMBY][AdminServer][SelfTest] PASS|FAIL <case>.
 // Style : one statement per line.
 // -----------------------------------------------------------------------------
+
+// An in-memory stand-in for the profile files (review finding 3): a path exists when it is in
+// m_Files; a path in m_Unreadable exists but cannot be read; notes are collected, not printed.
+class NimbyAdminServerFakeIo extends NimbyAdminServerStoreIo
+{
+    ref map<string, string> m_Files = new map<string, string>;
+    ref array<string> m_Unreadable = new array<string>;
+    ref array<string> m_Notes = new array<string>;
+
+    override bool Exists(string path)
+    {
+        return m_Files.Contains(path);
+    }
+
+    override bool Read(string path, out string text)
+    {
+        text = "";
+        if (!m_Files.Contains(path) || m_Unreadable.Find(path) >= 0)
+        {
+            return false;
+        }
+        text = m_Files.Get(path);
+        return true;
+    }
+
+    override bool Write(string path, string text)
+    {
+        m_Files.Set(path, text);
+        return true;
+    }
+
+    override void Note(string line)
+    {
+        m_Notes.Insert(line);
+    }
+}
 
 class NimbyAdminServerSelfTest
 {
@@ -19,6 +56,7 @@ class NimbyAdminServerSelfTest
         failures += AccessCases(results);
         failures += TextCases(results);
         failures += LimitCases(results);
+        failures += StoreCases(results);
         return failures;
     }
 
@@ -272,6 +310,103 @@ class NimbyAdminServerSelfTest
         bool harness = AcceptRange(mixed, base, base + 59);
         failures += Case(results, "replay: after 60 harness ids at highest + 1024 the client's next id is accepted", client && harness && mixed.Count() == NimbyAdminServerRules.SEEN_MAX && mixed.Check(201) == NimbyAdminServerSeen.ACCEPT);
         failures += Case(results, "replay: after the harness ids a client replay below the floor is still stale", mixed.Check(1) == NimbyAdminServerSeen.STALE);
+        return failures;
+    }
+
+    // ---- stores over the in-memory fake (review findings 3 and 9) -------------------------------
+    // Every text below is valid JSON syntax: a syntax error would make the engine print a
+    // SCRIPT (E) JSON ERROR line at boot (Greet NIMBY-T-042), which fails the boot check.
+
+    static const string BOOT_A = "76561198354705597";
+    static const string OWNER_B = "{\"version\":1,\"admins\":[{\"steam64\":\"76561190000000011\",\"name\":\"B\",\"role\":\"owner\"}]}";
+    static const string ADMIN_C = "{\"version\":1,\"admins\":[{\"steam64\":\"76561190000000012\",\"name\":\"C\",\"role\":\"admin\"}]}";
+    static const string BAD_V2 = "{\"version\":2,\"admins\":[]}";
+    static const string BANS_ONE = "{\"version\":1,\"bans\":[{\"steam64\":\"76561190000000013\",\"reason\":\"x\",\"actor\":\"76561198354705597\",\"createdUtc\":\"2026-10-31T20:00:00Z\",\"expiresUtc\":\"\"}]}";
+
+    protected static NimbyAdminServerPermissionStore PermStore(NimbyAdminServerFakeIo io)
+    {
+        NimbyAdminServerPermissionStore store = new NimbyAdminServerPermissionStore();
+        store.m_Io = io;
+        store.m_Bootstrap = BOOT_A;
+        return store;
+    }
+
+    protected static NimbyAdminServerBanStore BanStore(NimbyAdminServerFakeIo io)
+    {
+        NimbyAdminServerBanStore store = new NimbyAdminServerBanStore();
+        store.m_Io = io;
+        return store;
+    }
+
+    protected static int StoreCases(array<string> results)
+    {
+        int failures = 0;
+        string problem;
+        string why;
+        string p = NimbyAdminServerRules.FILE_PERMISSIONS;
+        string pl = NimbyAdminServerRules.FILE_PERMISSIONS_LKG;
+
+        NimbyAdminServerFakeIo first = new NimbyAdminServerFakeIo();
+        NimbyAdminServerPermissionStore fresh = PermStore(first);
+        fresh.Load(0, problem);
+        fresh.ApplyBootstrap();
+        failures += Case(results, "store: a true first install is source none with edits allowed and the bootstrap owner", fresh.m_Source == "none" && !fresh.m_EditsRefused && fresh.IsFirstInstall() && fresh.RoleOf(BOOT_A) == "owner" && problem == "");
+
+        NimbyAdminServerFakeIo missing = new NimbyAdminServerFakeIo();
+        missing.m_Files.Set(pl, OWNER_B);
+        NimbyAdminServerPermissionStore lkg = PermStore(missing);
+        lkg.Load(0, problem);
+        lkg.ApplyBootstrap();
+        bool wrote = lkg.WriteBootstrapFile(why);
+        failures += Case(results, "store: a missing primary with a .lkg loads the .lkg, refuses edits, and grants no bootstrap", lkg.m_Source == "lkg" && lkg.m_EditsRefused && lkg.RoleOf("76561190000000011") == "owner" && lkg.RoleOf(BOOT_A) == "none" && !lkg.IsFirstInstall() && !wrote && missing.m_Files.Contains(p) == false);
+
+        NimbyAdminServerFakeIo locked = new NimbyAdminServerFakeIo();
+        locked.m_Files.Set(p, OWNER_B);
+        locked.m_Unreadable.Insert(p);
+        locked.m_Files.Set(pl, ADMIN_C);
+        NimbyAdminServerPermissionStore unreadable = PermStore(locked);
+        unreadable.Load(0, problem);
+        unreadable.ApplyBootstrap();
+        failures += Case(results, "store: an unreadable primary with a .lkg loads the .lkg and refuses edits", unreadable.m_Source == "lkg" && unreadable.m_EditsRefused && unreadable.RoleOf("76561190000000012") == "admin" && problem.IndexOf("unreadable") > 0);
+        failures += Case(results, "store: a recovered set with no owner gets the bootstrap owner only, edits still refused (Q4)", unreadable.RoleOf(BOOT_A) == "owner" && unreadable.m_EditsRefused);
+
+        NimbyAdminServerFakeIo reload = new NimbyAdminServerFakeIo();
+        reload.m_Files.Set(p, OWNER_B);
+        NimbyAdminServerPermissionStore kept = PermStore(reload);
+        kept.Load(0, problem);
+        bool editableFirst = !kept.m_EditsRefused && kept.m_Source == "file";
+        reload.m_Files.Remove(p);
+        kept.Load(10, problem);
+        failures += Case(results, "store: a reload that cannot read the primary keeps the set and refuses edits (not the old flag)", editableFirst && kept.m_Source == "kept" && kept.m_EditsRefused && kept.RoleOf("76561190000000011") == "owner" && problem.IndexOf("missing") > 0);
+        int notesBefore = reload.m_Notes.Count();
+        kept.Load(20, problem);
+        failures += Case(results, "store: a repeated read failure writes no second line", reload.m_Notes.Count() == notesBefore && problem == "" && kept.m_EditsRefused);
+
+        NimbyAdminServerFakeIo repair = new NimbyAdminServerFakeIo();
+        repair.m_Files.Set(p, OWNER_B);
+        NimbyAdminServerPermissionStore fixedStore = PermStore(repair);
+        fixedStore.Load(0, problem);
+        repair.m_Files.Set(p, BAD_V2);
+        fixedStore.Load(10, problem);
+        bool refusedOnBad = fixedStore.m_EditsRefused && fixedStore.m_Source == "kept";
+        repair.m_Files.Set(p, OWNER_B);
+        fixedStore.Load(20, problem);
+        failures += Case(results, "store: restoring the exact last good text clears recovery (finding 9)", refusedOnBad && fixedStore.m_Source == "file" && !fixedStore.m_EditsRefused);
+        repair.m_Files.Set(p, BAD_V2);
+        fixedStore.Load(30, problem);
+        failures += Case(results, "store: after that repair the same bad text refuses edits again", fixedStore.m_Source == "kept" && fixedStore.m_EditsRefused && problem != "");
+
+        NimbyAdminServerFakeIo banMissing = new NimbyAdminServerFakeIo();
+        banMissing.m_Files.Set(NimbyAdminServerRules.FILE_BANS_LKG, BANS_ONE);
+        NimbyAdminServerBanStore bans = BanStore(banMissing);
+        bans.Load(0, problem);
+        failures += Case(results, "bans: a missing bans.json with a .lkg loads the .lkg and refuses edits", bans.m_Source == "lkg" && bans.m_EditsRefused && bans.m_Active.Count() == 1 && !bans.NoUsableList());
+        NimbyAdminServerFakeIo banLocked = new NimbyAdminServerFakeIo();
+        banLocked.m_Files.Set(NimbyAdminServerRules.FILE_BANS, BANS_ONE);
+        banLocked.m_Unreadable.Insert(NimbyAdminServerRules.FILE_BANS);
+        NimbyAdminServerBanStore noList = BanStore(banLocked);
+        noList.Load(0, problem);
+        failures += Case(results, "bans: an unreadable bans.json with no .lkg is no usable list (ruling 3)", noList.m_Source == "none" && noList.m_EditsRefused && noList.NoUsableList());
         return failures;
     }
 

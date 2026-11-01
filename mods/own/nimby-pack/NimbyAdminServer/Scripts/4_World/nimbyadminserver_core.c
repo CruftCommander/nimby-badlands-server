@@ -74,7 +74,10 @@ class NimbyAdminServerCore
         s_Permissions.m_Bootstrap = s_Config.bootstrapOwnerSteam64;
         string permissionsProblem;
         s_Permissions.Load(now, permissionsProblem);
-        if (!s_Permissions.Exists() && s_Config.bootstrapOwnerSteam64 != "")
+        // Review finding 3: the bootstrap file only on a true first install; a missing primary
+        // with a .lkg is a recovery (the .lkg set, edits refused), and the bootstrap owner then
+        // applies only as the overlay when that set has no owner (ApplyBootstrap).
+        if (s_Permissions.IsFirstInstall() && s_Config.bootstrapOwnerSteam64 != "")
         {
             WriteBootstrap();
             s_Permissions.Load(now, permissionsProblem);

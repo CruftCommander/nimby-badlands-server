@@ -11,7 +11,12 @@ Changes, newest first:
   docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md): finding 1, the replay
   window (the last 256 accepted ids per connection, a floor once full, no time expiry; "stale"
   below the floor) replaces the 300 s duplicate window, and the server publishes each
-  connection's highest accepted id to the client half's NimbyAdminHighWater for the dev harness.
+  connection's highest accepted id to the client half's NimbyAdminHighWater for the dev harness;
+  findings 3 and 9, a missing or unreadable primary store recovers like a corrupt one (the set
+  in memory, then .lkg, edits refused, set on every load), the bootstrap owner file is written
+  only when neither the primary nor .lkg exists, and restoring the exact last good text clears
+  recovery; the store file operations sit behind NimbyAdminServerStoreIo so the self-test runs
+  every branch over an in-memory fake.
 - October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the server half - config.json,
   permissions.json and bans.json stores with .lkg and the refuse-edits state, the first-owner
   bootstrap, the audit journal, the Discord queue over the vanilla RestApi, the session table,
