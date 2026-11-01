@@ -1,8 +1,9 @@
 NimbyGreet (Greet) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
-Will modify the vanilla DayZ 1.30 MissionServer, MissionBase, MissionGameplay, PlayerBase, and
-InGameMenu classes (Bohemia Interactive) to fetch and show the server welcome text; no
-third-party mod code. Media shipped under Media/ is listed here with its source and license at
-each release (plan G15).
+Will modify the vanilla DayZ 1.30 MissionServer, MissionBase, MissionGameplay, and PlayerBase
+classes (Bohemia Interactive) to fetch and show the server welcome text; the window and the
+pause-menu button are built on the in-house shared addon NimbyShared (listed in
+requiredAddons[]), which modifies InGameMenu; no third-party mod code. Media shipped under
+Media/ is listed here with its source and license at each release (plan G15).
 
 Media: none. Release 1 ships no media (plan G15; Jeff, October 25, 2026). The Phase 0 probe
 files (probe.mp4 and its four re-encodings, probe.png, probe.edds; all generated with ffmpeg
@@ -17,6 +18,16 @@ English text until a font with those glyphs is proven (plan v0.4, G14, NIMBY-T-0
 
 Changes, newest first:
 
+- October 31, 2026, Plan 11 Phase 1 (docs/plans/2026-10-31-nimby-shared-plan.md): the window
+  shell, the pause-menu button creation, the chunk codec and the two page keys moved to
+  NimbyShared. NimbyGreetMenu is a NimbySharedWindow subclass and its body and footer live in
+  GUI/nimbygreet_content.layout at the release-1 coordinates; the pause button is
+  NimbyGreetPauseEntry; MissionGameplay and MissionServer use NimbySharedChunkReceiver and
+  NimbySharedChunkSender; UANimbyGreetPageUp and UANimbyGreetPageDown are replaced by
+  NimbyShared's UANimbySharedPageUp and UANimbySharedPageDown (same default keys; a rebinding of
+  the old pair does not carry over). The shell debug lines now print as [NIMBY][Shared] behind
+  $profile:NimbyShared\debug. Self-test: the 38 chunk and receiver cases moved to NimbyShared;
+  Greet keeps 87. No behavior change intended (Plan 11 C4).
 - October 27, 2026, release-1 patch 1 (review GREET-R2-01 to R2-05, R2-07; plan G18):
   production lines write player=(<bi-id>, <steam64>) "<name>" with the name escaped (a
   name could forge an id pair before); the four request refusals in PlayerBase and every
