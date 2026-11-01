@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!--
+  Central Scrutinizer key binding (Plan 3 N2, shared rules 5). Default Home: bin/constants.xml:578
+  declares kHome, and no PC or PS preset binds it (bin/preset_X1MouseKey.xml, _Alternate,
+  preset_PS4MouseKey.xml, _Alternate: 0 uses, 164200 reference). F10 is bound in all four
+  (preset_X1MouseKey.xml:446,480,824), so Home it is. Rebindable in Options, Controls, NIMBY.
+  Nesting follows the Ears precedent: the sorting block sits inside inputs, beside actions; group
+  "nimby" is declared in every NIMBY addon with the same name and label.
+-->
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UANimbyAdminOpen" loc="Central Scrutinizer: open menu" />
+        </actions>
+        <sorting name="nimby" loc="NIMBY">
+            <input name="UANimbyAdminOpen" />
+        </sorting>
+    </inputs>
+    <preset>
+        <input name="UANimbyAdminOpen">
+            <btn name="kHome" />
+        </input>
+    </preset>
+</modded_inputs>
