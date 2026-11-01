@@ -418,10 +418,19 @@ class NimbyDevHarnessAdmin
         s_OwnerBefore = s_Owner.GetPosition();
         s_OtherBefore = s_Other.GetPosition();
         BeginStep();
-        s_IdDenied = IdFor(s_Other.GetIdentity(), 0);
-        s_IdNotOwner = IdFor(s_Other.GetIdentity(), 1);
-        Forge(s_Other, s_Other.GetIdentity(), 1, s_IdDenied, NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
-        Forge(s_Owner, s_Other.GetIdentity(), 1, s_IdNotOwner, NimbyAdminRules.CMD_TELEPORT_TO, TeleportArgs(s_Owner));
+        // 164200 argument slots (gate rerun, November 1, 2026; the behavior the patch-1 session
+        // reproduced): with TeleportArgs(s_Owner) inside the argument list, the sender argument
+        // s_Other.GetIdentity() reached Forge as the owner's identity ([Forge] sent id=1000001
+        // sender=D target=L). Every argument of a forge call is now a local, computed before the
+        // call, so no call inside an argument list can overwrite another argument.
+        PlayerIdentity otherId = s_Other.GetIdentity();
+        string toOwner = TeleportArgs(s_Owner);
+        s_IdDenied = IdFor(otherId, 0);
+        s_IdNotOwner = IdFor(otherId, 1);
+        int deniedId = s_IdDenied;
+        int notOwnerId = s_IdNotOwner;
+        Forge(s_Other, otherId, 1, deniedId, NimbyAdminRules.CMD_TELEPORT_TO, toOwner);
+        Forge(s_Owner, otherId, 1, notOwnerId, NimbyAdminRules.CMD_TELEPORT_TO, toOwner);
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step2, STEP_MS, false);
     }
 
@@ -444,10 +453,17 @@ class NimbyDevHarnessAdmin
             s_IdMalformed.Insert(IdFor(owner, k));
             k = k + 1;
         }
-        Forge(s_Owner, owner, 2, s_IdMalformed.Get(0), NimbyAdminRules.CMD_HELLO, "");
-        Forge(s_Owner, owner, 1, s_IdMalformed.Get(1), "player.kill", "");
-        Forge(s_Owner, owner, 1, s_IdMalformed.Get(2), NimbyAdminRules.CMD_TELEPORT_TO, NimbySharedChunks.FillBytes("a", 901));
-        Forge(s_Owner, owner, 1, s_IdMalformed.Get(3), NimbyAdminRules.CMD_TELEPORT_TO, "target=%41;session=1");
+        int id0 = s_IdMalformed.Get(0);
+        int id1 = s_IdMalformed.Get(1);
+        int id2 = s_IdMalformed.Get(2);
+        int id3 = s_IdMalformed.Get(3);
+        int id4 = s_IdMalformed.Get(4);
+        int id5 = s_IdMalformed.Get(5);
+        string longArgs = NimbySharedChunks.FillBytes("a", 901);
+        Forge(s_Owner, owner, 2, id0, NimbyAdminRules.CMD_HELLO, "");
+        Forge(s_Owner, owner, 1, id1, "player.kill", "");
+        Forge(s_Owner, owner, 1, id2, NimbyAdminRules.CMD_TELEPORT_TO, longArgs);
+        Forge(s_Owner, owner, 1, id3, NimbyAdminRules.CMD_TELEPORT_TO, "target=%41;session=1");
         string seventeen = "";
         int i = 0;
         while (i < 17)
@@ -459,8 +475,8 @@ class NimbyDevHarnessAdmin
             seventeen = seventeen + "k" + i.ToString() + "=1";
             i = i + 1;
         }
-        Forge(s_Owner, owner, 1, s_IdMalformed.Get(4), NimbyAdminRules.CMD_TELEPORT_TO, seventeen);
-        Forge(s_Owner, owner, 1, s_IdMalformed.Get(5), NimbyAdminRules.CMD_TELEPORT_TO, "target=nobody;session=1");
+        Forge(s_Owner, owner, 1, id4, NimbyAdminRules.CMD_TELEPORT_TO, seventeen);
+        Forge(s_Owner, owner, 1, id5, NimbyAdminRules.CMD_TELEPORT_TO, "target=nobody;session=1");
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step3, STEP_MS, false);
     }
 
@@ -483,10 +499,12 @@ class NimbyDevHarnessAdmin
         s_OwnerBefore = s_Owner.GetPosition();
         string args = TeleportArgs(s_Other);
         BeginStep();
-        s_IdDuplicate = IdFor(s_Owner.GetIdentity(), 0);
+        PlayerIdentity ownerId = s_Owner.GetIdentity();
+        s_IdDuplicate = IdFor(ownerId, 0);
+        int duplicateId = s_IdDuplicate;
         // The second forge reuses the id the first one put inside the set.
-        Forge(s_Owner, s_Owner.GetIdentity(), 1, s_IdDuplicate, NimbyAdminRules.CMD_TELEPORT_TO, args);
-        Forge(s_Owner, s_Owner.GetIdentity(), 1, s_IdDuplicate, NimbyAdminRules.CMD_TELEPORT_TO, args);
+        Forge(s_Owner, ownerId, 1, duplicateId, NimbyAdminRules.CMD_TELEPORT_TO, args);
+        Forge(s_Owner, ownerId, 1, duplicateId, NimbyAdminRules.CMD_TELEPORT_TO, args);
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(NimbyDevHarnessAdmin.Step4, STEP_MS, false);
     }
 
@@ -499,10 +517,12 @@ class NimbyDevHarnessAdmin
         float near = vector.Distance(s_Owner.GetPosition(), s_Other.GetPosition());
         Record("duplicate request id runs once", intents == 1 && results == 1 && lines.Count() == 2 && near < 3.0, "intents=" + intents.ToString() + " results=" + results.ToString() + " distance=" + near.ToString());
         BeginStep();
+        PlayerIdentity burstId = s_Other.GetIdentity();
         int n = 0;
         while (n < 50)
         {
-            Forge(s_Other, s_Other.GetIdentity(), 1, IdFor(s_Other.GetIdentity(), n), NimbyAdminRules.CMD_HELLO, "");
+            int helloId = IdFor(burstId, n);
+            Forge(s_Other, burstId, 1, helloId, NimbyAdminRules.CMD_HELLO, "");
             n = n + 1;
         }
         Record("burst of 50 sent", !s_Aborted, "sent=50; the script log holds one rate-limited line for the sender");

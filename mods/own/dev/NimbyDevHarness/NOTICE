@@ -41,7 +41,10 @@ Changes, newest first:
   sandstorm case follows the vanilla dev command (DayZGame.c:3415-3436): wind turned to the
   storm's direction and rain held at 0 before Start (the gate session showed a thunderstorm),
   and the check line is followed by the storm's position, direction, speed, remaining time and
-  each player's distance to it.
+  each player's distance to it; gate rerun: every argument of a forge call is a local computed
+  before the call, because on 164200 a call inside the argument list (TeleportArgs) overwrote
+  the sender argument with the owner's identity, the argument-slot behavior the patch-1 session
+  reproduced.
 - November 1, 2026, afternoon (feat/nimby-admin, Central Scrutinizer third-pass finding 14):
   before forging, the admin cases check id headroom (HasIdHeadroom): each identity's highest
   plus 2 x (1,000,000 + 127) must fit a positive 32-bit int, because each identity reads a new
