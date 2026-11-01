@@ -58,46 +58,138 @@ class NimbyAdminLog
         return "player=(" + Safe(biId) + ", " + Safe(steam64) + ") \"" + Escape(Safe(name)) + "\"";
     }
 
-    // Review finding 7 (October 31, 2026): at most SAFE_BYTES bytes (on a UTF-8 boundary), every
-    // byte below 0x20 and 0x7F replaced with '?', so a client cannot write a line break or a
-    // control sequence into the server log. Also replaced, each sequence by one '?' (security
-    // review of f8d99c0): the UTF-8 C1 controls U+0080 to U+009F (NEL among them), the line and
-    // paragraph separators U+2028 and U+2029, and the bidirectional marks, embeddings, overrides
-    // and isolates U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. Engine-free; self-tested.
+    // Review finding 7 (October 31, 2026): at most SAFE_BYTES bytes (on a UTF-8 boundary), and
+    // nothing that can break or disguise a log line. Security reviews of f8d99c0 and 4935842: the
+    // text is decoded as UTF-8 and allowed by code point (NextUnit). Every malformed byte (a stray
+    // continuation, 0xC0, 0xC1, 0xF5 to 0xFF, an overlong form, a surrogate, a sequence cut short)
+    // becomes '?', and so does every unsafe code point (IsUnsafeCodePoint: all of Cc, which holds
+    // every byte below 0x20, 0x7F and NEL, and the format characters that hide or reorder text).
+    // Every other character is kept whole, so a Cyrillic name still reads. Engine-free;
+    // self-tested.
     static const int SAFE_BYTES = 64;
 
     static string Safe(string text)
     {
         string cut = NimbyAdminRules.CutBytes(text, SAFE_BYTES);
+        array<int> bytes = new array<int>;
+        int b = 0;
+        while (b < cut.Length())
+        {
+            bytes.Insert(ByteAt(cut, b));
+            b = b + 1;
+        }
         string result = "";
         int i = 0;
-        int length = cut.Length();
-        while (i < length)
+        while (i < bytes.Count())
         {
-            int b0 = ByteAt(cut, i);
-            int b1 = -1;
-            int b2 = -1;
-            if (i + 1 < length)
+            bool keep;
+            int unit = NextUnit(bytes, i, keep);
+            if (keep)
             {
-                b1 = ByteAt(cut, i + 1);
-            }
-            if (i + 2 < length)
-            {
-                b2 = ByteAt(cut, i + 2);
-            }
-            int unsafeLength = UnsafeSequenceLength(b0, b1, b2);
-            if (unsafeLength > 0)
-            {
-                result = result + "?";
-                i = i + unsafeLength;
+                result = result + cut.Substring(i, unit);
             }
             else
             {
-                result = result + cut.Get(i);
-                i = i + 1;
+                result = result + "?";
             }
+            i = i + unit;
         }
         return result;
+    }
+
+    // The unit at index: its length in bytes (1 to 4) and whether it is kept. A malformed unit is
+    // one byte and never kept.
+    static int NextUnit(array<int> bytes, int index, out bool keep)
+    {
+        keep = false;
+        int b0 = bytes.Get(index);
+        if (b0 < 0x80)
+        {
+            keep = !IsUnsafeCodePoint(b0);
+            return 1;
+        }
+        int need = 0;
+        int codePoint = 0;
+        int lowest = 0;
+        if (b0 >= 0xC2 && b0 <= 0xDF)
+        {
+            need = 1;
+            codePoint = b0 & 0x1F;
+            lowest = 0x80;
+        }
+        else if (b0 >= 0xE0 && b0 <= 0xEF)
+        {
+            need = 2;
+            codePoint = b0 & 0x0F;
+            lowest = 0x800;
+        }
+        else if (b0 >= 0xF0 && b0 <= 0xF4)
+        {
+            need = 3;
+            codePoint = b0 & 0x07;
+            lowest = 0x10000;
+        }
+        else
+        {
+            return 1;
+        }
+        if (index + need >= bytes.Count())
+        {
+            return 1;
+        }
+        int k = 1;
+        while (k <= need)
+        {
+            int next = bytes.Get(index + k);
+            if (next < 0x80 || next > 0xBF)
+            {
+                return 1;
+            }
+            codePoint = (codePoint << 6) | (next & 0x3F);
+            k = k + 1;
+        }
+        if (codePoint < lowest || codePoint > 0x10FFFF)
+        {
+            return 1;
+        }
+        if (codePoint >= 0xD800 && codePoint <= 0xDFFF)
+        {
+            return 1;
+        }
+        keep = !IsUnsafeCodePoint(codePoint);
+        return need + 1;
+    }
+
+    // Cc (U+0000 to U+001F, U+007F to U+009F) and the format characters that hide, join or
+    // reorder text: U+061C, U+180E, U+200B to U+200F, U+2028 to U+202E, U+2060 to U+206F,
+    // U+FEFF, U+FFF9 to U+FFFB.
+    static bool IsUnsafeCodePoint(int codePoint)
+    {
+        if (IsUnsafeByte(codePoint))
+        {
+            return true;
+        }
+        if (codePoint >= 0x80 && codePoint <= 0x9F)
+        {
+            return true;
+        }
+        if (codePoint == 0x061C || codePoint == 0x180E || codePoint == 0xFEFF)
+        {
+            return true;
+        }
+        if (codePoint >= 0x200B && codePoint <= 0x200F)
+        {
+            return true;
+        }
+        if (codePoint >= 0x2028 && codePoint <= 0x202E)
+        {
+            return true;
+        }
+        if (codePoint >= 0x2060 && codePoint <= 0x206F)
+        {
+            return true;
+        }
+        return codePoint >= 0xFFF9 && codePoint <= 0xFFFB;
     }
 
     // The byte at index as 0 to 255 (ToAscii may report a byte above 0x7F as negative).
@@ -111,36 +203,6 @@ class NimbyAdminLog
         return c;
     }
 
-    // How many bytes from b0 form one unsafe sequence (1, 2 or 3), or 0. b1 and b2 are -1 past
-    // the end of the text.
-    static int UnsafeSequenceLength(int b0, int b1, int b2)
-    {
-        if (IsUnsafeByte(b0))
-        {
-            return 1;
-        }
-        if (b0 == 0xC2 && b1 >= 0x80 && b1 <= 0x9F)
-        {
-            return 2;
-        }
-        if (b0 != 0xE2)
-        {
-            return 0;
-        }
-        if (b1 == 0x80 && (b2 == 0x8E || b2 == 0x8F))
-        {
-            return 3;
-        }
-        if (b1 == 0x80 && b2 >= 0xA8 && b2 <= 0xAE)
-        {
-            return 3;
-        }
-        if (b1 == 0x81 && b2 >= 0xA6 && b2 <= 0xA9)
-        {
-            return 3;
-        }
-        return 0;
-    }
 
     static bool IsUnsafeByte(int c)
     {

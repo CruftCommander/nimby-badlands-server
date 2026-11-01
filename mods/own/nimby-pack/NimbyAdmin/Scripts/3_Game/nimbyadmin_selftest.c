@@ -21,6 +21,47 @@ class NimbyAdminSelfTest
         return failures;
     }
 
+    // Up to four bytes; -1 leaves a place empty.
+    protected static array<int> B(int b0, int b1, int b2, int b3)
+    {
+        array<int> bytes = new array<int>;
+        array<int> given = new array<int>;
+        given.Insert(b0);
+        given.Insert(b1);
+        given.Insert(b2);
+        given.Insert(b3);
+        foreach (int value : given)
+        {
+            if (value >= 0)
+            {
+                bytes.Insert(value);
+            }
+        }
+        return bytes;
+    }
+
+    // The units NextUnit finds, in order: "?" for one not kept, "k<length>" for one kept.
+    protected static string Units(array<int> bytes)
+    {
+        string verdict = "";
+        int i = 0;
+        while (i < bytes.Count())
+        {
+            bool keep;
+            int unit = NimbyAdminLog.NextUnit(bytes, i, keep);
+            if (keep)
+            {
+                verdict = verdict + "k" + unit.ToString();
+            }
+            else
+            {
+                verdict = verdict + "?";
+            }
+            i = i + unit;
+        }
+        return verdict;
+    }
+
     protected static NimbyAdminPlayerRow Row(string biId, int session)
     {
         NimbyAdminPlayerRow row = new NimbyAdminPlayerRow();
@@ -190,9 +231,10 @@ class NimbyAdminSelfTest
         failures += Case(results, "log: Safe treats every byte below 0x20 and 0x7F as unsafe, and keeps 0x20 to 0x7E", NimbyAdminLog.IsUnsafeByte(0) && NimbyAdminLog.IsUnsafeByte(9) && NimbyAdminLog.IsUnsafeByte(31) && NimbyAdminLog.IsUnsafeByte(127) && !NimbyAdminLog.IsUnsafeByte(32) && !NimbyAdminLog.IsUnsafeByte(126));
         failures += Case(results, "log: Safe caps at 64 bytes and keeps a two-byte character whole", NimbyAdminLog.Safe(NimbySharedChunks.FillBytes("x", 100)).Length() == 64 && NimbyAdminLog.Safe("aд\nb") == "aд?b");
         failures += Case(results, "log: ByteAt reads a byte above 0x7F as 128 to 255 (engine)", NimbyAdminLog.ByteAt("д", 0) == 0xD0 && NimbyAdminLog.ByteAt("д", 1) == 0xB4);
-        failures += Case(results, "log: NEL and the other C1 controls are unsafe sequences", NimbyAdminLog.UnsafeSequenceLength(0xC2, 0x85, -1) == 2 && NimbyAdminLog.UnsafeSequenceLength(0xC2, 0x80, 0x41) == 2 && NimbyAdminLog.UnsafeSequenceLength(0xC2, 0x9F, -1) == 2);
-        failures += Case(results, "log: LS, PS, LRM, RLM, RLO and the isolates are unsafe sequences", NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0xA8) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0xA9) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0x8E) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0x8F) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0xAE) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x81, 0xA6) == 3 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x81, 0xA9) == 3);
-        failures += Case(results, "log: ordinary letters and punctuation are not unsafe sequences", NimbyAdminLog.UnsafeSequenceLength(0xD0, 0xB4, -1) == 0 && NimbyAdminLog.UnsafeSequenceLength(0xC2, 0xA0, -1) == 0 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x80, 0x99) == 0 && NimbyAdminLog.UnsafeSequenceLength(0xE2, 0x82, 0xAC) == 0 && NimbyAdminLog.UnsafeSequenceLength(0x41, -1, -1) == 0);
+        failures += Case(results, "log: a lone 0x85, an overlong C1 85 and an overlong E0 80 8A are all ?", Units(B(0x85, -1, -1, -1)) == "?" && Units(B(0xC1, 0x85, -1, -1)) == "??" && Units(B(0xE0, 0x80, 0x8A, -1)) == "???");
+        failures += Case(results, "log: NEL, ALM (D8 9C), LS, PS, RLO, an isolate, ZWSP and BOM are ?", Units(B(0xC2, 0x85, -1, -1)) == "?" && Units(B(0xD8, 0x9C, -1, -1)) == "?" && Units(B(0xE2, 0x80, 0xA8, -1)) == "?" && Units(B(0xE2, 0x80, 0xA9, -1)) == "?" && Units(B(0xE2, 0x80, 0xAE, -1)) == "?" && Units(B(0xE2, 0x81, 0xA6, -1)) == "?" && Units(B(0xE2, 0x80, 0x8B, -1)) == "?" && Units(B(0xEF, 0xBB, 0xBF, -1)) == "?");
+        failures += Case(results, "log: a surrogate, a byte above 0xF4 and a sequence cut short are ?", Units(B(0xED, 0xA0, 0x80, -1)) == "???" && Units(B(0xFF, -1, -1, -1)) == "?" && Units(B(0xE2, 0x80, -1, -1)) == "??");
+        failures += Case(results, "log: a Cyrillic letter, a right quote, a no-break space, an emoji and ASCII are kept whole", Units(B(0xD0, 0xB4, -1, -1)) == "k2" && Units(B(0xE2, 0x80, 0x99, -1)) == "k3" && Units(B(0xC2, 0xA0, -1, -1)) == "k2" && Units(B(0xF0, 0x9F, 0x98, 0x80)) == "k4" && Units(B(0x41, -1, -1, -1)) == "k1");
         failures += Case(results, "log: a forged name cannot add a line to WhoFrom", NimbyAdminLog.WhoFrom("x\n[NIMBY][Admin] fake", "BI\n", "7656").IndexOf("\n") < 0);
         return failures;
     }
