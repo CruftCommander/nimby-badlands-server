@@ -34,7 +34,7 @@ class NimbyAdminServerRules
     static const float DENIAL_RECORDS_AGGREGATE_PER_SECOND = 2.0;
     static const int DENIAL_RECORDS_AGGREGATE_BURST = 120;
     // Replay window per sender per connection (recon 4.3 step 7; review finding 1, October 31,
-    // 2026): the last SEEN_MAX accepted ids, no time-based expiry.
+    // 2026; re-review November 1): the SEEN_MAX highest accepted ids, no time-based expiry.
     static const int SEEN_MAX = 256;
 
     // Discord (recon 7, ruling 7).
@@ -857,21 +857,20 @@ class NimbyAdminServerBucket
     }
 }
 
-// The replay window of one sender on one connection (review finding 1, October 31, 2026). It
-// keeps the highest accepted id, the last SEEN_MAX accepted ids in acceptance order, and the
-// floor: the lowest id in that set once the set is full. An id in the set is a duplicate. An id
-// below the floor of a full set is stale. Any other id is accepted, also below the highest (a
-// gap), which lets the dev harness forge above a real client's ids. No time-based expiry.
-// Residual: an id evicted while a lower id is still in the set lies above the floor and would be
-// accepted again; only an id accepted out of order (the harness's high ids) can be in that place,
-// because a real client's ids rise (NimbyAdminRequestIds).
+// The replay window of one sender on one connection (review finding 1, October 31, 2026;
+// re-review, November 1). It keeps the SEEN_MAX highest accepted ids, the highest of them, and
+// the floor: the lowest id in that set once the set is full. An id in the set is a duplicate. An
+// id below the floor of a full set is stale. Any other id is accepted, also below the highest (a
+// gap), which lets the dev harness forge above a real client's ids. Eviction removes the lowest
+// id, so an evicted id is always below the new floor and can never be accepted again; the floor
+// only rises. No time-based expiry.
 class NimbyAdminServerSeen
 {
     static const string ACCEPT = "";
     static const string DUPLICATE = "duplicate";
     static const string STALE = "stale";
 
-    protected ref array<int> m_Order = new array<int>;
+    protected ref array<int> m_Ids = new array<int>;
     protected ref map<int, bool> m_Set = new map<int, bool>;
     protected int m_Highest;
     protected int m_Floor;
@@ -883,31 +882,33 @@ class NimbyAdminServerSeen
         {
             return DUPLICATE;
         }
-        if (m_Order.Count() >= NimbyAdminServerRules.SEEN_MAX && requestId < m_Floor)
+        if (m_Ids.Count() >= NimbyAdminServerRules.SEEN_MAX && requestId < m_Floor)
         {
             return STALE;
         }
         return ACCEPT;
     }
 
-    // Records an id Check accepted.
+    // Records an id Check accepted; evicts the lowest id while the set is over SEEN_MAX.
     void Accept(int requestId)
     {
-        m_Order.Insert(requestId);
+        m_Ids.Insert(requestId);
         m_Set.Set(requestId, true);
         if (requestId > m_Highest)
         {
             m_Highest = requestId;
         }
-        while (m_Order.Count() > NimbyAdminServerRules.SEEN_MAX)
+        while (m_Ids.Count() > NimbyAdminServerRules.SEEN_MAX)
         {
-            int gone = m_Order.Get(0);
-            m_Order.RemoveOrdered(0);
+            int at = LowestIndex();
+            int gone = m_Ids.Get(at);
+            // Order does not matter, so the unordered Remove (EnScript.c:463).
+            m_Ids.Remove(at);
             m_Set.Remove(gone);
         }
-        if (m_Order.Count() >= NimbyAdminServerRules.SEEN_MAX)
+        if (m_Ids.Count() >= NimbyAdminServerRules.SEEN_MAX)
         {
-            m_Floor = Lowest();
+            m_Floor = m_Ids.Get(LowestIndex());
         }
     }
 
@@ -924,20 +925,22 @@ class NimbyAdminServerSeen
 
     int Count()
     {
-        return m_Order.Count();
+        return m_Ids.Count();
     }
 
-    protected int Lowest()
+    protected int LowestIndex()
     {
-        int lowest = m_Order.Get(0);
-        foreach (int id : m_Order)
+        int best = 0;
+        int i = 1;
+        while (i < m_Ids.Count())
         {
-            if (id < lowest)
+            if (m_Ids.Get(i) < m_Ids.Get(best))
             {
-                lowest = id;
+                best = i;
             }
+            i = i + 1;
         }
-        return lowest;
+        return best;
     }
 }
 

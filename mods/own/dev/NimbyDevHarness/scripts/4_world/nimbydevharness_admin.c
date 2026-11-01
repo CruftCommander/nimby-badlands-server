@@ -14,14 +14,16 @@
 // Session : the server numbers sessions in InvokeOnConnect order (a new number for a new
 //           identity object); the harness mirrors that numbering from the same hook to build
 //           the teleport args.
-// Ids     : review finding 1 and the orchestrator ruling (October 31, 2026): each step forges
-//           for an identity from the server's highest accepted id on that connection plus 1024,
-//           read at the start of the step through NimbyAdminHighWater (client half, 3_Game;
-//           written by the server). A run forges at most MAX_FORGES_PER_RUN ids, so the server's
-//           256-id set always keeps real client ids and its floor stays below the client's next
-//           id; a run that would exceed it SKIPs with a reason line. The duplicate case reuses an
-//           id that is inside the set. Audit lines are matched by id, actor Steam64 and run
-//           start, because these small ids repeat across runs on the same day.
+// Ids     : review finding 1 and the orchestrator rulings (October 31 and November 1, 2026):
+//           each step forges for an identity from the server's highest accepted id on that
+//           connection plus 1,000,000, read at the start of the step through NimbyAdminHighWater
+//           (client half, 3_Game; written by the server). The server's set keeps the 256 highest
+//           ids, so the harness ids stay in it; a run forges at most MAX_FORGES_PER_RUN ids, so
+//           they take at most 127 of the 256 slots, the set always keeps real client ids, and its
+//           floor stays below the client's next id. A run that would exceed it SKIPs with a
+//           reason line. The duplicate case reuses an id that is inside the set. Audit lines are
+//           matched by id, actor Steam64 and run start, because these ids repeat across runs on
+//           the same day.
 // Persists: Nothing.
 // Vanilla : ScriptCallQueue.CallLater (2_GameLib/DayZ/tools.c:61), from 4_World only (shared rules
 //           7.1); Weather.GetOvercast, GetWindMagnitude, GetSandstorm (3_Game/DayZ/Weather.c:183,
@@ -36,7 +38,7 @@ class NimbyDevHarnessAdmin
     static const string FORGE_FILE = "$profile:NimbyDevHarness\\forge";
     static const int START_DELAY_MS = 10000;
     static const int STEP_MS = 3000;
-    static const int FORGE_OFFSET = 1024;
+    static const int FORGE_OFFSET = 1000000;
     static const int MAX_FORGES_PER_RUN = 127;
     // Step 1: 2, step 2: 6, step 3: 2 (one id twice), step 4: 50.
     static const int PLANNED_FORGES = 60;

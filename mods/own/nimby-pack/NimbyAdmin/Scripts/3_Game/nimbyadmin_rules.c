@@ -558,9 +558,10 @@ class NimbyAdminDone
 }
 
 // Review finding 1 (October 31, 2026): the highest request id the server accepted on each
-// connection, by BI id, so the dev harness can forge above it (orchestrator ruling: highest plus
-// 1024). Only NimbyAdminServer writes it, on the server; on a client nothing writes it and Get
-// returns 0. No decision reads it: the replay check lives in NimbyAdminServerSeen.
+// connection, by BI id, so the dev harness can forge above it (orchestrator ruling of November
+// 1: highest plus 1,000,000). Only NimbyAdminServer writes it, on the server; on a client
+// nothing writes it and Get returns 0. No decision reads it: the replay check lives in
+// NimbyAdminServerSeen.
 class NimbyAdminHighWater
 {
     protected static ref map<string, int> s_Highest;

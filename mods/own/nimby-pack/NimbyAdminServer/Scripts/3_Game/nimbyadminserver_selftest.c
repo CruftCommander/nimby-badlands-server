@@ -320,9 +320,10 @@ class NimbyAdminServerSelfTest
         return ok;
     }
 
-    // Review finding 1: duplicate inside the set, stale below the floor, gaps accepted, a replay
-    // after 300 accepted ids refused, and the harness ids (highest plus 1024) leave the client's
-    // next id acceptable.
+    // Review finding 1 and the re-review: duplicate inside the set, stale below the floor, gaps
+    // accepted, a replay after 300 accepted ids refused, the re-review's evicted-id scenario, and
+    // the harness ids (highest plus 1,000,000, at most 127 a run) leave the client's next id
+    // acceptable.
     protected static int ReplayCases(array<string> results)
     {
         int failures = 0;
@@ -340,12 +341,21 @@ class NimbyAdminServerSelfTest
         NimbyAdminServerSeen replay = new NimbyAdminServerSeen();
         bool ran = AcceptRange(replay, 1, 301);
         failures += Case(results, "replay: an id replayed after 300 accepted ids is refused", ran && replay.Check(1) == NimbyAdminServerSeen.STALE);
+        // The re-review's scenario: 1000 first, then 1 through 256. Before the fix 1000 was evicted
+        // first (acceptance order) while above the floor, and was accepted again.
+        NimbyAdminServerSeen hostile = new NimbyAdminServerSeen();
+        hostile.Accept(1000);
+        bool low = AcceptRange(hostile, 1, 256);
+        failures += Case(results, "replay: accept 1000 then 1 to 256, a replay of 1000 is a duplicate", low && hostile.Check(1000) == NimbyAdminServerSeen.DUPLICATE);
+        failures += Case(results, "replay: accept 1000 then 1 to 256, a replay of 1 (evicted) is stale", hostile.Floor() == 2 && hostile.Check(1) == NimbyAdminServerSeen.STALE);
         NimbyAdminServerSeen mixed = new NimbyAdminServerSeen();
         bool client = AcceptRange(mixed, 1, 200);
-        int base = mixed.Highest() + 1024;
-        bool harness = AcceptRange(mixed, base, base + 59);
-        failures += Case(results, "replay: after 60 harness ids at highest + 1024 the client's next id is accepted", client && harness && mixed.Count() == NimbyAdminServerRules.SEEN_MAX && mixed.Check(201) == NimbyAdminServerSeen.ACCEPT);
+        int base = mixed.Highest() + 1000000;
+        bool harness = AcceptRange(mixed, base, base + 126);
+        failures += Case(results, "replay: after 127 harness ids at highest + 1000000 the client's next id is accepted", client && harness && mixed.Count() == NimbyAdminServerRules.SEEN_MAX && mixed.Check(201) == NimbyAdminServerSeen.ACCEPT);
         failures += Case(results, "replay: after the harness ids a client replay below the floor is still stale", mixed.Check(1) == NimbyAdminServerSeen.STALE);
+        bool more = AcceptRange(mixed, 201, 500);
+        failures += Case(results, "replay: harness ids stay in the set after 300 more client ids and replay as duplicates", more && mixed.Check(base) == NimbyAdminServerSeen.DUPLICATE && mixed.Check(base + 126) == NimbyAdminServerSeen.DUPLICATE && mixed.Check(501) == NimbyAdminServerSeen.ACCEPT);
         return failures;
     }
 
