@@ -1,13 +1,13 @@
 // -----------------------------------------------------------------------------
 // NimbyGreet - PlayerBase: the RPC plumbing and the spawn hook (plan v0.4, G5).
-// Purpose : The only file that touches the wire. Client: sends 6551101 for the controlled
+// Purpose : The client side of the wire and the request receive. Client: sends 6551101 for the controlled
 //           player, hands 6551102 chunks and the 6551103 done record to MissionGameplay
 //           through NimbyGreetClient's invokers, and reports the end of OnPlayerLoaded
 //           (4_World/DayZ/Entities/ManBase/PlayerBase.c:2569) for the controlled player,
 //           after vanilla's CloseAll (:2594) has run. Server: checks that the sender owns
 //           this player, reads the request, and hands it to MissionServer through the
-//           Request invoker; MissionServer answers through NimbyGreetSendChunk and
-//           NimbyGreetSendDone, to the owning identity only (RPCSingleParam with
+//           Request invoker; MissionServer answers through NimbySharedChunkSender (Plan 11,
+//           NimbyShared/Scripts/3_Game/nimbyshared_chunks.c), to the owning identity only (RPCSingleParam with
 //           recipient, 3_Game/DayZ/Global/Game.c:1013).
 // Security: a client can target any network object with an RPC, so the server derives
 //           ownership from the authenticated sender before reading anything (the Legs
@@ -157,19 +157,5 @@ modded class PlayerBase extends ManBase
             return;
         }
         NimbyGreetClient.Request().Invoke(this, sender, request.param1, request.param2, request.param3, request.param4, request.param5);
-    }
-
-    // One chunk to the owning identity. Called by MissionServer.
-    void NimbyGreetSendChunk(PlayerIdentity recipient, int requestId, int index, string text)
-    {
-        Param3<int, int, string> chunk = new Param3<int, int, string>(requestId, index, text);
-        GetGame().RPCSingleParam(this, NimbyGreetRules.RPC_CHUNK, chunk, true, recipient);
-    }
-
-    // The done record to the owning identity. Called by MissionServer.
-    void NimbyGreetSendDone(PlayerIdentity recipient, int requestId, int chunkCount, string doneJson)
-    {
-        Param3<int, int, string> done = new Param3<int, int, string>(requestId, chunkCount, doneJson);
-        GetGame().RPCSingleParam(this, NimbyGreetRules.RPC_DONE, done, true, recipient);
     }
 }

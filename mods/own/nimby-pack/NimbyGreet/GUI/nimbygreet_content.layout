@@ -1,94 +1,12 @@
-FrameWidgetClass Root {
- clipchildren 0
- color 1 1 1 1
+FrameWidgetClass NimbyGreetContent {
+ ignorepointer 1
  position 0 0
  size 1 1
  hexactpos 0
  vexactpos 0
  hexactsize 0
  vexactsize 0
- priority 50
  {
-  PanelWidgetClass Dim {
-   ignorepointer 1
-   color 0 0 0 0.6
-   position 0 0
-   size 1 1
-   hexactpos 0
-   vexactpos 0
-   hexactsize 0
-   vexactsize 0
-   style rover_sim_colorable
-  }
-  PanelWidgetClass Panel {
-   color 0 0 0 0.85
-   position 0 0
-   size 0.7 0.86
-   halign center_ref
-   valign center_ref
-   hexactpos 0
-   vexactpos 0
-   hexactsize 0
-   vexactsize 0
-   style DayZDefaultPanel
-   {
-    TextWidgetClass Title {
-     ignorepointer 1
-     color 1 1 1 1
-     position 0.02 0.015
-     size 0.96 0.06
-     hexactpos 0
-     vexactpos 0
-     hexactsize 0
-     vexactsize 0
-     text ""
-     font "gui/fonts/sdf_MetronLight72"
-     "exact text" 1
-     "exact text size" 30
-     "text valign" center
-    }
-    TextWidgetClass Tagline {
-     ignorepointer 1
-     color 0.78 0.78 0.78 1
-     position 0.02 0.075
-     size 0.96 0.035
-     hexactpos 0
-     vexactpos 0
-     hexactsize 0
-     vexactsize 0
-     text ""
-     font "gui/fonts/sdf_MetronLight24"
-     "exact text" 1
-     "exact text size" 16
-     "text valign" center
-    }
-    ScrollWidgetClass SectionScroll {
-     position 0.02 0.12
-     size 0.22 0.66
-     hexactpos 0
-     vexactpos 0
-     hexactsize 0
-     vexactsize 0
-     "no focus" 1
-     "Ignore invisible" 0
-     "Scrollbar V" 1
-     {
-      WrapSpacerWidgetClass SectionList {
-       ignorepointer 1
-       position 0 0
-       size 1 1
-       hexactpos 1
-       vexactpos 1
-       hexactsize 0
-       vexactsize 0
-       "no focus" 1
-       Padding 0
-       Margin 2
-       "Size To Content H" 0
-       "Size To Content V" 1
-      }
-     }
-    }
     PanelWidgetClass BodyBackground {
      ignorepointer 1
      color 0 0 0 0.35
@@ -348,22 +266,5 @@ FrameWidgetClass Root {
       }
      }
     }
-    TextWidgetClass Hint {
-     ignorepointer 1
-     color 0.6 0.6 0.6 1
-     position 0.02 0.875
-     size 0.96 0.04
-     hexactpos 0
-     vexactpos 0
-     hexactsize 0
-     vexactsize 0
-     text ""
-     font "gui/fonts/sdf_MetronLight24"
-     "exact text" 1
-     "exact text size" 13
-     "text valign" center
-    }
-   }
-  }
  }
 }

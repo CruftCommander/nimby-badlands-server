@@ -1,11 +1,11 @@
 // -----------------------------------------------------------------------------
 // NimbyShared - rules: the constants every other NimbyShared file reads, and the engine-free
-// self-test (shared rules 8). No engine call in this file.
-// Plan  : docs/plans/2026-10-31-nimby-shared-plan.md v0.1: C1 (identifiers), C7 (codec),
-//         C8 (self-test). A constant change is a plan change first.
-// Stub  : On main the file holds the flag paths, CHUNK_BYTES, and a self-test that proves
-//         the addon loads and the boot check's self-test gate sees it. The codec moves here
-//         from NimbyGreetRules in Plan 11 Phase 1, with its Phase 0 cases.
+// decisions the self-test covers (shared rules 8). No engine call in this file.
+// Plan  : docs/plans/2026-10-31-nimby-shared-plan.md v0.2: C1 (identifiers), C5 (the text-size
+//         steps of the window shell), C7 (codec), C8 (self-test). A constant change is a plan
+//         change first.
+// Origin: CHUNK_BYTES and the text-size steps moved here from NimbyGreetRules (Greet plan
+//         v0.4, G5 and G16) in Plan 11 Phase 1; their values are unchanged.
 // Style : one statement per line.
 // -----------------------------------------------------------------------------
 
@@ -15,42 +15,27 @@ class NimbySharedRules
     // at 1,100 and above (Greet NIMBY-T-037). The value is the codec's, not a consumer's.
     static const int CHUNK_BYTES = 1000;
 
-    // Shared rules 4.3 and 8: the flag files, read once at mission start.
+    // C5 (Greet G16): the three text sizes a shell window cycles through.
+    static const float TEXT_SCALE_NORMAL = 1.0;
+    static const float TEXT_SCALE_LARGE = 1.25;
+    static const float TEXT_SCALE_LARGER = 1.5;
+
+    // Shared rules 4.3 and 8: the flag files, read once at first use.
     static const string DIR = "$profile:NimbyShared";
     static const string FILE_DEBUG = "$profile:NimbyShared\\debug";
     static const string FILE_SELFTEST = "$profile:NimbyShared\\selftest";
-}
 
-class NimbySharedSelfTest
-{
-    // Returns the number of failures; the caller prints one PASS|FAIL line per result.
-    static int Run(out array<string> results)
+    // The next step of the text-size cycle: normal, large, larger, then normal again.
+    static float NextTextScale(float current)
     {
-        results = new array<string>;
-        int failures = 0;
-        failures += StubCases(results);
-        return failures;
-    }
-
-    // ---- Stub (October 31, 2026): the constants the consumers will depend on -------------------
-
-    protected static int StubCases(array<string> results)
-    {
-        int failures = 0;
-        failures += Case(results, "rules: CHUNK_BYTES is 1000 (NIMBY-T-037)", NimbySharedRules.CHUNK_BYTES == 1000);
-        failures += Case(results, "rules: debug flag lives under $profile:NimbyShared", NimbySharedRules.FILE_DEBUG.IndexOf(NimbySharedRules.DIR) == 0);
-        failures += Case(results, "rules: selftest flag lives under $profile:NimbyShared", NimbySharedRules.FILE_SELFTEST.IndexOf(NimbySharedRules.DIR) == 0);
-        return failures;
-    }
-
-    protected static int Case(array<string> results, string name, bool passed)
-    {
-        if (passed)
+        if (current < TEXT_SCALE_LARGE)
         {
-            results.Insert("PASS " + name);
-            return 0;
+            return TEXT_SCALE_LARGE;
         }
-        results.Insert("FAIL " + name);
-        return 1;
+        if (current < TEXT_SCALE_LARGER)
+        {
+            return TEXT_SCALE_LARGER;
+        }
+        return TEXT_SCALE_NORMAL;
     }
 }
