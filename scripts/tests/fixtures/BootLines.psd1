@@ -19,6 +19,8 @@
             Line = '21:52:34.668  SCRIPT       : [NIMBY][Hands][SelfTest] FAIL transfer lifecycle' }
         @{ Pattern = '\[NIMBY\]\[[^\]]+\]\[SelfTest\] FAIL'; Kind = 'constructed'; Source = 'hyphenated log prefix (TGA-016 failure scenario)'
             Line = '21:52:34.668  SCRIPT       : [NIMBY][Dev-Harness][SelfTest] FAIL harness case' }
+        @{ Pattern = "Warning Message: Addon 'Nimby[^']*' requires addon"; Kind = 'real'; Source = 'nimby-shared worktree logs\build-20261031-210921\server-profile\DayZServer_x64_2026-10-31_21-09-23.RPT (Plan 11 SH-13)'
+            Line = '21:09:24.584 Warning Message: Addon ''NimbyGreet'' requires addon ''NimbyShared''' }
     )
     QuietLines   = @(
         @{ Name = 'SCRIPT (W)'; Source = 'RPT 2026-10-19 21-52-19:176'
