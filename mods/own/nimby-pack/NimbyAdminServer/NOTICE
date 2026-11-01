@@ -7,5 +7,12 @@ checks, and the RPC router. No media.
 
 Changes, newest first:
 
+- October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the server half - config.json,
+  permissions.json and bans.json stores with .lkg and the refuse-edits state, the first-owner
+  bootstrap, the audit journal, the Discord queue over the vanilla RestApi, the session table,
+  the authenticated router, the session.hello, players.list and player.teleportTo handlers, and
+  the self-test. Modifies the vanilla PlayerBase (OnRPC), MissionServer (OnInit, OnUpdate,
+  InvokeOnConnect, PlayerDisconnected) and MissionBase (OnInit). Reads the client half's wire
+  definition (requiredAddons NimbyAdmin).
 - October 31, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
   builds with the pack.json row; the body lands from feat/nimby-admin.

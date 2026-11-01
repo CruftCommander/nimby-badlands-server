@@ -1,0 +1,17 @@
+{
+    "version": 1,
+    "bootstrapOwnerSteam64": "",
+    "webhookUrl": "",
+    "spawnMaxItems": 50,
+    "spawnMaxVehicles": 1,
+    "requestsPerSecond": 5,
+    "permissionsReloadSeconds": 5,
+    "discordQueueMax": 200,
+    "auditRetentionDays": 90,
+    "restrainTimeoutMinutes": 10,
+    "vehicleRegistryRefreshSeconds": 60,
+    "densityTileMeters": 200,
+    "densityRefreshSeconds": 300,
+    "densityAlertObjects": 400,
+    "densityPlayerAlertObjects": 400
+}

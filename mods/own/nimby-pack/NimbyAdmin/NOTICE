@@ -6,5 +6,12 @@ Interactive) for the self-test hook, the menu, and the RPC plumbing. No media.
 
 Changes, newest first:
 
+- October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the client half - the wire definition both
+  halves read (RPC ids 6550301-6550305, the request envelope rules, the key=value args codec,
+  the Players list and done classes), the [NIMBY][Admin] log helper, the PlayerBase RPC
+  plumbing (client only), the NimbySharedWindow menu with the page registry and the Players
+  page, the pause-menu entry, the Home binding (UANimbyAdminOpen), and the self-test. Modifies
+  the vanilla PlayerBase (OnPlayerLoaded, OnRPC), MissionGameplay (OnInit, OnMissionFinish,
+  OnUpdate) and MissionBase (OnInit).
 - October 31, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
   builds with the pack.json row; the body lands from feat/nimby-admin.
