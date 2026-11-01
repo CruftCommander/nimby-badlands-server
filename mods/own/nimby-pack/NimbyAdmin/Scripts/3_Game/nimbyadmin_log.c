@@ -60,7 +60,10 @@ class NimbyAdminLog
 
     // Review finding 7 (October 31, 2026): at most SAFE_BYTES bytes (on a UTF-8 boundary), every
     // byte below 0x20 and 0x7F replaced with '?', so a client cannot write a line break or a
-    // control sequence into the server log. Engine-free; self-tested.
+    // control sequence into the server log. Also replaced, each sequence by one '?' (security
+    // review of f8d99c0): the UTF-8 C1 controls U+0080 to U+009F (NEL among them), the line and
+    // paragraph separators U+2028 and U+2029, and the bidirectional marks, embeddings, overrides
+    // and isolates U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. Engine-free; self-tested.
     static const int SAFE_BYTES = 64;
 
     static string Safe(string text)
@@ -68,20 +71,75 @@ class NimbyAdminLog
         string cut = NimbyAdminRules.CutBytes(text, SAFE_BYTES);
         string result = "";
         int i = 0;
-        while (i < cut.Length())
+        int length = cut.Length();
+        while (i < length)
         {
-            string ch = cut.Get(i);
-            if (IsUnsafeByte(ch.ToAscii()))
+            int b0 = ByteAt(cut, i);
+            int b1 = -1;
+            int b2 = -1;
+            if (i + 1 < length)
+            {
+                b1 = ByteAt(cut, i + 1);
+            }
+            if (i + 2 < length)
+            {
+                b2 = ByteAt(cut, i + 2);
+            }
+            int unsafeLength = UnsafeSequenceLength(b0, b1, b2);
+            if (unsafeLength > 0)
             {
                 result = result + "?";
+                i = i + unsafeLength;
             }
             else
             {
-                result = result + ch;
+                result = result + cut.Get(i);
+                i = i + 1;
             }
-            i = i + 1;
         }
         return result;
+    }
+
+    // The byte at index as 0 to 255 (ToAscii may report a byte above 0x7F as negative).
+    static int ByteAt(string text, int index)
+    {
+        int c = text.Get(index).ToAscii();
+        if (c < 0)
+        {
+            c = c + 256;
+        }
+        return c;
+    }
+
+    // How many bytes from b0 form one unsafe sequence (1, 2 or 3), or 0. b1 and b2 are -1 past
+    // the end of the text.
+    static int UnsafeSequenceLength(int b0, int b1, int b2)
+    {
+        if (IsUnsafeByte(b0))
+        {
+            return 1;
+        }
+        if (b0 == 0xC2 && b1 >= 0x80 && b1 <= 0x9F)
+        {
+            return 2;
+        }
+        if (b0 != 0xE2)
+        {
+            return 0;
+        }
+        if (b1 == 0x80 && (b2 == 0x8E || b2 == 0x8F))
+        {
+            return 3;
+        }
+        if (b1 == 0x80 && b2 >= 0xA8 && b2 <= 0xAE)
+        {
+            return 3;
+        }
+        if (b1 == 0x81 && b2 >= 0xA6 && b2 <= 0xA9)
+        {
+            return 3;
+        }
+        return 0;
     }
 
     static bool IsUnsafeByte(int c)
