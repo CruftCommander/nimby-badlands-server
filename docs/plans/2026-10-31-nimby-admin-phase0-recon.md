@@ -249,3 +249,19 @@ Next:
 1. When no `DayZServer_x64` runs: `Build-NimbyPack.ps1 -ServerPath D:\DayZServer -BootInstanceId 998 -Dev -Qualification`, then update the build line of the test record.
 2. Jeff pastes the throwaway webhook into `profiles\nimby-admin-p0\NimbyAdmin\config.json` and starts `Start-NimbyTestServer.ps1` with the command in the test record from a console he keeps open.
 3. Run the gate table and the item 3 rows in `docs/testing/2026-10-31-central-scrutinizer-phase0.md`; then stop for the N18 review.
+
+## Status, November 1, 2026, 00:25 (Part 1 done, waiting on the second review pass)
+
+Done (resume brief Part 1, on `feat/nimby-admin`):
+
+- The eleven Codex findings on `439b729`, each fixed with self-test cases, in `a521807`, `7741466`, `dd6e636`, `e7802d2`, `1180702`, `7c70299`, `f8d99c0`, `fd91248`; follow-ups from the background security review in `84a6fca`, `6ea46cc`, `4935842`, `5bad47f`. Every commit had a green `-Dev` build first; the last is `@NIMBY-20261101-001917`: `SUMMARY PASS`, Admin 69/69, AdminServer 106/106, DevHarness 16/16, total 836/836.
+- The review copied to `docs/reviews/2026-10-31-central-scrutinizer-phase0-codex-review.md`; the dispositions table and the revised deviations in the test record.
+- Orchestrator ruling on finding 1 (harness ids from the server's highest plus 1024, at most 127 forges per run), recorded as a deviation.
+
+Waiting:
+
+- Part 2: Jeff's short Codex pass on `git diff 439b729..HEAD`; Part 3 does not start before it comes back clean or ruled.
+- Plan question raised for the orchestrator: write denied and invalid audit records to their own day file, so the finding 4 readback (whole day file per intent; 1.30 has no seek) reads only admin activity.
+
+Next (Part 3): with no `DayZServer_x64` running, the gate rebuild (`-ServerPath D:\DayZServer -BootInstanceId 998 -Dev -Qualification`) and `Test-NimbyRepo.ps1`; then the gate rows and the item 3 proofs with Jeff and a second client.
+
