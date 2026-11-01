@@ -295,3 +295,23 @@ Next (Part 3): unchanged from the 00:25 status.
 - Fix round and two reruns after the gate session: harness forge format (`a974118`), Discord `wait=true` and timeout-only retry (`678c70a`), sandstorm per the vanilla dev command (`d516b1a`), harness arguments as locals for the 164200 argument-slot behavior (`23b4e46`). Final gate build `@NIMBY-20261101-163708`, 865/865 on the replica.
 - Every gate row passes on its required result; item 3 proofs 1, 2, 3 and 5 PASS; proof 4's visual is not verifiable in Phase 0 and moved to Phase 3 (Plan 3 v0.10). The test record carries the open items and a verdict paragraph recommending go for Phase 1.
 
+## Status, November 1, 2026, 17:50 (Phase 0 closed; next is Phase 1)
+
+Done:
+
+- Phase 0 closed on the gate record at `831b4bd` (Jeff's ruling, November 1, 2026: go for Phase 1, open items carried as tabled). Final build `@NIMBY-20261101-163708`, 865 of 865 self-test cases on the replica `storage_998`. The wrong-webhook row is PASS with deviation (orchestrator ruling).
+
+Blocked:
+
+- Nothing.
+
+Next (Phase 1 per Plan 3 v0.10):
+
+1. The harness session-mirror fix: forge with the identity object from InvokeOnConnect, not `PlayerBase.GetIdentity()`, then rerun the duplicate-id row on the current build.
+2. The Phase 1 check on identity-keyed sessions: confirm the engine always hands the same `PlayerIdentity` object per connection, or key sessions on the BI id plus a connect counter.
+3. The rest of Phase 1 as Plan 3 v0.10 lists it, with the other open items from the test record carried.
+
+Owed:
+
+- Plan 3 Phase 3 Discord text: on 164200 a deleted or wrong webhook's 404 arrives as `class=other code=5` (`EREST_ERROR`), not `class=client`; amend the Discord section and any evidence line that names `class=client`.
+
