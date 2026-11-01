@@ -292,6 +292,78 @@ class NimbyAdminServerRules
 
     // ---- JSON text the server writes (never parses from a client) -------------------------------
 
+    // Finding 8: true when key is a key of the outermost JSON object of text. Strings (with their
+    // escapes) are skipped, so a value that spells the key or a key of a nested object does not
+    // count. Engine-free; only for text that already parsed as JSON.
+    static bool HasTopLevelKey(string text, string key)
+    {
+        int depth = 0;
+        bool inString = false;
+        bool escaped = false;
+        int stringStart = -1;
+        int i = 0;
+        int length = text.Length();
+        while (i < length)
+        {
+            string ch = text.Get(i);
+            if (inString)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                }
+                else if (ch == "\\")
+                {
+                    escaped = true;
+                }
+                else if (ch == "\"")
+                {
+                    inString = false;
+                    if (depth == 1 && IsKeyAt(text, i + 1) && text.Substring(stringStart, i - stringStart) == key)
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if (ch == "\"")
+            {
+                inString = true;
+                stringStart = i + 1;
+            }
+            else if (ch == "{" || ch == "[")
+            {
+                depth = depth + 1;
+            }
+            else if (ch == "}" || ch == "]")
+            {
+                depth = depth - 1;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
+
+    // True when the next byte after optional whitespace at from is ':'.
+    protected static bool IsKeyAt(string text, int from)
+    {
+        int i = from;
+        while (i < text.Length())
+        {
+            string ch = text.Get(i);
+            if (ch == ":")
+            {
+                return true;
+            }
+            int c = ch.ToAscii();
+            if (c != 32 && c != 9 && c != 10 && c != 13)
+            {
+                return false;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
+
     static string JsonEscape(string text)
     {
         string result = "";
@@ -455,13 +527,30 @@ class NimbyAdminServerAdmin
     string role;
 }
 
+// Review finding 8 (October 31, 2026): a key missing from the file keeps its initializer (Tack
+// TK-F9 d, October 24, 2026), so version starts at the sentinel 0 and "{}" is refused. The
+// collection cannot use a null sentinel: on 164200 the serializer allocates the array even when
+// its key is absent (this seat's boot, October 31, 2026: {"version":1} was adopted with admins
+// null-initialized). So the store also requires the collection key on the text itself
+// (NimbyAdminServerRules.HasTopLevelKey) before it adopts a file or copies it to .lkg; Build
+// still refuses a null collection.
 class NimbyAdminServerPermissions
 {
-    int version = 1;
-    ref array<ref NimbyAdminServerAdmin> admins = new array<ref NimbyAdminServerAdmin>;
+    int version = 0;
+    ref array<ref NimbyAdminServerAdmin> admins;
+
+    // A valid empty file, for the writers (bootstrap) and the self-test.
+    static NimbyAdminServerPermissions Empty()
+    {
+        NimbyAdminServerPermissions data = new NimbyAdminServerPermissions();
+        data.version = 1;
+        data.admins = new array<ref NimbyAdminServerAdmin>;
+        return data;
+    }
 
     // The active set (Steam64 to role). Invalid and duplicate rows are skipped and named in notes;
-    // they grant nothing. False when the file as a whole is unusable (wrong version).
+    // they grant nothing. False when the file as a whole is unusable (version not exactly 1, or
+    // no admins collection); the first note then names why.
     bool Build(out map<string, string> active, out array<string> notes)
     {
         active = new map<string, string>;
@@ -469,6 +558,11 @@ class NimbyAdminServerPermissions
         if (version != 1)
         {
             notes.Insert("version " + version.ToString() + " is not 1");
+            return false;
+        }
+        if (!admins)
+        {
+            notes.Insert("admins missing");
             return false;
         }
         int i = 0;
@@ -522,10 +616,19 @@ class NimbyAdminServerBan
     string expiresUtc;
 }
 
+// Finding 8: sentinels as for NimbyAdminServerPermissions.
 class NimbyAdminServerBans
 {
-    int version = 1;
-    ref array<ref NimbyAdminServerBan> bans = new array<ref NimbyAdminServerBan>;
+    int version = 0;
+    ref array<ref NimbyAdminServerBan> bans;
+
+    static NimbyAdminServerBans Empty()
+    {
+        NimbyAdminServerBans data = new NimbyAdminServerBans();
+        data.version = 1;
+        data.bans = new array<ref NimbyAdminServerBan>;
+        return data;
+    }
 
     bool Build(out map<string, string> active, out array<string> notes)
     {
@@ -534,6 +637,11 @@ class NimbyAdminServerBans
         if (version != 1)
         {
             notes.Insert("version " + version.ToString() + " is not 1");
+            return false;
+        }
+        if (!bans)
+        {
+            notes.Insert("bans missing");
             return false;
         }
         int i = 0;

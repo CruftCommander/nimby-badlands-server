@@ -148,7 +148,7 @@ class NimbyAdminServerSelfTest
     protected static int AccessCases(array<string> results)
     {
         int failures = 0;
-        NimbyAdminServerPermissions file = new NimbyAdminServerPermissions();
+        NimbyAdminServerPermissions file = NimbyAdminServerPermissions.Empty();
         file.admins.Insert(Admin("76561198354705597", "owner"));
         file.admins.Insert(Admin("76561190000000001", "admin"));
         file.admins.Insert(Admin("7656119000000000", "admin"));
@@ -159,7 +159,7 @@ class NimbyAdminServerSelfTest
         bool built = file.Build(active, notes);
         failures += Case(results, "permissions: valid rows kept, bad id, bad role and duplicate skipped", built && active.Count() == 2 && notes.Count() == 3 && active.Get("76561190000000001") == "admin");
         failures += Case(results, "permissions: an owner is found", NimbyAdminServerPermissions.HasOwner(active));
-        NimbyAdminServerPermissions future = new NimbyAdminServerPermissions();
+        NimbyAdminServerPermissions future = NimbyAdminServerPermissions.Empty();
         future.version = 2;
         map<string, string> futureActive;
         array<string> futureNotes;
@@ -176,7 +176,7 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "roles: a fake owner-only capability registers and unregisters (N9 seam)", fakeOwner && !fakeAdmin && NimbyAdminServerRules.RoleGrants("owner", "selftest.fake") == false);
         failures += Case(results, "commands: hello needs no capability, teleport needs player.teleport", NimbyAdminServerRules.CapabilityFor("session.hello") == "" && NimbyAdminServerRules.CapabilityFor("player.teleportTo") == NimbyAdminServerRules.CAP_PLAYER_TELEPORT);
         failures += Case(results, "commands: an unknown command is not known", NimbyAdminServerRules.IsKnownCommand("player.kill") == false && NimbyAdminServerRules.IsKnownCommand("players.list"));
-        NimbyAdminServerBans bans = new NimbyAdminServerBans();
+        NimbyAdminServerBans bans = NimbyAdminServerBans.Empty();
         bans.bans.Insert(Ban("76561190000000003", ""));
         bans.bans.Insert(Ban("76561190000000004", "2026-11-01T00:00:00Z"));
         bans.bans.Insert(Ban("76561190000000005", "tomorrow"));
@@ -407,6 +407,52 @@ class NimbyAdminServerSelfTest
         NimbyAdminServerBanStore noList = BanStore(banLocked);
         noList.Load(0, problem);
         failures += Case(results, "bans: an unreadable bans.json with no .lkg is no usable list (ruling 3)", noList.m_Source == "none" && noList.m_EditsRefused && noList.NoUsableList());
+        failures += ShapeCases(results);
+        return failures;
+    }
+
+    // Review finding 8: "{}" and {"version":1} are not stores; {"version":1,"admins":[]} is.
+    protected static bool ShapeRefused(string text, bool bansStore)
+    {
+        NimbyAdminServerFakeIo io = new NimbyAdminServerFakeIo();
+        string problem;
+        if (bansStore)
+        {
+            io.m_Files.Set(NimbyAdminServerRules.FILE_BANS, BANS_ONE);
+            NimbyAdminServerBanStore bans = BanStore(io);
+            bans.Load(0, problem);
+            io.m_Files.Set(NimbyAdminServerRules.FILE_BANS, text);
+            bans.Load(10, problem);
+            return bans.m_Source == "kept" && bans.m_EditsRefused && bans.m_Active.Count() == 1 && io.m_Files.Get(NimbyAdminServerRules.FILE_BANS_LKG) == BANS_ONE;
+        }
+        io.m_Files.Set(NimbyAdminServerRules.FILE_PERMISSIONS, OWNER_B);
+        NimbyAdminServerPermissionStore store = PermStore(io);
+        store.Load(0, problem);
+        io.m_Files.Set(NimbyAdminServerRules.FILE_PERMISSIONS, text);
+        store.Load(10, problem);
+        return store.m_Source == "kept" && store.m_EditsRefused && store.RoleOf("76561190000000011") == "owner" && io.m_Files.Get(NimbyAdminServerRules.FILE_PERMISSIONS_LKG) == OWNER_B;
+    }
+
+    protected static int ShapeCases(array<string> results)
+    {
+        int failures = 0;
+        NimbyAdminServerPermissions blank = new NimbyAdminServerPermissions();
+        map<string, string> blankActive;
+        array<string> blankNotes;
+        failures += Case(results, "shape: a fresh permissions object is not a valid store (sentinels)", blank.Build(blankActive, blankNotes) == false && blankNotes.Get(0) == "version 0 is not 1");
+        failures += Case(results, "shape: a top-level key is found, also with spaces", NimbyAdminServerRules.HasTopLevelKey("{\"version\":1,\"admins\":[]}", "admins") && NimbyAdminServerRules.HasTopLevelKey("{ \"admins\" : [ ] }", "admins"));
+        failures += Case(results, "shape: a missing, nested, or value-only key is not a top-level key", !NimbyAdminServerRules.HasTopLevelKey("{\"version\":1}", "admins") && !NimbyAdminServerRules.HasTopLevelKey("{\"x\":{\"admins\":[]}}", "admins") && !NimbyAdminServerRules.HasTopLevelKey("{\"name\":\"admins\"}", "admins"));
+        failures += Case(results, "shape: an escaped quote inside a string does not end it", !NimbyAdminServerRules.HasTopLevelKey("{\"n\":\"a\\\",\\\"admins\\\":[\"}", "admins"));
+        failures += Case(results, "shape: permissions {} is refused; the good set and .lkg stay", ShapeRefused("{}", false));
+        failures += Case(results, "shape: permissions {\"version\":1} is refused; the good set and .lkg stay", ShapeRefused("{\"version\":1}", false));
+        failures += Case(results, "shape: bans {} is refused; the good set and .lkg stay", ShapeRefused("{}", true));
+        failures += Case(results, "shape: bans {\"version\":1} is refused; the good set and .lkg stay", ShapeRefused("{\"version\":1}", true));
+        NimbyAdminServerFakeIo io = new NimbyAdminServerFakeIo();
+        io.m_Files.Set(NimbyAdminServerRules.FILE_PERMISSIONS, "{\"version\":1,\"admins\":[]}");
+        NimbyAdminServerPermissionStore empty = PermStore(io);
+        string problem;
+        empty.Load(0, problem);
+        failures += Case(results, "shape: {\"version\":1,\"admins\":[]} is a valid empty store", empty.m_Source == "file" && !empty.m_EditsRefused && empty.m_Active.Count() == 0);
         return failures;
     }
 

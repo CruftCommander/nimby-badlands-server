@@ -282,6 +282,16 @@ class NimbyAdminServerStore
         return !m_Io.Exists(m_Path) && !m_Io.Exists(m_LkgPath);
     }
 
+    // Why a parsed file was refused as a whole (finding 8: "version 0 is not 1", "admins missing").
+    static string FirstNote(array<string> notes)
+    {
+        if (notes && notes.Count() > 0)
+        {
+            return notes.Get(0);
+        }
+        return "shape";
+    }
+
     static bool SameSet(map<string, string> a, map<string, string> b)
     {
         if (a.Count() != b.Count())
@@ -322,9 +332,16 @@ class NimbyAdminServerPermissionStore extends NimbyAdminServerStore
             notes = new array<string>;
             return false;
         }
+        if (!NimbyAdminServerRules.HasTopLevelKey(text, "admins"))
+        {
+            active = new map<string, string>;
+            notes = new array<string>;
+            error = "admins missing";
+            return false;
+        }
         if (!data.Build(active, notes))
         {
-            error = "version";
+            error = FirstNote(notes);
             return false;
         }
         return true;
@@ -367,7 +384,7 @@ class NimbyAdminServerPermissionStore extends NimbyAdminServerStore
             why = "permissions.json needs repair";
             return false;
         }
-        NimbyAdminServerPermissions data = new NimbyAdminServerPermissions();
+        NimbyAdminServerPermissions data = NimbyAdminServerPermissions.Empty();
         NimbyAdminServerAdmin owner = new NimbyAdminServerAdmin();
         owner.steam64 = m_Bootstrap;
         owner.name = "bootstrap owner";
@@ -408,9 +425,16 @@ class NimbyAdminServerBanStore extends NimbyAdminServerStore
             notes = new array<string>;
             return false;
         }
+        if (!NimbyAdminServerRules.HasTopLevelKey(text, "bans"))
+        {
+            active = new map<string, string>;
+            notes = new array<string>;
+            error = "bans missing";
+            return false;
+        }
         if (!data.Build(active, notes))
         {
-            error = "version";
+            error = FirstNote(notes);
             return false;
         }
         return true;

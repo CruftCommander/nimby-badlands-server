@@ -16,7 +16,10 @@ Changes, newest first:
   in memory, then .lkg, edits refused, set on every load), the bootstrap owner file is written
   only when neither the primary nor .lkg exists, and restoring the exact last good text clears
   recovery; the store file operations sit behind NimbyAdminServerStoreIo so the self-test runs
-  every branch over an in-memory fake.
+  every branch over an in-memory fake; finding 8, version starts at the sentinel 0 and a file is
+  adopted or copied to .lkg only with version exactly 1 and its collection key (admins or bans)
+  at the top level of the text (HasTopLevelKey), because the 164200 serializer allocates the
+  array even when the key is absent.
 - October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the server half - config.json,
   permissions.json and bans.json stores with .lkg and the refuse-edits state, the first-owner
   bootstrap, the audit journal, the Discord queue over the vanilla RestApi, the session table,
