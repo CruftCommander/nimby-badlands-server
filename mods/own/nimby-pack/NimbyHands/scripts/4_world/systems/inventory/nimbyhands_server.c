@@ -80,9 +80,6 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
     EntityAI stagedParent;
     // GetGame().GetTime() when the STAGED signal was read; the step 2 poll measures from it.
     int stagedAtMs;
-    // Build 14: poll ticks on which step 2 was held because the giver's inventory was still
-    // processing (DayZPlayerInventory.IsProcessing) or in an action command. Logged at dispatch.
-    int step2HeldTicks;
     // Identity ids captured at registration; the terminal toast resolves its targets from the
     // engine's player list by these, never through the stored references (see MoveStep2).
     string giverId;
@@ -130,7 +127,6 @@ class NimbyHandsWorldTransfer : NimbyHandsTransfer
         stagedText = "";
         stagedParent = null;
         stagedAtMs = 0;
-        step2HeldTicks = 0;
         giverId = "";
         receiverId = "";
         giverAtStaged = null;
@@ -790,7 +786,7 @@ class NimbyHandsServer
         string verdict = CompareBaselines(transfer, transfer.giverAtStaged, transfer.itemAtStaged, transfer.receiverAtStaged);
         if (verdict == NimbyHandsRules.CANARY_OK)
         {
-            NimbyHandsLog.Debug("id=" + idText + " canary tick: ok, staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
+            NimbyHandsLog.Debug("id=" + idText + " canary tick: ok, staged " + agoMs.ToString() + " ms ago");
             return false;
         }
         bool processing = false;
@@ -803,13 +799,13 @@ class NimbyHandsServer
         {
             processing = inventory.IsProcessing();
         }
-        NimbyHandsLog.Info("id=" + idText + " canary tick: " + verdict + ", staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString() + " giverProcessing=" + NimbyHandsLog.Bool(processing));
+        NimbyHandsLog.Info("id=" + idText + " canary tick: " + verdict + ", staged " + agoMs.ToString() + " ms ago giverProcessing=" + NimbyHandsLog.Bool(processing));
         Quarantine(transfer, idText, "step 2 poll, " + agoMs.ToString() + " ms after STAGED", transfer.itemAtStaged, transfer.receiverAtStaged, transfer.giverId, transfer.receiverId, transfer.itemTextAtStaged);
         return true;
     }
 
-    // Build 18 (November 1, 2026): one canary at a named step of the final poll tick (after IsFree,
-    // after each native group in CollectStep2Facts). Pointer compares against the STAGED copies;
+    // Build 18 (November 1, 2026): one canary at a named step of the final poll tick (after each
+    // native group in CollectStep2Facts; the one after IsFree left with build 21). Pointer compares against the STAGED copies;
     // an ok step writes one debug line, the first CHANGED writes the Info line, quarantines the
     // entry and sets the trip flag, so RunStep2 stops before the move. Returns true when tripped
     // (by this step or an earlier one in the same tick).
@@ -1085,29 +1081,15 @@ class NimbyHandsServer
             {
                 continue;
             }
-            // Build 14 (October 31, 2026): step 2 waits for the giver's inventory to be idle. IsFree
-            // reads IsProcessing and the action commands on the giver; those natives passed in
-            // CollectStep2Facts on every run since the client-driven step 1.
-            bool giverIdle = IsFree(transfer.giver, true);
-            // Build 18 (November 1, 2026): run 202718 read every tick canary ok and the MoveStep2 entry
-            // canary CHANGED, so the giver slot is damaged inside this tick, in IsFree or in
-            // CollectStep2Facts. One canary after each step names the one.
-            if (StepCanary(transfer, "after IsFree"))
+            // Build 21 (November 1, 2026): the build 14 idle gate (step 2 held while IsFree read the
+            // giver's inventory as processing) is removed; the delay alone decides, as before build
+            // 14. The build 18 canary after IsFree went with the IsFree call. The cause of NIMBY-T-063
+            // was the VM store misfire (build 19), not the giver's inventory state.
+            if (agoMs < NimbyHandsConstants.STEP2_DELAY_MS)
             {
                 continue;
             }
-            int verdict = NimbyHandsRules.Step2Verdict(agoMs, NimbyHandsConstants.STEP2_DELAY_MS, giverIdle);
-            if (verdict == NimbyHandsRules.STEP2_WAIT)
-            {
-                continue;
-            }
-            if (verdict == NimbyHandsRules.STEP2_HELD)
-            {
-                transfer.step2HeldTicks = transfer.step2HeldTicks + 1;
-                NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 held: giver processing, staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
-                continue;
-            }
-            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 poll: staged " + agoMs.ToString() + " ms ago, held=" + transfer.step2HeldTicks.ToString());
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 poll: staged " + agoMs.ToString() + " ms ago");
             OnStep2(transfer.id);
         }
     }

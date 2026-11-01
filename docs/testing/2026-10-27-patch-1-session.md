@@ -401,6 +401,22 @@ The unwind of the hunt's workarounds, one build and one confirming S6-30 per ste
 
 Readings: S6-30 CONFIRMED in both directions with every canary `ok` and no quarantine clears this step and the unwind moves to the idle gate; a CHANGED canary, a quarantine or a crash stops the unwind here, and the dispatch frame goes back on the table with this run as its evidence.
 
+## Rows on @NIMBY-20261031-215942 (two-client, `-NoDev`, build 20, October 31, 2026)
+
+Build 21:59 (`build-20261031-215942`, 882fbab, `SUMMARY PASS`, 690 of 690: Hands 196, DevHarness 20): the build 20 design section. Boot log: the store probe unchanged (`source intact=false target reached=false`, g9=1, g10=0, g18=1). Mirrored to `\\purgatory\server\nimby\` (15 of 15); the laptop pulls from there (`nimby-client.cmd` rewritten tonight: pulls a missing pack from purgatory, refuses when it is still missing, sets the working directory, sends the join password; the first two launches of the evening ran without the pack and without a password and showed every dialog drawn twice over its raw layout).
+
+| Test | Plan row | Check | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| S6-30 | Hands HD-001 (T-010, TGA-035) | D holds the kit wrench and offers (O); L uses Take. Three repetitions in one run (D to L, L to D, D to L) | **PASS, three of three: CONFIRMED on the build without the CommandHandler plumbing.** Every canary `ok` (32 per transfer, 96), no quarantine, no crash, clean shutdown (`~DayZGame()` 22:37:11), pool back to 8 after each | Run `testserver-20261031-222236`, 22:22 to 22:37. id=1 (D gives, wrench): `wait free waited=799` (no `site=`), `REQUESTED ... via=client` (22:36:27.369), `STAGED` (27.824, +455 ms), `step 2 held: giver processing` six ticks (50 to 300 ms), `step 2 poll: staged 350 ms ago, held=6`, `LocationSyncMoveEntity=true signal=true`, `SendServerMove sent`, **`state=CONFIRMED`** (28.175), `released; in flight=0`, `transfer recycled; pool=8`. id=2 (L gives, wrench) CONFIRMED 22:36:39.601 (waited 799, held 6); id=3 (D gives, hammer) CONFIRMED 22:36:59.128 (waited 774, held 6). Server stopped by Enter 22:37 |
+
+Unwind step 1 cleared: the dispatch frame is not needed. Step 2 (the build 14 idle gate) follows.
+
+## Build 21: the build 14 idle gate removed (unwind step 2, November 1, 2026)
+
+- **Removed.** `NimbyHandsRules.Step2Verdict` with `STEP2_WAIT`, `STEP2_HELD`, `STEP2_RUN` and its four cases (Hands self-test 196 to 192); `NimbyHandsWorldTransfer.step2HeldTicks` (and its line in the harness pool case, DevHarness stays 20); the `IsFree` read in `Step2Tick` and the build 18 `after IsFree` step canary that guarded it; the `step 2 held: giver processing` lines; `held=` on the `canary tick` and `step 2 poll` lines. `Step2Tick` runs step 2 on the first tick at least `STEP2_DELAY_MS` (50 ms, kept by ruling) past `stagedAtMs`, the build 13 shape.
+- **Unchanged.** The step 1 wait, the client-driven step 1, the poll-read landing, the hold, the pool, the tick canary, the twelve step canaries in `CollectStep2Facts`, the `MoveStep2` canaries, the quarantine, the probe.
+- **What this build tests.** On builds 14 to 20 every connected giver read as processing for six ticks after the landing (`held=5` on `-210147`, `held=6` on `-222236`), so step 2 ran 350 ms after STAGED. On this build it runs at 50 ms, with the giver's inventory still processing the client's own move. Build 13 ran the same timing and crashed, but that crash was the VM misfire. Readings: CONFIRMED three of three with every canary `ok` clears the gate; a crash, a quarantine, a REFUSED step 2 (`not at source`, a `LocationCanMoveEntity` false) or an UNCONFIRMED stops the unwind here and the gate goes back in as a build 22 with this run as its evidence.
+
 ## Not in tonight's plan
 
 - Receiver killed between step 1 and step 2, and the corpse-delivery ruling Jeff owes (TGA-041): needs a third player.

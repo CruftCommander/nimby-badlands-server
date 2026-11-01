@@ -557,13 +557,12 @@ class NimbyDevHarness
             pooledEntry.detail = "dirty";
             pooledEntry.state = NimbyHandsState.CONFIRMED;
             pooledEntry.staged = true;
-            pooledEntry.step2HeldTicks = 3;
             pooledEntry.giver = dummyA;
             pooledEntry.giverAtStaged = dummyA;
             pooledEntry.itemTextAtStaged = "dirty";
             bool taken = pooledEntry.pooled && NimbyHandsServer.PoolCount() == poolBefore - 1;
             NimbyHandsServer.Recycle(pooledEntry);
-            bool clean = pooledEntry.detail == "" && pooledEntry.state == NimbyHandsState.PENDING && !pooledEntry.staged && pooledEntry.step2HeldTicks == 0 && pooledEntry.giver == null && pooledEntry.giverAtStaged == null && pooledEntry.itemTextAtStaged == "" && pooledEntry.pooled;
+            bool clean = pooledEntry.detail == "" && pooledEntry.state == NimbyHandsState.PENDING && !pooledEntry.staged && pooledEntry.giver == null && pooledEntry.giverAtStaged == null && pooledEntry.itemTextAtStaged == "" && pooledEntry.pooled;
             Record("hands-pool-recycles-reset", taken && clean && NimbyHandsServer.PoolCount() == poolBefore, "pool before=" + poolBefore.ToString() + " after=" + NimbyHandsServer.PoolCount().ToString() + " taken=" + Bool(taken) + " clean=" + Bool(clean));
 
             dummyB.NimbyHandsSetPocketsOpen(true);
