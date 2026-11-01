@@ -301,3 +301,5 @@ Next:
 3. When every row is green: draft the PR description in a "PR description" section of this file; the PR is Jeff's call.
 
 Blocked: SH-14 evidence wording (record, "Open for the orchestrator").
+
+Update 21:50: the test server is stopped. Jeff's client run 1 ran 21:30 to 21:43; the server stopped on its input after the logout and exited cleanly (`~DayZGame()` 21:45:10). The server-side lines are in the Phase 1 record. Still owed: the client lines and screenshots for SH-02 to SH-12, SH-15, SH-16. A rerun starts the server again from `build\@NIMBY-20261031-210953` with `-ProfileName nimby-shared-p1`, in a console that stays open.
