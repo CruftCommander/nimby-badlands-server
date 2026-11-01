@@ -165,8 +165,9 @@ class NimbyAdminRules
 }
 
 // Recon 4.2, ruled October 31, 2026 (question 6): the request args are key=value pairs separated
-// by ';'. In a value '%', ';' and '=' are written %25, %3B and %3D; any other '%' sequence and
-// any byte below 32 is refused. Keys are [a-z0-9.], 1 to 32 bytes. Never JSON (recon R8).
+// by ';'. In a value '%', ';' and '=' are written %25, %3B and %3D; any other '%' sequence, a raw
+// '=' (review finding 11), and any byte below 32 is refused. Keys are [a-z0-9.], 1 to 32 bytes.
+// Never JSON (recon R8).
 class NimbyAdminArgs
 {
     protected ref map<string, string> m_Values;
@@ -312,6 +313,11 @@ class NimbyAdminArgs
         while (i < length)
         {
             string ch = text.Get(i);
+            if (ch == "=")
+            {
+                why = "unescaped =";
+                return false;
+            }
             if (ch != "%")
             {
                 value = value + ch;

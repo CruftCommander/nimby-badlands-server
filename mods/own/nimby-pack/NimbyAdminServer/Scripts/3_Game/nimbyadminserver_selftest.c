@@ -208,6 +208,10 @@ class NimbyAdminServerSelfTest
         failures += Case(results, "time: a formatted time validates", NimbyAdminServerRules.IsIsoUtc(NimbyAdminServerRules.FormatIsoUtc(2026, 10, 31, 23, 59, 59)));
         failures += Case(results, "time: month 13 refused", NimbyAdminServerRules.IsIsoUtc("2026-13-01T00:00:00Z") == false);
         failures += Case(results, "time: a missing Z refused", NimbyAdminServerRules.IsIsoUtc("2026-10-31T00:00:00+") == false);
+        failures += Case(results, "time: February 29 refused in 2027 (finding 10)", NimbyAdminServerRules.IsIsoUtc("2027-02-29T00:00:00Z") == false);
+        failures += Case(results, "time: February 29 accepted in 2028", NimbyAdminServerRules.IsIsoUtc("2028-02-29T00:00:00Z"));
+        failures += Case(results, "time: April 31 refused, December 31 accepted", NimbyAdminServerRules.IsIsoUtc("2026-04-31T00:00:00Z") == false && NimbyAdminServerRules.IsIsoUtc("2026-12-31T23:59:59Z"));
+        failures += Case(results, "time: February 29 refused in 2100, accepted in 2000; February 31 refused", NimbyAdminServerRules.IsIsoUtc("2100-02-29T00:00:00Z") == false && NimbyAdminServerRules.IsIsoUtc("2000-02-29T00:00:00Z") && NimbyAdminServerRules.IsIsoUtc("2027-02-31T00:00:00Z") == false);
         failures += Case(results, "json: quote, backslash and control bytes are escaped", NimbyAdminServerRules.JsonEscape("a\"b\\c\nd") == "a\\\"b\\\\c d");
         NimbyAdminServerAuditRecord record = new NimbyAdminServerAuditRecord();
         record.id = "7";

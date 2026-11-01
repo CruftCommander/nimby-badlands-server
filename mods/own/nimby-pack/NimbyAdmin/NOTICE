@@ -14,7 +14,7 @@ Changes, newest first:
   clears it with a status notice; finding 7, NimbyAdminLog.Safe (bytes below 0x20 and 0x7F
   become ?, at most 64 bytes), applied by WhoFrom to every name and id; Safe also replaces the
   UTF-8 C1 controls, the line and paragraph separators, and the bidirectional marks, overrides
-  and isolates.
+  and isolates; finding 11, the args decoder refuses a raw = inside a value (%3D still decodes).
 - October 31, 2026 (Phase 0 Stop B, feat/nimby-admin): the client half - the wire definition both
   halves read (RPC ids 6550301-6550305, the request envelope rules, the key=value args codec,
   the Players list and done classes), the [NIMBY][Admin] log helper, the PlayerBase RPC

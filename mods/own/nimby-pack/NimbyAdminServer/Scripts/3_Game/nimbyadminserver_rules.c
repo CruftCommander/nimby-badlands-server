@@ -342,12 +342,18 @@ class NimbyAdminServerRules
             }
             i = i + 1;
         }
+        int year = value.Substring(0, 4).ToInt();
         int month = value.Substring(5, 2).ToInt();
         int day = value.Substring(8, 2).ToInt();
         int hour = value.Substring(11, 2).ToInt();
         int minute = value.Substring(14, 2).ToInt();
         int second = value.Substring(17, 2).ToInt();
-        if (month < 1 || month > 12 || day < 1 || day > 31)
+        if (month < 1 || month > 12 || day < 1)
+        {
+            return false;
+        }
+        // Review finding 10: the day must exist in that month of that year.
+        if (day > DaysInMonth(year, month))
         {
             return false;
         }
@@ -356,6 +362,37 @@ class NimbyAdminServerRules
             return false;
         }
         return true;
+    }
+
+    // Gregorian: a year divisible by 4 is a leap year, except centuries not divisible by 400.
+    static bool IsLeapYear(int year)
+    {
+        if (year % 400 == 0)
+        {
+            return true;
+        }
+        if (year % 100 == 0)
+        {
+            return false;
+        }
+        return year % 4 == 0;
+    }
+
+    static int DaysInMonth(int year, int month)
+    {
+        if (month == 2)
+        {
+            if (IsLeapYear(year))
+            {
+                return 29;
+            }
+            return 28;
+        }
+        if (month == 4 || month == 6 || month == 9 || month == 11)
+        {
+            return 30;
+        }
+        return 31;
     }
 
     // ---- JSON text the server writes (never parses from a client) -------------------------------

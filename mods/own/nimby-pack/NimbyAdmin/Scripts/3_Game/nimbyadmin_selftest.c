@@ -130,6 +130,11 @@ class NimbyAdminSelfTest
         failures += Case(results, "args: a value of 201 bytes refused", ParseIs("v=" + NimbySharedChunks.FillBytes("x", 201), false, "value too long"));
         failures += Case(results, "args: an unknown escape refused", ParseIs("v=%41", false, "bad escape"));
         failures += Case(results, "args: a cut escape refused", ParseIs("v=%3", false, "bad escape"));
+        failures += Case(results, "args: a raw = inside a value refused (finding 11)", ParseIs("target=abc=;session=4", false, "unescaped =") && ParseIs("v==", false, "unescaped ="));
+        NimbyAdminArgs escapedEq;
+        string whyEq;
+        bool okEq = NimbyAdminArgs.Parse("target=abc%3D;session=4", escapedEq, whyEq);
+        failures += Case(results, "args: %3D inside a value still decodes to =", okEq && escapedEq.Get("target") == "abc=" && escapedEq.Get("session") == "4");
         failures += Case(results, "args: a control byte refused", ParseIs("v=a\nb", false, "control byte"));
         failures += Case(results, "args: a duplicate key refused", ParseIs("a=1;a=2", false, "duplicate key"));
         string sixteen = "";
