@@ -319,6 +319,64 @@ class NimbyHandsRequestFacts
     }
 }
 
+// Build 19 (November 1, 2026, NIMBY-T-063): the store-misfire probe. Fifteen server crashes and
+// three quarantined runs came down to three statements in CollectStep2Facts of the shape
+// `f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && Id(giver) != transfer.expectedGiverId;`:
+// the VM stored the bool at the facts field's offset (+0x24, +0x28, +0x48) but into `transfer`, the
+// object whose members the chain read, zeroing the high half of detail, the low half of giver and the
+// low half of itemText (minidumps 13, 14, 15, 17; canaries, run 204404). These two classes reproduce
+// the layout: integer guards on the source at every 4-byte offset the target's bools occupy, and the
+// probe (NimbyHandsRules.StoreProbe) runs the same expression shapes at boot and prints what happened.
+class NimbyHandsProbeSource
+{
+    int g0;
+    int g1;
+    int g2;
+    int g3;
+    int g4;
+    int g5;
+    int g6;
+    int g7;
+    int g8;
+    int g9;
+    int g10;
+    int g11;
+    int g12;
+    int g13;
+    int g14;
+    int g15;
+    int g16;
+    int g17;
+    int g18;
+    bool hasExpected;
+    string expectedId;
+    NimbyHandsProbeSource otherA;
+    NimbyHandsProbeSource otherB;
+}
+
+class NimbyHandsProbeTarget
+{
+    int p0;
+    int p1;
+    int p2;
+    int p3;
+    int p4;
+    int p5;
+    int p6;
+    int p7;
+    int p8;
+    bool hit24;
+    bool hit28;
+    int p11;
+    int p12;
+    int p13;
+    int p14;
+    int p15;
+    int p16;
+    int p17;
+    bool hit48;
+}
+
 class NimbyHandsRules
 {
     // Returned by the classifiers when an observation says nothing about the request.
@@ -609,6 +667,80 @@ class NimbyHandsRules
             return "same";
         }
         return "changed";
+    }
+
+    // ---- the replaced-party test (build 19, November 1, 2026) ---------------------------------
+    // A party or the item is "replaced" when the request recorded an expectation and the current
+    // value differs. Takes plain values so the caller stores the result through a local: the
+    // compound form `f.x = transfer.hasExpected && ... != transfer.expectedId` was stored by the VM
+    // into transfer (see NimbyHandsProbeSource).
+    static bool Replaced(bool hasExpected, string expectedId, string actualId)
+    {
+        if (!hasExpected)
+        {
+            return false;
+        }
+        if (expectedId == "")
+        {
+            return false;
+        }
+        return actualId != expectedId;
+    }
+
+    // Runs the three expression shapes of CollectStep2Facts between a guarded source and a target
+    // and prints one line per shape: whether the store reached the target and whether the source's
+    // guard at the target field's offset survived. Information for the record, not a case: the
+    // engine's behavior is what is being measured, and a build must not fail on either answer.
+    static void StoreProbe()
+    {
+        NimbyHandsProbeSource s = new NimbyHandsProbeSource();
+        NimbyHandsProbeSource a = new NimbyHandsProbeSource();
+        NimbyHandsProbeSource b = new NimbyHandsProbeSource();
+        s.g0 = 1000;
+        s.g1 = 1001;
+        s.g2 = 1002;
+        s.g3 = 1003;
+        s.g4 = 1004;
+        s.g5 = 1005;
+        s.g6 = 1006;
+        s.g7 = 1007;
+        s.g8 = 1008;
+        s.g9 = 1009;
+        s.g10 = 1010;
+        s.g11 = 1011;
+        s.g12 = 1012;
+        s.g13 = 1013;
+        s.g14 = 1014;
+        s.g15 = 1015;
+        s.g16 = 1016;
+        s.g17 = 1017;
+        s.g18 = 1018;
+        s.hasExpected = true;
+        s.expectedId = "a";
+        s.otherA = a;
+        s.otherB = b;
+        NimbyHandsProbeTarget t = new NimbyHandsProbeTarget();
+        t.p0 = 2000;
+        t.p8 = 2008;
+        t.p11 = 2011;
+        t.p17 = 2017;
+        // Shape 1 (giverReplaced): true expected; target +0x24, source guard g9.
+        t.hit24 = s.hasExpected && s.expectedId != "" && ProbeId("b") != s.expectedId;
+        // Shape 2 (receiverReplaced): false expected; target +0x28, source guard g10.
+        t.hit28 = s.hasExpected && s.expectedId != "" && ProbeId("a") != s.expectedId;
+        // Shape 3 (itemReplaced): true expected; target +0x48, source guard g18.
+        t.hit48 = s.hasExpected && s.otherA != s.otherB;
+        Print("[NIMBY][Hands] store probe: shape giverReplaced target=" + NimbyHandsLog.Bool(t.hit24) + " (expected true) source g9=" + s.g9.ToString() + " (expected 1009)");
+        Print("[NIMBY][Hands] store probe: shape receiverReplaced target=" + NimbyHandsLog.Bool(t.hit28) + " (expected false) source g10=" + s.g10.ToString() + " (expected 1010)");
+        Print("[NIMBY][Hands] store probe: shape itemReplaced target=" + NimbyHandsLog.Bool(t.hit48) + " (expected true) source g18=" + s.g18.ToString() + " (expected 1018)");
+        bool intact = s.g9 == 1009 && s.g10 == 1010 && s.g18 == 1018;
+        bool reached = t.hit24 && !t.hit28 && t.hit48;
+        Print("[NIMBY][Hands] store probe: source intact=" + NimbyHandsLog.Bool(intact) + " target reached=" + NimbyHandsLog.Bool(reached) + " p0=" + t.p0.ToString() + " p8=" + t.p8.ToString() + " p11=" + t.p11.ToString() + " p17=" + t.p17.ToString());
+    }
+
+    protected static string ProbeId(string value)
+    {
+        return value;
     }
 
     // ---- the client-driven step 1 (NIMBY-T-063, October 31, 2026) -------------------------
@@ -1253,6 +1385,27 @@ class NimbyHandsRules
         failures += Case(results, "step 2 canary: a changed item is named", Step2Canary(true, false, true) == "CHANGED giver=same item=changed receiver=same");
         failures += Case(results, "step 2 canary: a changed receiver is named", Step2Canary(true, true, false) == "CHANGED giver=same item=same receiver=changed");
         failures += Case(results, "step 2 canary: every change is named", Step2Canary(false, false, false) == "CHANGED giver=changed item=changed receiver=changed");
+        failures += Case(results, "replaced: no expectation is never replaced", !Replaced(false, "a", "b"));
+        failures += Case(results, "replaced: empty expected id is never replaced", !Replaced(true, "", "b"));
+        failures += Case(results, "replaced: same id is not replaced", !Replaced(true, "a", "a"));
+        failures += Case(results, "replaced: different id is replaced", Replaced(true, "a", "b"));
+        // Build 19: the fixed shape (locals in, local out) reaches the target and leaves the source alone.
+        NimbyHandsProbeSource guarded = new NimbyHandsProbeSource();
+        guarded.g9 = 1009;
+        guarded.g10 = 1010;
+        guarded.g18 = 1018;
+        guarded.hasExpected = true;
+        guarded.expectedId = "a";
+        NimbyHandsProbeTarget target = new NimbyHandsProbeTarget();
+        bool guardedHasExpected = guarded.hasExpected;
+        string guardedExpectedId = guarded.expectedId;
+        bool replacedB = Replaced(guardedHasExpected, guardedExpectedId, "b");
+        target.hit24 = replacedB;
+        bool replacedA = Replaced(guardedHasExpected, guardedExpectedId, "a");
+        target.hit28 = replacedA;
+        failures += Case(results, "replaced through locals: store reaches the target", target.hit24 && !target.hit28);
+        failures += Case(results, "replaced through locals: source guards intact", guarded.g9 == 1009 && guarded.g10 == 1010 && guarded.g18 == 1018);
+        StoreProbe();
         return failures;
     }
 

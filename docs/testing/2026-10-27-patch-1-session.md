@@ -356,6 +356,34 @@ Build 20:22 (`build-20261031-202240`, 2fca201, `SUMMARY PASS`, 684 of 684: Hands
 
 Jeff's ruling (November 1, 20:45 Central): one build, the pool stays in. `NimbyHandsServer.StepCanary(transfer, point)` compares the live fields with the STAGED copies at a named step and writes `canary <point>: ok` (debug) or `canary <point>: CHANGED ...` (Info), quarantining on the first CHANGED and setting the trip flag so `RunStep2` returns before the move. Points: `after IsFree` (in `Step2Tick`, every tick), and in `CollectStep2Facts` `after TakeForcedStep2Refusal`, `after CheckPlayer giver`, `after CheckPlayer receiver`, `after IdentityId`, `after FillReach`, `after GetCurrentInventoryLocation`, `after IsAtStagedLocation`, `after FindFreeLocationFor`, `after DescribeLocation dst`, `after LocationCanMoveEntity`, `after facts written`. The trip flag is reset per entry at the top of the poll tick and in `OnStep2` (the harness entry), no longer in `MoveStep2`. Self-test 190, DevHarness 20, unchanged. Readings: the first CHANGED point names the native (or the script step) that writes the giver slot; `after IsFree` CHANGED splits `IsFree` next; every point `ok` and `MoveStep2` entry CHANGED means a step between the last point and `MoveStep2` (`CheckRequest`, the `RunStep2` locals) and the next build moves the canaries there.
 
+## Rows on @NIMBY-20261031-204159 (two-client, `-NoDev`, step canaries, October 31, 2026)
+
+Build 20:41 (`build-20261031-204159`, a47bb4a, `SUMMARY PASS`, 684 of 684): the build 18 design section. Mirrored to `\\purgatory\server\nimby\` and the laptop (15 of 15 each).
+
+| Test | Plan row | Check | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| S6-30 | Hands HD-001 (T-010, TGA-035) | D holds the kit wrench and offers (O); L uses Take. Three repetitions in one run, a canary after every step of the final poll tick | **The step is named.** No crash; all three entries `canary after TakeForcedStep2Refusal: ok`, `after CheckPlayer giver: ok`, `after CheckPlayer receiver: ok`, then **`canary after IdentityId: CHANGED giver=changed item=same receiver=same`**, quarantined before the move; the wrench stayed with the giver (by design for this build) | Run `testserver-20261031-204404`, 20:44 to 20:50. id=1 20:49:21.323, id=2 20:49:47.905, id=3 20:50:06.523, each identical. `Read-NimbyTestRun.ps1`: `ids=3 open=3`, `ERRORS none`; the shutdown crash at 20:50:58 (`+0x2468e3`, module cleanup freeing the quarantined `detail` buffers) as in run 202718 |
+
+**The cause (NIMBY-T-063, closed to a script-side VM misfire).** Between the two canaries run three statements of `CollectStep2Facts`:
+
+```
+f.samePlayer = giver == receiver;
+f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != transfer.expectedGiverId;
+f.receiverReplaced = transfer.hasExpected && transfer.expectedReceiverId != "" && NimbyHandsActionData.IdentityId(receiver) != transfer.expectedReceiverId;
+```
+
+and, after the staged check, `f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;`. The layouts close it. `NimbyHandsRequestFacts` (4-byte bools and ints, 8-byte strings and references, 8-aligned): `giverReplaced` at `+0x24`, `receiverReplaced` at `+0x28`, `itemReplaced` at `+0x48`. `NimbyHandsWorldTransfer` from its `id` field: `detail` at `+0x20` (so its high half at `+0x24`), `giver` at `+0x28`, `itemText` at `+0x48`. The three damaged dwords in minidumps 13, 14, 15 and 17 are exactly `+0x24`, `+0x28`, `+0x48` and exactly zero: the three `false` results of those three assignments (both players and the item were the expected ones), stored at the facts field's offset but into the transfer. The VM stores a compound `&&` expression whose operands read members of another object into that object instead of the assignment's target. `f.samePlayer = giver == receiver` (locals only), `f.consentDetail = transfer.consentDetail` (no operator) and every call-result store (`f.locationKnown = ...GetCurrentInventoryLocation(src)`) land correctly, which is why nothing else in the object is ever touched. The dev harness and S6-D forge `hasExpected = false`, so the chains short-circuit on the first operand and nothing misfires: the one difference that mattered. The step 1 facts carry the same shape with `m_HasExpected`, storing into the move object. Every crash since October 28 followed: the giver slot read as a pointer with a zero low half by the next read of `giver` (crashes 3 to 7) or the `detail` slot with a zero high half by the next write of `detail` (8 to 15), and the "stale engine write" readings of October 31 and November 1 are withdrawn.
+
+## Build 19: the fix and the store probe (design, November 1, 2026)
+
+Jeff's ruling (November 1, 21:05 Central): fix plus probe, canaries and pool stay for the confirm run.
+
+- **Fix.** The seven compound member assignments in `moveitemtoplayer.c` (`CollectStep1Facts` lines 393, 394, 414, 415; `CollectStep2Facts` 533, 534, 566) read every operand into a local, compute the bool into a local (`NimbyHandsRules.Replaced(hasExpected, expectedId, actualId)` for the three identity tests, plain locals for `itemAtSource` and `itemReplaced`) and store the local. No other compound member assignment with another object's members on the right exists in the six addons (grep over `mods\own`).
+- **Probe.** `NimbyHandsProbeSource` (nineteen integer guards at `+0x00` to `+0x48`, then `hasExpected`, `expectedId`, two references) and `NimbyHandsProbeTarget` (bools at `+0x24`, `+0x28`, `+0x48` among integers) reproduce the two layouts in pure script. `NimbyHandsRules.StoreProbe`, run by the self-test, evaluates the three original expression shapes between them and prints `store probe: shape <name> target=<bool> (expected ...) source gN=<int> (expected ...)` and `store probe: source intact=<bool> target reached=<bool>`. Information, not a case: the engine's behavior is what is measured and a build must not fail on either answer. Four `Replaced` cases and two cases for the fixed shape (store reaches the target, source guards intact) are cases: Hands self-test 196.
+- A new step canary `after itemReplaced` sits after the fixed `itemReplaced` store.
+
+Readings: `source intact=false` at boot is the VM bug reproduced on 1.30.164200 in pure script, and S6-30 on this build should run every canary `ok` and write the first in-game `CONFIRMED`; `source intact=true` with a CONFIRMED run means the misfire needs the production shape (a call in the chain across modules) and the probe is refined later; a CHANGED canary anywhere reopens the hunt with the step named.
+
 ## Not in tonight's plan
 
 - Receiver killed between step 1 and step 2, and the corpse-delivery ruling Jeff owes (TGA-041): needs a third player.

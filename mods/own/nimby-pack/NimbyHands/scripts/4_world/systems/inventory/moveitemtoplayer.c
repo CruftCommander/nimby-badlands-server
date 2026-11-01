@@ -390,8 +390,19 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.samePlayer = giver == m_DstPlayer;
-        f.giverReplaced = m_HasExpected && m_ExpectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != m_ExpectedGiverId;
-        f.receiverReplaced = m_HasExpected && m_ExpectedReceiverId != "" && NimbyHandsActionData.IdentityId(m_DstPlayer) != m_ExpectedReceiverId;
+        // Build 19 (November 1, 2026, NIMBY-T-063): every compound bool is evaluated into a local
+        // and the local is stored. The compound form `f.x = m_HasExpected && ... != m_Expected...`
+        // is stored by the VM into the object whose members the chain read (here this move object;
+        // in CollectStep2Facts the transfer), at the facts field's offset. See NimbyHandsProbeSource.
+        bool hasExpected = m_HasExpected;
+        string expectedGiverId = m_ExpectedGiverId;
+        string expectedReceiverId = m_ExpectedReceiverId;
+        string giverIdNow = NimbyHandsActionData.IdentityId(giver);
+        string receiverIdNow = NimbyHandsActionData.IdentityId(m_DstPlayer);
+        bool giverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedGiverId, giverIdNow);
+        bool receiverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedReceiverId, receiverIdNow);
+        f.giverReplaced = giverReplaced;
+        f.receiverReplaced = receiverReplaced;
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
             return f;
@@ -411,8 +422,14 @@ class NimbyHandsMoveItemToPlayer
         {
             return f;
         }
-        f.itemAtSource = src.GetType() == InventoryLocationType.HANDS && src.GetParent() == giver;
-        f.itemReplaced = m_HasExpected && m_ExpectedItem != m_Item;
+        int srcType = src.GetType();
+        EntityAI srcParent = src.GetParent();
+        bool itemAtSource = srcType == InventoryLocationType.HANDS && srcParent == giver;
+        f.itemAtSource = itemAtSource;
+        EntityAI expectedItem = m_ExpectedItem;
+        EntityAI item = m_Item;
+        bool itemReplaced = hasExpected && expectedItem != item;
+        f.itemReplaced = itemReplaced;
         if (!f.itemAtSource || f.itemReplaced)
         {
             return f;
@@ -530,8 +547,22 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.samePlayer = giver == receiver;
-        f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != transfer.expectedGiverId;
-        f.receiverReplaced = transfer.hasExpected && transfer.expectedReceiverId != "" && NimbyHandsActionData.IdentityId(receiver) != transfer.expectedReceiverId;
+        // Build 19 (November 1, 2026, NIMBY-T-063): the three statements that damaged the transfer in
+        // crashes 1 to 15 and runs 202718 and 204404. The compound form
+        // `f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && Id(giver) != transfer.expectedGiverId`
+        // was stored by the VM at the facts field's offset (+0x24, +0x28, +0x48) into transfer, the
+        // object whose members the chain read, zeroing the high half of detail, the low half of
+        // giver and the low half of itemText. Every operand is read into a local, the result is a
+        // local, and the local is stored. See NimbyHandsProbeSource and NimbyHandsRules.StoreProbe.
+        bool hasExpected = transfer.hasExpected;
+        string expectedGiverId = transfer.expectedGiverId;
+        string expectedReceiverId = transfer.expectedReceiverId;
+        string giverIdNow = NimbyHandsActionData.IdentityId(giver);
+        string receiverIdNow = NimbyHandsActionData.IdentityId(receiver);
+        bool giverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedGiverId, giverIdNow);
+        bool receiverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedReceiverId, receiverIdNow);
+        f.giverReplaced = giverReplaced;
+        f.receiverReplaced = receiverReplaced;
         NimbyHandsServer.StepCanary(transfer, "after IdentityId");
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
@@ -563,7 +594,11 @@ class NimbyHandsMoveItemToPlayer
         f.itemAtSource = NimbyHandsServer.IsAtStagedLocation(transfer, src);
         NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: at source=" + NimbyHandsLog.Bool(f.itemAtSource));
         NimbyHandsServer.StepCanary(transfer, "after IsAtStagedLocation");
-        f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
+        EntityAI expectedItem = transfer.expectedItem;
+        EntityAI item = transfer.item;
+        bool itemReplaced = hasExpected && expectedItem != item;
+        f.itemReplaced = itemReplaced;
+        NimbyHandsServer.StepCanary(transfer, "after itemReplaced");
         if (!f.itemAtSource || f.itemReplaced)
         {
             return f;
