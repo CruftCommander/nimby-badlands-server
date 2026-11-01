@@ -6,12 +6,15 @@
 // Layers: 3_Game holds the engine-free rules, converter, chunk validation and the file
 // shapes; 4_World the PlayerBase RPC plumbing; 5_Mission the server text owner, the client
 // orchestration and the window. No save footprint, ever (shared rules 6).
+// NimbyShared (Plan 11): the window is a NimbySharedWindow subclass, the pause-menu button an
+// entry in the NimbyShared registry, and the chunked delivery the NimbyShared codec; NimbyShared
+// is in requiredAddons[] so the engine loads it first (Plan 11 C3, C9; shared rules 8.1).
 // -----------------------------------------------------------------------------
 class CfgPatches
 {
     class NimbyGreet
     {
-        requiredAddons[] = { "DZ_Data" };
+        requiredAddons[] = { "DZ_Data", "NimbyShared" };
         units[] = {};
         weapons[] = {};
     };

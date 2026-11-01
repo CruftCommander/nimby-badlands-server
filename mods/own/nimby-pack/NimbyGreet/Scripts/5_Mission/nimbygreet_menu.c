@@ -1,34 +1,20 @@
 // -----------------------------------------------------------------------------
 // NimbyGreet - the window (plan v0.4, G4, G5, G6, G7, G10, G13, G15, G16, G17).
-// Purpose : One UIScriptedMenu built from NimbyGreet/GUI/nimbygreet_window.layout in the
-//           vanilla look (DayZDefaultPanel, Metron fonts, the pause menu's button shape):
-//           title and tagline, a vertical section list, the selected section's blocks in a
-//           ScrollWidget, the section's link rows, and a footer with the dismissal toggle,
-//           text size, animations, language and Close. Blocks come from the G13 converter
-//           and are created from the small block layouts under GUI/.
-// Phase 0 : the FAIL and the three findings this file answers:
-//           - NIMBY-T-039: OnShow adds the vanilla "menu" input exclude (PlayerBase.c:5812,
-//             missionGameplay.c:894) and OnHide removes exactly that (missionGameplay.c:847),
-//             so the player stops moving while reading; UANimbyGreetOpen and the UAUI inputs
-//             are outside the set.
-//           - NIMBY-T-046: this menu never polls UANimbyGreetOpen; MissionGameplay.OnUpdate is
-//             the one reader and closes the window through NimbyGreetClose.
+// Purpose : A NimbySharedWindow subclass (Plan 11 C5, NimbyShared/Scripts/5_Mission/
+//           nimbyshared_window.c). The shell (dim, panel, title and tagline, the section column,
+//           the hint, open and close with the input exclude and the zeroing guard, Esc, the tab and
+//           page keys, focus and hover painting, the text-size steps) is NimbyShared's; this class
+//           supplies the content: NimbyGreet/GUI/nimbygreet_content.layout (the body ScrollWidget,
+//           the link rows, and the footer with the dismissal toggle, text size, animations,
+//           language and Close, at the coordinates of the release-1 window), and the selected
+//           section's blocks from the G13 converter, created from the small block layouts under GUI/.
+// Phase 0 : NIMBY-T-039 (input exclude), NIMBY-T-058 (zeroing guard) and NIMBY-T-046 (the open key
+//           is read only by MissionGameplay.OnUpdate) are carried by the shell. Here:
 //           - NIMBY-T-041: the body scrolls in a ScrollWidget (EnWidgets.c:481), which clamps
 //             itself; RichTextWidget.SetContentOffset is not used.
 //           - NIMBY-T-043, G15: media is an ImageWidget with "no wrap" 1; a clip is up to 8
-//             power-of-two .edds frames flipped on a timer.
-// Inputs  : UAUIBack closes (NoteMenu.c:152-158 pattern). UAUITabLeft and UAUITabRight
-//           ([ ] and the shoulder buttons, preset_X1MouseKey.xml:631-637) move between
-//           sections; UAUINextUp and UAUINextDown (the triggers, :696-701) and Greet's own
-//           UANimbyGreetPageUp and UANimbyGreetPageDown (Page Up and Page Down, Data/Inputs.xml)
-//           page the body; the wheel scrolls it natively; the arrow keys, the D-pad and the stick
-//           move the engine's own button focus (Tab does nothing, G-P1-40); UAUISelect activates.
-//           Buttons show the vanilla hover and focus state (black panel, red label,
-//           InGameMenu.c:365-380).
-//           NIMBY-T-058: the "menu" exclude does not cover UAZeroingUp and UAZeroingDown (Page Up,
-//           Page Down, = and -, the D-pad; preset_X1MouseKey.xml:309-318), so a key read by this
-//           window also zeroed the weapon behind it (G-P1-40). OnShow force-disables both
-//           (UAInput.ForceDisable, UAInput.c:94); OnHide and the destructor release them.
+//             power-of-two .edds frames flipped on a timer (the known 5_Mission CallLater use,
+//             shared rules 7.1; it moves to the 4_World pattern before any media ships).
 // Client  : UIScriptedMenu exists only on the client; the server never builds one.
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
@@ -41,14 +27,15 @@ class NimbyGreetClip
     int frameMs;
 }
 
-class NimbyGreetMenu extends UIScriptedMenu
+class NimbyGreetMenu extends NimbySharedWindow
 {
-    static const int ID_CLOSE = 1;
+    static const string CONTENT_LAYOUT = "NimbyGreet/GUI/nimbygreet_content.layout";
+
+    // userIDs; ID_CLOSE (1) and the section range (100 to 199) are the shell's.
     static const int ID_NEVER = 2;
     static const int ID_TEXTSIZE = 3;
     static const int ID_ANIMATIONS = 4;
     static const int ID_LANGUAGE = 5;
-    static const int ID_SECTION_BASE = 100;
     static const int ID_LINK_OPEN_BASE = 200;
     static const int ID_LINK_COPY_BASE = 300;
 
@@ -56,24 +43,12 @@ class NimbyGreetMenu extends UIScriptedMenu
     static const int HEADING1_SIZE = 24;
     static const int HEADING2_SIZE = 20;
     static const int TABLE_TEXT_SIZE = 17;
-    static const int SECTION_TEXT_SIZE = 17;
     static const int LINK_TEXT_SIZE = 15;
     static const int TABLE_ROW_HEIGHT = 28;
     static const int TABLE_RELAYOUT_FRAMES = 3;
     static const float TABLE_ONE_LINE_MAX = 26.8;   // largest one-line GetContentHeight measured, G-P1-31
     static const int BLOCK_GAP = 10;   // extra air around tables and rules (Phase 1 run 2, Jeff)
     static const int MEDIA_ALT_HEIGHT = 20;
-
-    // Phase 1 run 1 (Jeff): buttons should look like buttons. Footer and link buttons sit on a visible
-    // dark panel in their normal state; the section list stays flat with a lit selected row; hover
-    // and focus are the vanilla pause-menu state (black panel, red label).
-    static const int COLOR_PANEL_HIGHLIGHT = 0xFF000000;
-    static const int COLOR_PANEL_NORMAL = 0x00000000;
-    static const int COLOR_PANEL_BUTTON = 0xD2333333;
-    static const int COLOR_PANEL_SELECTED = 0xFF2A2A2A;
-    static const int COLOR_LABEL_HIGHLIGHT = 0xFFFF0000;
-    static const int COLOR_LABEL_NORMAL = 0xFFFFFFFF;
-    static const int COLOR_LABEL_DIM = 0xFFCCCCCC;
 
     protected ref NimbyGreetLanguage m_Language;
     protected ref NimbyGreetDone m_Done;
@@ -84,16 +59,7 @@ class NimbyGreetMenu extends UIScriptedMenu
     protected string m_Source = "spawn";
     protected string m_CloseReason = "";
     protected bool m_NeverChecked;
-    protected bool m_AddedExclude;
-    protected bool m_ZeroingDisabled;   // NIMBY-T-058
-    protected int m_Selected = -1;
 
-    protected TextWidget m_Title;
-    protected TextWidget m_Tagline;
-    protected TextWidget m_Hint;
-    protected ScrollWidget m_SectionScroll;
-    protected Widget m_SectionList;
-    protected ScrollWidget m_BodyScroll;
     protected Widget m_BodyContent;
     protected ScrollWidget m_LinkScroll;
     protected Widget m_LinkRows;
@@ -103,7 +69,6 @@ class NimbyGreetMenu extends UIScriptedMenu
     protected Widget m_BtnAnimations;
     protected Widget m_BtnLanguage;
 
-    protected ref array<Widget> m_SectionButtons;
     protected ref array<Widget> m_BlockWidgets;
     // Table rows and their cells, re-measured for a few frames after each build (Phase 1 run 5): a
     // RichTextWidget measured right after SetText has not been laid out at its width yet, so a cell
@@ -122,7 +87,6 @@ class NimbyGreetMenu extends UIScriptedMenu
     void NimbyGreetMenu()
     {
         SetID(NimbyGreetRules.MENU_ID);
-        m_SectionButtons = new array<Widget>;
         m_BlockWidgets = new array<Widget>;
         m_TableRows = new array<Widget>;
         m_TableLeft = new array<RichTextWidget>;
@@ -136,6 +100,13 @@ class NimbyGreetMenu extends UIScriptedMenu
         m_MediaIds = new array<string>;
     }
 
+    // NIMBY-T-052: the clip timer is queued on this menu; a menu destroyed without OnHide must not
+    // leave it queued. The shell's own destructor releases the zeroing guard (NIMBY-T-058).
+    void ~NimbyGreetMenu()
+    {
+        StopClips();
+    }
+
     // Called before ShowScriptedMenu. prefs and seen are the mission's own objects (shared).
     void Setup(NimbyGreetLanguage language, NimbyGreetDone done, NimbyGreetPrefs prefs, NimbyGreetSeen seen, NimbyGreetManifest manifest, string source)
     {
@@ -146,6 +117,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         m_Manifest = manifest;
         m_Source = source;
         m_NeverChecked = seen.neverShow;
+        m_TextScale = prefs.textScale;
         m_MediaIds.Clear();
         if (manifest && manifest.media)
         {
@@ -201,22 +173,15 @@ class NimbyGreetMenu extends UIScriptedMenu
         return m_Language.sections.Get(m_Selected).id;
     }
 
-    // ---- lifecycle ---------------------------------------------------------------------------
+    // ---- the shell's virtuals (Plan 11 C5) ---------------------------------------------------
 
-    override Widget Init()
+    override protected string ContentLayout()
     {
-        layoutRoot = g_Game.GetWorkspace().CreateWidgets("NimbyGreet/GUI/nimbygreet_window.layout");
-        if (!layoutRoot)
-        {
-            NimbyGreetLog.Info("layout failed to load: NimbyGreet/GUI/nimbygreet_window.layout");
-            return null;
-        }
-        m_Title = TextWidget.Cast(layoutRoot.FindAnyWidget("Title"));
-        m_Tagline = TextWidget.Cast(layoutRoot.FindAnyWidget("Tagline"));
-        m_Hint = TextWidget.Cast(layoutRoot.FindAnyWidget("Hint"));
-        m_SectionScroll = ScrollWidget.Cast(layoutRoot.FindAnyWidget("SectionScroll"));
-        m_SectionList = layoutRoot.FindAnyWidget("SectionList");
-        m_BodyScroll = ScrollWidget.Cast(layoutRoot.FindAnyWidget("BodyScroll"));
+        return CONTENT_LAYOUT;
+    }
+
+    override protected void OnWindowInit()
+    {
         m_BodyContent = layoutRoot.FindAnyWidget("BodyContent");
         m_LinkScroll = ScrollWidget.Cast(layoutRoot.FindAnyWidget("LinkScroll"));
         m_LinkRows = layoutRoot.FindAnyWidget("LinkRows");
@@ -225,71 +190,64 @@ class NimbyGreetMenu extends UIScriptedMenu
         m_BtnTextSize = layoutRoot.FindAnyWidget("BtnTextSize");
         m_BtnAnimations = layoutRoot.FindAnyWidget("BtnAnimations");
         m_BtnLanguage = layoutRoot.FindAnyWidget("BtnLanguage");
-        BuildChrome();
-        BuildSections();
-        SelectSection(0);
-        if (m_BtnClose)
-        {
-            SetFocus(m_BtnClose);
-        }
-        return layoutRoot;
     }
 
-    override void OnShow()
+    override protected int SectionCount()
     {
-        super.OnShow();
-        Mission mission = g_Game.GetMission();
-        if (mission)
+        if (!m_Language)
         {
-            mission.AddActiveInputExcludes({"menu"});
-            m_AddedExclude = true;
-            NimbyGreetLog.Debug("input exclude added: menu");
+            return 0;
         }
-        SetZeroingDisabled(true);
+        return m_Language.sections.Count();
     }
 
-    // NIMBY-T-052: the clip timer is queued on this menu; a menu destroyed without OnHide must not leave it queued.
-    // NIMBY-T-058: nor may it leave the weapon's zeroing disabled.
-    void ~NimbyGreetMenu()
+    override protected string SectionLabel(int index)
+    {
+        return m_Language.sections.Get(index).heading;
+    }
+
+    override protected void OnSectionSelected(int index)
+    {
+        BuildBody(index);
+        BuildLinks();
+        NimbyGreetLog.Debug("section selected index=" + index.ToString() + " id=" + m_Language.sections.Get(index).id + " blocks=" + m_BlockWidgets.Count().ToString() + " links=" + m_Links.Count().ToString());
+    }
+
+    override protected Widget InitialFocus()
+    {
+        return m_BtnClose;
+    }
+
+    override protected void OnWindowUpdate(float timeslice)
+    {
+        if (m_TableRelayoutFrames > 0)
+        {
+            m_TableRelayoutFrames = m_TableRelayoutFrames - 1;
+            RelayoutTables(m_TableRelayoutFrames == 0);
+        }
+    }
+
+    override protected void OnTextScaleChanged()
+    {
+        m_Prefs.textScale = m_TextScale;
+        NimbyGreetClientFiles.SavePrefs(m_Prefs);
+        RefreshTextSizeLabel();
+        NimbyGreetLog.Info("pref textScale=" + m_Prefs.textScale.ToString());
+    }
+
+    // Link labels are flat buttons: no panel in their normal state (Phase 1 run 1).
+    override protected int NormalPanelColor(Widget w)
+    {
+        if (w && w.GetName() == "LinkRow_text")
+        {
+            return COLOR_PANEL_NORMAL;
+        }
+        return COLOR_PANEL_BUTTON;
+    }
+
+    override protected void OnWindowClosed()
     {
         StopClips();
-        SetZeroingDisabled(false);
-    }
-
-    // NIMBY-T-058: zeroing off while the window is open, back on when it closes. Only this window's
-    // own disable is ever released; the flag keeps OnHide and the destructor from releasing twice.
-    protected void SetZeroingDisabled(bool disabled)
-    {
-        if (disabled == m_ZeroingDisabled)
-        {
-            return;
-        }
-        UAInputAPI api = GetUApi();
-        if (!api)
-        {
-            return;
-        }
-        api.GetInputByID(UAZeroingUp).ForceDisable(disabled);
-        api.GetInputByID(UAZeroingDown).ForceDisable(disabled);
-        m_ZeroingDisabled = disabled;
-        NimbyGreetLog.Debug("zeroing disabled=" + NimbyGreetLog.Bool(disabled));
-    }
-
-    override void OnHide()
-    {
-        super.OnHide();
-        StopClips();
-        SetZeroingDisabled(false);
-        if (m_AddedExclude)
-        {
-            Mission mission = g_Game.GetMission();
-            if (mission)
-            {
-                mission.RemoveActiveInputExcludes({"menu"}, false);
-                NimbyGreetLog.Debug("input exclude removed: menu");
-            }
-            m_AddedExclude = false;
-        }
         MissionGameplay gameplay = MissionGameplay.Cast(g_Game.GetMission());
         if (gameplay)
         {
@@ -297,71 +255,22 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
     }
 
-    override void Update(float timeslice)
+    // Esc and Close: the reason is "player" unless the mission set one first.
+    override void RequestClose(string reason)
     {
-        super.Update(timeslice);
-        if (!g_Game)
+        if (m_CloseReason == "")
         {
-            return;
+            m_CloseReason = reason;
         }
-        if (m_TableRelayoutFrames > 0)
-        {
-            m_TableRelayoutFrames = m_TableRelayoutFrames - 1;
-            RelayoutTables(m_TableRelayoutFrames == 0);
-        }
-        UAInputAPI api = GetUApi();
-        if (!api)
-        {
-            return;
-        }
-        if (api.GetInputByID(UAUIBack).LocalPress())
-        {
-            if (m_CloseReason == "")
-            {
-                m_CloseReason = "player";
-            }
-            Close();
-            return;
-        }
-        if (api.GetInputByID(UAUITabLeft).LocalPress())
-        {
-            SelectSection(m_Selected - 1);
-            return;
-        }
-        if (api.GetInputByID(UAUITabRight).LocalPress())
-        {
-            SelectSection(m_Selected + 1);
-            return;
-        }
-        if (api.GetInputByID(UAUINextUp).LocalPress() || Pressed(api, "UANimbyGreetPageUp"))
-        {
-            PageBody(-1);
-            return;
-        }
-        if (api.GetInputByID(UAUINextDown).LocalPress() || Pressed(api, "UANimbyGreetPageDown"))
-        {
-            PageBody(1);
-            return;
-        }
+        Close();
     }
 
     // ---- chrome ------------------------------------------------------------------------------
 
-    protected void BuildChrome()
+    override protected void BuildChrome()
     {
-        if (m_Title)
-        {
-            m_Title.SetText(m_Language.title);
-        }
-        if (m_Tagline)
-        {
-            m_Tagline.SetText(m_Language.tagline);
-            m_Tagline.Show(m_Language.tagline.Length() > 0);
-        }
-        if (m_Hint)
-        {
-            m_Hint.SetText(Tr("#STR_NimbyGreet_Hint", "The Greet key (default Insert) opens this window again. Esc closes it."));
-        }
+        SetTitle(m_Language.title, m_Language.tagline);
+        SetHint(Tr("#STR_NimbyGreet_Hint", "The Greet key (default Insert) opens this window again. Esc closes it."));
         SetButtonLabel(m_BtnClose, Tr("#STR_NimbyGreet_Close", "Close"));
         PaintButtonNormal(m_BtnClose);
         PaintButtonNormal(m_BtnNever);
@@ -393,14 +302,14 @@ class NimbyGreetMenu extends UIScriptedMenu
     {
         string key = "#STR_NimbyGreet_TextNormal";
         string fallback = "Text: normal";
-        if (m_Prefs.textScale >= NimbyGreetRules.TEXT_SCALE_LARGER)
+        if (m_Prefs.textScale >= NimbySharedRules.TEXT_SCALE_LARGER)
         {
             key = "#STR_NimbyGreet_TextLarger";
             fallback = "Text: larger";
         }
         else
         {
-            if (m_Prefs.textScale >= NimbyGreetRules.TEXT_SCALE_LARGE)
+            if (m_Prefs.textScale >= NimbySharedRules.TEXT_SCALE_LARGE)
             {
                 key = "#STR_NimbyGreet_TextLarge";
                 fallback = "Text: large";
@@ -459,139 +368,7 @@ class NimbyGreetMenu extends UIScriptedMenu
         return code;
     }
 
-    // Widget.TranslateString returns the key without its # when the table has no entry for the
-    // client's language (NIMBY-T-044); Phase 1 run 1 showed raw keys after an in-session language
-    // change, before the client restart that reloads mod string tables. English is the fallback.
-    static string Tr(string key, string fallback)
-    {
-        string text = Widget.TranslateString(key);
-        if (text.Length() == 0)
-        {
-            return fallback;
-        }
-        if (NimbyGreetRules.StartsWith(text, "STR_NimbyGreet_"))
-        {
-            return fallback;
-        }
-        return text;
-    }
-
-    protected void SetButtonLabel(Widget button, string text)
-    {
-        if (!button)
-        {
-            return;
-        }
-        TextWidget label = TextWidget.Cast(button.FindAnyWidget(button.GetName() + "_label"));
-        if (label)
-        {
-            label.SetText(text);
-        }
-    }
-
     // ---- sections ----------------------------------------------------------------------------
-
-    protected void BuildSections()
-    {
-        foreach (Widget old : m_SectionButtons)
-        {
-            if (old)
-            {
-                old.Unlink();
-            }
-        }
-        m_SectionButtons.Clear();
-        if (!m_SectionList)
-        {
-            return;
-        }
-        int i = 0;
-        while (i < m_Language.sections.Count())
-        {
-            NimbyGreetSection section = m_Language.sections.Get(i);
-            Widget button = g_Game.GetWorkspace().CreateWidgets("NimbyGreet/GUI/nimbygreet_section_button.layout", m_SectionList);
-            if (!button)
-            {
-                NimbyGreetLog.Info("section button layout failed to load");
-                return;
-            }
-            button.SetUserID(ID_SECTION_BASE + i);
-            TextWidget label = TextWidget.Cast(button.FindAnyWidget("SectionBtn_label"));
-            if (label)
-            {
-                label.SetText(section.heading);
-                label.SetTextExactSize(Scaled(SECTION_TEXT_SIZE));
-            }
-            m_SectionButtons.Insert(button);
-            i = i + 1;
-        }
-        if (m_SectionScroll)
-        {
-            m_SectionScroll.Update();
-        }
-    }
-
-    void SelectSection(int index)
-    {
-        int count = m_Language.sections.Count();
-        if (count == 0)
-        {
-            return;
-        }
-        if (index < 0)
-        {
-            index = count - 1;
-        }
-        if (index >= count)
-        {
-            index = 0;
-        }
-        m_Selected = index;
-        int b = 0;
-        while (b < m_SectionButtons.Count())
-        {
-            PaintSectionButton(b, false);
-            b = b + 1;
-        }
-        BuildBody(index);
-        BuildLinks();
-        if (m_BodyScroll)
-        {
-            m_BodyScroll.VScrollToPos(0);
-        }
-        NimbyGreetLog.Debug("section selected index=" + index.ToString() + " id=" + m_Language.sections.Get(index).id + " blocks=" + m_BlockWidgets.Count().ToString() + " links=" + m_Links.Count().ToString());
-    }
-
-    protected void PaintSectionButton(int index, bool hover)
-    {
-        if (index < 0 || index >= m_SectionButtons.Count())
-        {
-            return;
-        }
-        Widget button = m_SectionButtons.Get(index);
-        Widget panel = button.FindAnyWidget("SectionBtn_panel");
-        TextWidget label = TextWidget.Cast(button.FindAnyWidget("SectionBtn_label"));
-        int panelColor = COLOR_PANEL_NORMAL;
-        int labelColor = COLOR_LABEL_DIM;
-        if (index == m_Selected)
-        {
-            panelColor = COLOR_PANEL_SELECTED;
-            labelColor = COLOR_LABEL_NORMAL;
-        }
-        if (hover)
-        {
-            panelColor = COLOR_PANEL_HIGHLIGHT;
-            labelColor = COLOR_LABEL_HIGHLIGHT;
-        }
-        if (panel)
-        {
-            panel.SetColor(panelColor);
-        }
-        if (label)
-        {
-            label.SetColor(labelColor);
-        }
-    }
 
     protected NimbyGreetConverted ConvertedFor(int index)
     {
@@ -1150,14 +927,11 @@ class NimbyGreetMenu extends UIScriptedMenu
         }
     }
 
+
     // ---- scale (G16) -------------------------------------------------------------------------
 
-    protected int Scaled(int base)
-    {
-        return (int)(base * m_Prefs.textScale);
-    }
-
-    protected void ApplyScale()
+    // The shell rescales the section labels; the body text and the link rows follow here.
+    override protected void ApplyScale()
     {
         int i = 0;
         while (i < m_ScaledBody.Count())
@@ -1169,14 +943,7 @@ class NimbyGreetMenu extends UIScriptedMenu
             }
             i = i + 1;
         }
-        foreach (Widget button : m_SectionButtons)
-        {
-            TextWidget label = TextWidget.Cast(button.FindAnyWidget("SectionBtn_label"));
-            if (label)
-            {
-                label.SetTextExactSize(Scaled(SECTION_TEXT_SIZE));
-            }
-        }
+        super.ApplyScale();
         foreach (Widget row : m_LinkWidgets)
         {
             TextWidget rowLabel = TextWidget.Cast(row.FindAnyWidget("LinkRow_text_label"));
@@ -1190,53 +957,20 @@ class NimbyGreetMenu extends UIScriptedMenu
         BuildLinks();
     }
 
-    // A Greet input by name, the Ears and Legs precedent (GetInputByName, UAInput.c:218); false when unbound.
-    protected bool Pressed(UAInputAPI api, string name)
-    {
-        UAInput input = api.GetInputByName(name);
-        if (!input)
-        {
-            return false;
-        }
-        return input.LocalPress();
-    }
+    // ---- clicks ------------------------------------------------------------------------------
 
-    protected void PageBody(int direction)
-    {
-        if (!m_BodyScroll)
-        {
-            return;
-        }
-        float w = 0;
-        float h = 0;
-        m_BodyScroll.GetScreenSize(w, h);
-        float pos = m_BodyScroll.GetVScrollPos() + direction * h * 0.8;
-        if (pos < 0)
-        {
-            pos = 0;
-        }
-        m_BodyScroll.VScrollToPos(pos);
-    }
-
-    // ---- clicks and focus --------------------------------------------------------------------
-
+    // The shell handles Close (ID_CLOSE) and the section buttons; Greet handles the rest.
     override bool OnClick(Widget w, int x, int y, int button)
     {
-        super.OnClick(w, x, y, button);
+        if (super.OnClick(w, x, y, button))
+        {
+            return true;
+        }
         if (!w)
         {
             return false;
         }
         int id = w.GetUserID();
-        if (id == ID_CLOSE)
-        {
-            if (m_CloseReason == "")
-            {
-                m_CloseReason = "player";
-            }
-            Close();
-            return true;
-        }
         if (id == ID_NEVER)
         {
             m_NeverChecked = !m_NeverChecked;
@@ -1261,11 +995,6 @@ class NimbyGreetMenu extends UIScriptedMenu
         if (id == ID_LANGUAGE)
         {
             CycleLanguage();
-            return true;
-        }
-        if (id >= ID_SECTION_BASE && id < ID_LINK_OPEN_BASE)
-        {
-            SelectSection(id - ID_SECTION_BASE);
             return true;
         }
         if (id >= ID_LINK_OPEN_BASE && id < ID_LINK_COPY_BASE)
@@ -1293,27 +1022,6 @@ class NimbyGreetMenu extends UIScriptedMenu
         return false;
     }
 
-    protected void CycleTextSize()
-    {
-        float next = NimbyGreetRules.TEXT_SCALE_NORMAL;
-        if (m_Prefs.textScale < NimbyGreetRules.TEXT_SCALE_LARGE)
-        {
-            next = NimbyGreetRules.TEXT_SCALE_LARGE;
-        }
-        else
-        {
-            if (m_Prefs.textScale < NimbyGreetRules.TEXT_SCALE_LARGER)
-            {
-                next = NimbyGreetRules.TEXT_SCALE_LARGER;
-            }
-        }
-        m_Prefs.textScale = next;
-        NimbyGreetClientFiles.SavePrefs(m_Prefs);
-        RefreshTextSizeLabel();
-        ApplyScale();
-        NimbyGreetLog.Info("pref textScale=" + m_Prefs.textScale.ToString());
-    }
-
     protected void CycleLanguage()
     {
         if (!m_Done || !m_Done.languages || m_Done.languages.Count() < 2)
@@ -1331,74 +1039,5 @@ class NimbyGreetMenu extends UIScriptedMenu
         {
             gameplay.NimbyGreetSendRequest(true, "selector");
         }
-    }
-
-    override bool OnMouseEnter(Widget w, int x, int y)
-    {
-        Highlight(w, true);
-        return super.OnMouseEnter(w, x, y);
-    }
-
-    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
-    {
-        Highlight(w, false);
-        return super.OnMouseLeave(w, enterW, x, y);
-    }
-
-    override bool OnFocus(Widget w, int x, int y)
-    {
-        Highlight(w, true);
-        return super.OnFocus(w, x, y);
-    }
-
-    override bool OnFocusLost(Widget w, int x, int y)
-    {
-        Highlight(w, false);
-        return super.OnFocusLost(w, x, y);
-    }
-
-    // The vanilla pause-menu state: black panel and red label on hover or focus (InGameMenu.c:365-380).
-    protected void Highlight(Widget w, bool on)
-    {
-        if (!w)
-        {
-            return;
-        }
-        int id = w.GetUserID();
-        if (id >= ID_SECTION_BASE && id < ID_LINK_OPEN_BASE)
-        {
-            PaintSectionButton(id - ID_SECTION_BASE, on);
-            return;
-        }
-        Widget panel = w.FindAnyWidget(w.GetName() + "_panel");
-        TextWidget label = TextWidget.Cast(w.FindAnyWidget(w.GetName() + "_label"));
-        if (!panel && !label)
-        {
-            return;
-        }
-        int panelColor = COLOR_PANEL_BUTTON;
-        int labelColor = COLOR_LABEL_NORMAL;
-        if (w.GetName() == "LinkRow_text")
-        {
-            panelColor = COLOR_PANEL_NORMAL;
-        }
-        if (on)
-        {
-            panelColor = COLOR_PANEL_HIGHLIGHT;
-            labelColor = COLOR_LABEL_HIGHLIGHT;
-        }
-        if (panel)
-        {
-            panel.SetColor(panelColor);
-        }
-        if (label)
-        {
-            label.SetColor(labelColor);
-        }
-    }
-
-    protected void PaintButtonNormal(Widget button)
-    {
-        Highlight(button, false);
     }
 }
