@@ -5,9 +5,15 @@
 //           append succeeded; "result" follows. A denied or invalid request writes one "result"
 //           record (plan line 3). One OpenFile per record (APPEND, FPrintln, CloseFile), so a
 //           crash loses at most the record being written.
-// Limit   : FPrintln returns nothing (EnSystem.c:481), so only a failed open is detected (R5).
-// Engine  : OpenFile with FileMode.APPEND (1_Core/DayZ/proto/EnSystem.c:417, :382-386), FPrintln
-//           (:481), CloseFile (:443); GetYearMonthDayUTC and GetHourMinuteSecondUTC (:100, :76).
+// Verify  : FPrintln and CloseFile return nothing (EnSystem.c:481, :443), so after the close the
+//           day file is opened again and its last line compared with the record just written;
+//           Append is true only on a match (review finding 4, October 31, 2026). One extra read
+//           per record, at admin-command rates.
+// Limit   : the readback proves the record reached the file, not that it survives a crash or a
+//           power cut (recon R5, kept as a stated limitation).
+// Engine  : OpenFile with FileMode.APPEND and READ (1_Core/DayZ/proto/EnSystem.c:417, :382-386),
+//           FPrintln (:481), FGets (:501), CloseFile (:443); GetYearMonthDayUTC and
+//           GetHourMinuteSecondUTC (:100, :76).
 // Style   : One statement per line.
 // -----------------------------------------------------------------------------
 
@@ -141,13 +147,75 @@ class NimbyAdminServerAudit
             }
             return false;
         }
-        FPrintln(handle, record.ToJson());
+        string json = record.ToJson();
+        FPrintln(handle, json);
         CloseFile(handle);
+        string last;
+        if (!ReadLastLine(path, last) || !IsLastRecord(last, json))
+        {
+            if (!s_Failing)
+            {
+                s_Failing = true;
+                NimbyAdminLog.Info("audit unavailable: the record just appended could not be read back from " + path);
+            }
+            return false;
+        }
         if (s_Failing)
         {
             s_Failing = false;
             NimbyAdminLog.Info("audit available again: " + path);
         }
         return true;
+    }
+
+    // The last non-empty line of the file; false when it cannot be opened or holds none.
+    protected static bool ReadLastLine(string path, out string last)
+    {
+        last = "";
+        FileHandle handle = OpenFile(path, FileMode.READ);
+        if (handle == 0)
+        {
+            return false;
+        }
+        bool any = false;
+        string line = "";
+        while (FGets(handle, line) >= 0)
+        {
+            string bare = StripLineEnd(line);
+            if (bare != "")
+            {
+                last = bare;
+                any = true;
+            }
+            line = "";
+        }
+        CloseFile(handle);
+        return any;
+    }
+
+    // Engine-free (self-tested): the line without trailing CR and LF bytes.
+    static string StripLineEnd(string line)
+    {
+        int end = line.Length();
+        while (end > 0)
+        {
+            string ch = line.Get(end - 1);
+            if (ch != "\r" && ch != "\n")
+            {
+                break;
+            }
+            end = end - 1;
+        }
+        return line.Substring(0, end);
+    }
+
+    // Engine-free (self-tested, finding 4): true only when the line read back is the record.
+    static bool IsLastRecord(string lastLine, string expected)
+    {
+        if (expected == "")
+        {
+            return false;
+        }
+        return StripLineEnd(lastLine) == expected;
     }
 }

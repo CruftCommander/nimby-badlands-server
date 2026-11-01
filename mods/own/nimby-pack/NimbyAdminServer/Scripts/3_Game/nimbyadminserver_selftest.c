@@ -228,6 +228,8 @@ class NimbyAdminServerSelfTest
         effects.Add("offset", "behind");
         effects.AddInt("n", 2);
         failures += Case(results, "audit: an effects object is valid JSON text", effects.ToJson() == "{\"offset\":\"behind\",\"n\":2}");
+        failures += Case(results, "audit readback: the record read back matches, also with a CR or LF left on", NimbyAdminServerAudit.IsLastRecord(denied, denied) && NimbyAdminServerAudit.IsLastRecord(denied + "\r", denied) && NimbyAdminServerAudit.IsLastRecord(denied + "\r\n", denied));
+        failures += Case(results, "audit readback: another record, a cut record, or nothing does not match (finding 4)", !NimbyAdminServerAudit.IsLastRecord(intent, denied) && !NimbyAdminServerAudit.IsLastRecord(denied.Substring(0, denied.Length() - 1), denied) && !NimbyAdminServerAudit.IsLastRecord("", denied) && !NimbyAdminServerAudit.IsLastRecord("", ""));
         string payload = NimbyAdminServerRules.DiscordPayload("@everyone hi \"x\"");
         failures += Case(results, "discord: mentions are disabled and text escaped", payload == "{\"content\":\"@everyone hi \\\"x\\\"\",\"allowed_mentions\":{\"parse\":[]}}");
         string longPayload = NimbyAdminServerRules.DiscordPayload(NimbySharedChunks.FillBytes("x", 3000));
