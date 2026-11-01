@@ -1,0 +1,31 @@
+<!-- Copied verbatim on November 1, 2026 from D:\GitHub\nimby-badlands-server-wt\codex-rereview-nimby-admin-phase0.md (the Codex read-only re-review of git diff 439b729..22c7226, the second pass after the Phase 0 review fixes). Every path:line below refers to head 22c7226; the fixes and their dispositions are in docs/testing/2026-10-31-central-scrutinizer-phase0.md, section Re-review findings and dispositions. -->
+
+Head: `22c7226`. Reviewed `git diff 439b729..HEAD` against the specified contract and previous review. **8 CLOSED, 3 PARTIAL. The high-severity replay gap remains.** Two additional medium findings below.
+
+Paths:
+
+- `C/` = `mods/own/nimby-pack/NimbyAdmin/Scripts/`
+- `S/` = `mods/own/nimby-pack/NimbyAdminServer/Scripts/`
+
+| # | Status | Evidence in new code and what remains |
+| --- | --- | --- |
+| 1 | **PARTIAL** | Time expiry is removed, but eviction still permits replay. `S/3_Game/nimbyadminserver_rules.c:906`: `m_Set.Remove(gone);`; `:910`: `m_Floor = Lowest();`; `:886` rejects only `requestId < m_Floor`. Execute teleport ID 1000, accept IDs 1 through 256, then replay 1000. It has been evicted and exceeds the floor, so it executes again. A hostile client can choose these IDs without the harness. **High, CONFIRMED remains.** Retain a monotonic stale boundary covering evicted IDs. |
+| 2 | **CLOSED** | `C/5_Mission/nimbyadmin_menu.c:266` captures `selectedSession = before.session;`; `:270` calls `NimbyAdminSelection.Rebind`. `C/3_Game/nimbyadmin_rules.c:530` matches BI ID and `:532` requires `row.session == session`. A replacement session clears selection. |
+| 3 | **PARTIAL** | Initial read failure now reaches `Recover(readWhy, problem)` at `S/3_Game/nimbyadminserver_files.c:191`, including `.lkg` recovery and edit refusal. However, recovery from `.lkg` assigns `m_Active = lkgActive;` at `:260` without setting `m_HaveGood`. If the primary remains missing and the backup subsequently disappears, `:174` treats this previously recovered store as a first installation and `:177` sets `m_EditsRefused = false;`. No primary repair occurred. **The remaining refuse-edits defect is medium, CONFIRMED.** Restrict first-install handling to a store with no previous load or recovery history. |
+| 4 | **CLOSED** | `S/3_Game/nimbyadminserver_audit.c:148` enables verification for `record.phase == "intent"`; `:183` requires both successful readback and `IsLastRecord(last, json)`. Failure returns false before mutation. Crash durability remains explicitly unproved, as allowed by the original finding. |
+| 5 | **CLOSED** | `S/3_Game/nimbyadminserver_rules.c:247` checks `sender.Take(...)` and returns on failure before `aggregate.Take(...)` at `:251`. The router uses this helper at `S/4_World/nimbyadminserver_core.c:262`. |
+| 6 | **PARTIAL** | Normal role-sync logging now depends on `ShouldLogRoleSync` at `S/4_World/nimbyadminserver_core.c:474`. However, every repeated hello still calls `NimbyAdminLog.Debug("role sync repeated session=" ...)` at `:481`. With `$profile:NimbyAdmin\debug` enabled, this prints once per accepted hello without a log gate. **Medium, CONFIRMED remains in debug mode.** Remove or rate-limit this repeated debug line. |
+| 7 | **CLOSED** | Duplicate and rejection logs use `CommandForLog(command)` at `S/4_World/nimbyadminserver_core.c:298` and `:356`. `S/3_Game/nimbyadminserver_rules.c:197` substitutes unknown text with its length. `C/3_Game/nimbyadmin_log.c:58` also applies `Safe` to names and both identities. |
+| 8 | **CLOSED** | `S/3_Game/nimbyadminserver_rules.c:644` and `:727` initialize `version = 0;`; both builders reject invalid versions and null collections. `S/3_Game/nimbyadminserver_files.c:335` and `:428` additionally require the collection's top-level key before adoption. The omitted-field cases no longer become valid empty stores. |
+| 9 | **CLOSED** | The exact-good-text branch restores `m_Source = NimbyAdminServerSource.FILE;` at `S/3_Game/nimbyadminserver_files.c:197`, clears edit refusal at `:198`, and clears bad-text state at `:199` and `:200`. |
+| 10 | **CLOSED** | `S/3_Game/nimbyadminserver_rules.c:356`: `if (day > DaysInMonth(year, month))`. `DaysInMonth` and `IsLeapYear` implement month lengths and Gregorian century rules. |
+| 11 | **CLOSED** | `C/3_Game/nimbyadmin_rules.c:316`: `if (ch == "=")` rejects the literal delimiter. The `%3D` branch at `:341` still decodes an escaped equals sign. |
+
+New findings, using the previous severity scale:
+
+| # | Severity | Confidence | Location | Issue | Failure scenario | Smallest fix |
+| --- | --- | --- | --- | --- | --- | --- |
+| 12 | medium | CONFIRMED | `S/4_World/nimbyadminserver_core.c:405`: `NimbyAdminServerAudit.Append(record);`; `:407`: `s_Suppressed.Clear();` | Suppression accounting is discarded even when its audit append explicitly fails. The intervening log also claims the record was written. | Denial limits accumulate suppressed requests. When the summary becomes due, the audit file cannot be opened. `Append` returns false, but per-sender counts are cleared permanently. Restoring the file cannot recover that summary. | Clear counts and report success only after a successful append. Retain failed summaries and retry on a bounded schedule. |
+| 13 | medium | PLAUSIBLE | `S/3_Game/nimbyadminserver_audit.c:194`: `OpenFile(path, FileMode.READ)`; `:201`: `while (FGets(handle, line) >= 0)` | Every intent synchronously scans the entire daily journal, including attacker-generated denials. Rate limits bound journal growth but do not keep verification work small. | Four non-admin connections can sustain the aggregate two denial records per second, adding roughly 172,800 records per day. Each subsequent authorized teleport scans them all. The amplification is established by the code; whether it causes disruptive stalls depends on engine and filesystem performance. | Put denied/invalid records and suppression summaries in a separate journal so they cannot increase intent-readback work. |
+
+Only `git diff` and `git log` were run. Nothing was changed. No builds, tests, server sessions, or filesystem-failure experiments were run; recorded PASS results were not independently verified.

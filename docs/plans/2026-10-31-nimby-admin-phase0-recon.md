@@ -265,3 +265,17 @@ Waiting:
 
 Next (Part 3): with no `DayZServer_x64` running, the gate rebuild (`-ServerPath D:\DayZServer -BootInstanceId 998 -Dev -Qualification`) and `Test-NimbyRepo.ps1`; then the gate rows and the item 3 proofs with Jeff and a second client.
 
+## Status, November 1, 2026, 13:00 (re-review fixes done, waiting on the last review pass)
+
+Done (orchestrator relay of the Codex re-review of `22c7226`: 8 closed, 1, 3 and 6 partial, 12 and 13 new):
+
+- Re-review findings fixed, one commit each, each with self-test cases: 1 in `97ba30c` (the replay set keeps the 256 highest ids; harness offset highest plus 1,000,000 per the orchestrator ruling, 127-per-run cap kept), 3 in `8329297` (a store that ever loaded or recovered is never a first install), 6 in `4c53391` (no repeated-hello debug line), 12 in `e00b647` (held-back counts cleared only after a successful summary append), 13 in `967dd32` (denied and invalid records in `audit-denied-<date>.log`; Plan 3 v0.9).
+- Before-fix boots for 1 and 3 failed on exactly the new cases (`build-20261101-124346`, `build-20261101-124616`); the last verification build `@NIMBY-20261101-125412` is `SUMMARY PASS`, Admin 69/69, AdminServer 121/121, DevHarness 16/16, total 851/851.
+- The re-review copied to `docs/reviews/2026-11-01-central-scrutinizer-phase0-codex-rereview.md`; the test record carries the re-review dispositions table, the revised deviations and the operations notes. The plan question of 00:25 (a separate day file for denied records) is closed by finding 13.
+
+Waiting:
+
+- Jeff's last Codex re-review over `git diff 439b729..HEAD`; Part 3 does not start before it comes back clean or ruled.
+
+Next (Part 3): unchanged from the 00:25 status.
+
