@@ -213,7 +213,9 @@ class NimbyAdminServerRules
         {
             return "session";
         }
-        if (!IsDigits(args.Get("session")))
+        // Phase 1 A4: the value is a local, not a call inside IsDigits' arguments.
+        string session = args.Get("session");
+        if (!IsDigits(session))
         {
             return "session";
         }
@@ -590,7 +592,9 @@ class NimbyAdminServerRules
         {
             return false;
         }
-        string rest = url.Substring(host.Length(), url.Length() - host.Length());
+        int hostLength = host.Length();
+        int urlLength = url.Length();
+        string rest = url.Substring(hostLength, urlLength - hostLength);
         if (rest.Length() < 3 || rest.IndexOf(" ") >= 0 || rest.IndexOf("/") <= 0)
         {
             return false;
@@ -656,7 +660,11 @@ class NimbyAdminServerConfig
     {
         if (value < low || value > high)
         {
-            notes.Insert(field + " out of range " + low.ToString() + " to " + high.ToString() + "; default " + fallback.ToString() + " used");
+            string lowText = low.ToString();
+            string highText = high.ToString();
+            string fallbackText = fallback.ToString();
+            string note = field + " out of range " + lowText + " to " + highText + "; default " + fallbackText + " used";
+            notes.Insert(note);
             return fallback;
         }
         return value;
@@ -705,7 +713,8 @@ class NimbyAdminServerPermissions
         notes = new array<string>;
         if (version != 1)
         {
-            notes.Insert("version " + version.ToString() + " is not 1");
+            string versionText = version.ToString();
+            notes.Insert("version " + versionText + " is not 1");
             return false;
         }
         if (!admins)
@@ -717,21 +726,23 @@ class NimbyAdminServerPermissions
         while (i < admins.Count())
         {
             NimbyAdminServerAdmin row = admins.Get(i);
+            // Phase 1 A4: the row number is a local, not a call inside Insert's arguments.
+            string rowText = i.ToString();
             if (!row)
             {
-                notes.Insert("row " + i.ToString() + " empty; skipped");
+                notes.Insert("row " + rowText + " empty; skipped");
             }
             else if (!NimbyAdminServerRules.IsSteam64(row.steam64))
             {
-                notes.Insert("row " + i.ToString() + " steam64 invalid; skipped");
+                notes.Insert("row " + rowText + " steam64 invalid; skipped");
             }
             else if (!NimbyAdminRules.IsKnownRole(row.role))
             {
-                notes.Insert("row " + i.ToString() + " role invalid; skipped");
+                notes.Insert("row " + rowText + " role invalid; skipped");
             }
             else if (active.Contains(row.steam64))
             {
-                notes.Insert("row " + i.ToString() + " duplicate steam64; skipped");
+                notes.Insert("row " + rowText + " duplicate steam64; skipped");
             }
             else
             {
@@ -784,7 +795,8 @@ class NimbyAdminServerBans
         notes = new array<string>;
         if (version != 1)
         {
-            notes.Insert("version " + version.ToString() + " is not 1");
+            string versionText = version.ToString();
+            notes.Insert("version " + versionText + " is not 1");
             return false;
         }
         if (!bans)
@@ -799,7 +811,8 @@ class NimbyAdminServerBans
             string why = CheckRow(row);
             if (why != "")
             {
-                notes.Insert("row " + i.ToString() + " " + why + "; skipped");
+                string rowText = i.ToString();
+                notes.Insert("row " + rowText + " " + why + "; skipped");
             }
             else if (!active.Contains(row.steam64))
             {
@@ -951,7 +964,9 @@ class NimbyAdminServerSeen
         }
         if (m_Ids.Count() >= NimbyAdminServerRules.SEEN_MAX)
         {
-            m_Floor = m_Ids.Get(LowestIndex());
+            // Phase 1 A4: the index is a local, not a call inside Get's arguments.
+            int lowest = LowestIndex();
+            m_Floor = m_Ids.Get(lowest);
         }
     }
 
@@ -1081,7 +1096,8 @@ class NimbyAdminServerSuppressed
             string steam64 = m_Order.Get(i);
             NimbyAdminServerJsonObject entry = new NimbyAdminServerJsonObject();
             entry.Add("steam64", steam64);
-            entry.AddInt("count", m_Counts.Get(steam64));
+            int count = m_Counts.Get(steam64);
+            entry.AddInt("count", count);
             if (listed != "")
             {
                 listed = listed + ",";
@@ -1091,7 +1107,8 @@ class NimbyAdminServerSuppressed
         }
         NimbyAdminServerJsonObject effects = new NimbyAdminServerJsonObject();
         effects.AddInt("suppressed", m_Total);
-        effects.AddInt("senders", m_Order.Count());
+        int senders = m_Order.Count();
+        effects.AddInt("senders", senders);
         effects.Raw("listed", "[" + listed + "]");
         return effects.ToJson();
     }
