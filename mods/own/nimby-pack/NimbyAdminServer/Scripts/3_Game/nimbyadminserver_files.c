@@ -204,7 +204,10 @@ class NimbyAdminServerStore
             m_LastBadText = "";
             if (repaired)
             {
-                m_Io.Note(m_Name + " repaired; source=file entries=" + m_Active.Count().ToString());
+                // Phase 1 A4: the count is a local, not a call inside Note's arguments.
+                int repairedEntries = m_Active.Count();
+                string repairedText = repairedEntries.ToString();
+                m_Io.Note(m_Name + " repaired; source=file entries=" + repairedText);
             }
             return false;
         }
@@ -235,12 +238,16 @@ class NimbyAdminServerStore
             {
                 m_Io.Note(m_Name + ".lkg not refreshed: write failed");
             }
-            m_Io.Note(m_Name + " loaded entries=" + m_Active.Count().ToString() + " source=file");
+            int loadedEntries = m_Active.Count();
+            string loadedText = loadedEntries.ToString();
+            m_Io.Note(m_Name + " loaded entries=" + loadedText + " source=file");
             return changed;
         }
         m_LastBadText = text;
         m_HaveBad = true;
-        return Recover("invalid (" + NimbyAdminRules.CutBytes(error, 200) + ")", problem);
+        string errorCut = NimbyAdminRules.CutBytes(error, 200);
+        string invalidWhy = "invalid (" + errorCut + ")";
+        return Recover(invalidWhy, problem);
     }
 
     // N8 recovery: the set in memory, else .lkg, else nothing; edits refused in every case.
