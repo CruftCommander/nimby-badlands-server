@@ -22,7 +22,9 @@ class NimbyAdminPauseEntry extends NimbySharedPauseEntry
 
     override bool IsVisible()
     {
-        MissionGameplay gameplay = MissionGameplay.Cast(g_Game.GetMission());
+        // Phase 1 A4: the mission is a local, not a call inside Cast's arguments.
+        Mission currentMission = g_Game.GetMission();
+        MissionGameplay gameplay = MissionGameplay.Cast(currentMission);
         if (!gameplay)
         {
             return false;
@@ -38,7 +40,8 @@ class NimbyAdminPauseEntry extends NimbySharedPauseEntry
         {
             mission.Continue();
         }
-        MissionGameplay gameplay = MissionGameplay.Cast(g_Game.GetMission());
+        Mission currentMission = g_Game.GetMission();
+        MissionGameplay gameplay = MissionGameplay.Cast(currentMission);
         if (gameplay)
         {
             gameplay.NimbyAdminOpenWhenClear("menu");
