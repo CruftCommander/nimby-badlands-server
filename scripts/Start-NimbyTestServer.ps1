@@ -44,7 +44,7 @@
               -ProfileName), <repo>\profiles\<ProfileName>\ with -ProfileName, and
               <server>\keys\<authority>.bikey (added, never overwritten if different). The server
               writes its test persistence to mpmissions\<mission>\storage_<instanceId>; pack.json
-              must name 998 or 999.
+              or -InstanceId must name 997, 998, or 999.
     Secrets : the RCON password is a random throwaway value, never shown or logged. The join
               password comes from -JoinPassword, else <profile>\join-password.txt, else the
               standing value in the NIMBY_JOIN_PASSWORD environment variable or
@@ -102,8 +102,11 @@
 
 .PARAMETER InstanceId
     Override pack.json testServer.instanceId for this run. On the local replica built by
-    Sync-LiveReplica.ps1, 998 is the copy of the live world and 999 is the fresh world. Only 998
-    and 999 are accepted (shared rules, section 8).
+    Sync-LiveReplica.ps1, 998 is the copy of the live world and 999 is the fresh world; 997 is
+    the Fang Phase 0 world (Plan 12, P2), a fresh world the server creates on its first boot
+    that no other plan's session writes. Only 997, 998, and 999 are accepted (shared rules,
+    section 8). The game port is unchanged by this switch: one DayZ server runs at a time
+    (Get-RunningServerMessage), so the instances never share a live port.
 
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Start-NimbyTestServer.ps1
@@ -121,7 +124,7 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$ProfileName,
     [ValidatePattern('^[\x21\x23-\x3a\x3c-\x7e]{8,32}$')][string]$JoinPassword,
     [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
-    [ValidateSet(998, 999)][int]$InstanceId,
+    [ValidateSet(997, 998, 999)][int]$InstanceId,
     [switch]$Vanilla,
     [switch]$Force
 )
@@ -511,11 +514,12 @@ try {
     $test = $pack.testServer
     if ($null -eq $test) { throw 'pack.json has no testServer section.' }
     if ($PSBoundParameters.ContainsKey('InstanceId')) {
-        # Per-run world selection on the replica: 998 live copy, 999 fresh (Sync-LiveReplica.ps1).
+        # Per-run world selection on the replica: 998 live copy, 999 fresh (Sync-LiveReplica.ps1),
+        # 997 the Fang Phase 0 world (Plan 12, P2).
         $test.instanceId = $InstanceId
         Write-Manifest -LogPath $manifest -Line ("INSTANCE override={0}" -f $InstanceId)
     }
-    if (-not (Test-TestInstanceId -InstanceId ([int]$test.instanceId))) { throw "testServer.instanceId $($test.instanceId) is not a test instance; only 998 and 999 are allowed so storage_1 is never written." }
+    if (-not (Test-TestInstanceId -InstanceId ([int]$test.instanceId))) { throw "testServer.instanceId $($test.instanceId) is not a test instance; only 997, 998 and 999 are allowed so storage_1 is never written." }
 
     # Build selection ---------------------------------------------------------
     $logRoot = Join-Path $RepoRoot 'logs'

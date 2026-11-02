@@ -9,11 +9,13 @@ BeforeAll {
 }
 
 Describe 'Test-TestInstanceId' {
-    It 'accepts only 998 and 999' {
+    It 'accepts only 997, 998 and 999 (shared rules, section 8; 997 added for Fang Phase 0, Plan 12 P2)' {
+        Test-TestInstanceId -InstanceId 997 | Should -BeTrue
         Test-TestInstanceId -InstanceId 998 | Should -BeTrue
         Test-TestInstanceId -InstanceId 999 | Should -BeTrue
         Test-TestInstanceId -InstanceId 1 | Should -BeFalse
-        Test-TestInstanceId -InstanceId 997 | Should -BeFalse
+        Test-TestInstanceId -InstanceId 996 | Should -BeFalse
+        Test-TestInstanceId -InstanceId 1000 | Should -BeFalse
     }
 }
 

@@ -36,9 +36,12 @@ function Write-Manifest {
 }
 
 function Test-TestInstanceId {
-    # Shared rules, section 8: test storage is storage_998 and storage_999 only.
+    # Shared rules, section 8: test storage is storage_997, storage_998, and storage_999 only.
+    # 998 is the live-world copy and 999 the fresh world (Sync-LiveReplica.ps1); 997 is the Fang
+    # Phase 0 world (Plan 12, P2, ruled by Jeff November 2, 2026), a fresh world the server
+    # creates on first boot and that no other plan's session writes.
     param([Parameter(Mandatory)][int]$InstanceId)
-    return ($InstanceId -eq 998 -or $InstanceId -eq 999)
+    return ($InstanceId -eq 997 -or $InstanceId -eq 998 -or $InstanceId -eq 999)
 }
 
 function Get-ServerArgument {
@@ -119,7 +122,7 @@ function Get-RunningServerProcess {
 function Get-RunningServerMessage {
     # $null when no DayZServer_x64 runs (under Root, when given); otherwise the refusal text with
     # the process ids. Only one DayZ server runs at a time: the boot check, the test server, and
-    # the replica share ports and storage_998 and storage_999.
+    # the replica share ports and storage_997, storage_998 and storage_999.
     param([string]$Root)
 
     $running = @(Get-RunningServerProcess -Root $Root)
