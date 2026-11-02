@@ -72,7 +72,9 @@ class NimbyAdminPages
         {
             return;
         }
-        int at = IndexOf(page.Id());
+        // Phase 1 A4: the id is a local, not a call inside IndexOf's arguments.
+        string pageId = page.Id();
+        int at = IndexOf(pageId);
         if (at >= 0)
         {
             s_Pages.Set(at, page);
@@ -174,7 +176,8 @@ class NimbyAdminMenu extends NimbySharedWindow
     {
         m_PlayerRows = layoutRoot.FindAnyWidget("PlayerRows");
         m_BodyContent = layoutRoot.FindAnyWidget("BodyContent");
-        m_Status = TextWidget.Cast(layoutRoot.FindAnyWidget("Status"));
+        Widget statusWidget = layoutRoot.FindAnyWidget("Status");
+        m_Status = TextWidget.Cast(statusWidget);
         m_BtnTeleport = layoutRoot.FindAnyWidget("BtnTeleport");
         m_BtnRefresh = layoutRoot.FindAnyWidget("BtnRefresh");
         m_BtnClose = layoutRoot.FindAnyWidget("BtnClose");
@@ -237,7 +240,8 @@ class NimbyAdminMenu extends NimbySharedWindow
 
     override protected void OnWindowClosed()
     {
-        MissionGameplay gameplay = MissionGameplay.Cast(g_Game.GetMission());
+        Mission currentMission = g_Game.GetMission();
+        MissionGameplay gameplay = MissionGameplay.Cast(currentMission);
         if (gameplay)
         {
             gameplay.NimbyAdminOnMenuClosed(this);
@@ -351,7 +355,9 @@ class NimbyAdminMenu extends NimbySharedWindow
             child.Unlink();
             child = next;
         }
-        RichTextWidget text = RichTextWidget.Cast(g_Game.GetWorkspace().CreateWidgets(DETAIL_LAYOUT, m_BodyContent));
+        WorkspaceWidget workspace = g_Game.GetWorkspace();
+        Widget created = workspace.CreateWidgets(DETAIL_LAYOUT, m_BodyContent);
+        RichTextWidget text = RichTextWidget.Cast(created);
         if (!text)
         {
             return;
@@ -359,7 +365,9 @@ class NimbyAdminMenu extends NimbySharedWindow
         NimbyAdminPlayerRow row = SelectedPlayer();
         if (!row)
         {
-            text.SetText(m_Players.players.Count().ToString() + " players online. Select one.");
+            int online = m_Players.players.Count();
+            string onlineText = online.ToString() + " players online. Select one.";
+            text.SetText(onlineText);
             m_BodyContent.Update();
             return;
         }
@@ -391,7 +399,8 @@ class NimbyAdminMenu extends NimbySharedWindow
             ShowDetail();
             return true;
         }
-        MissionGameplay gameplay = MissionGameplay.Cast(g_Game.GetMission());
+        Mission currentMission = g_Game.GetMission();
+        MissionGameplay gameplay = MissionGameplay.Cast(currentMission);
         if (!gameplay)
         {
             return false;
