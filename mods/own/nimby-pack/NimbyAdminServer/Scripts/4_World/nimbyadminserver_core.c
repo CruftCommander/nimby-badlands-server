@@ -188,7 +188,80 @@ class NimbyAdminServerCore
         {
             return;
         }
+        CheckIdentity("connect", identity, player);
         SessionFor(identity);
+    }
+
+    // MissionServer.OnClientRespawnEvent (missionServer.c:611, from OnEvent :366-378); the body is
+    // the old one. The new body arrives through ClientNewEvent and InvokeOnConnect (:326-336).
+    static void OnRespawn(PlayerIdentity identity, PlayerBase player)
+    {
+        CheckIdentity("respawn", identity, player);
+    }
+
+    // MissionServer.OnClientReconnectEvent (missionServer.c:633, from OnEvent :380-393).
+    static void OnReconnect(PlayerIdentity identity, PlayerBase player)
+    {
+        CheckIdentity("reconnect", identity, player);
+    }
+
+    // MissionServer.PlayerDisconnected (missionServer.c:690), before the session is dropped.
+    static void OnDisconnecting(PlayerIdentity identity, PlayerBase player)
+    {
+        CheckIdentity("disconnect", identity, player);
+    }
+
+    // Phase 1 A3, debug only ($profile:NimbyAdmin\debug): is the PlayerIdentity object the engine
+    // hands at InvokeOnConnect, at every OnRPC sender, and from PlayerBase.GetIdentity() the same
+    // object across a session, a reconnect, and a death and respawn? One line per point: both ids,
+    // the stored session's number, same.session (the object equals the stored session's),
+    // same.body (it equals the body's GetIdentity()), same.bodyTwice (two GetIdentity() calls on
+    // the body give one object), and the engine's per-connection GetPlayerId
+    // (3_Game/DayZ/gameplay.c:372). It reads only; no session changes here.
+    protected static void CheckIdentity(string point, PlayerIdentity identity, PlayerBase body)
+    {
+        if (!s_Ready)
+        {
+            return;
+        }
+        bool debugOn = NimbyAdminLog.IsDebug();
+        if (!debugOn)
+        {
+            return;
+        }
+        if (!identity)
+        {
+            NimbyAdminLog.Debug("identity check at=" + point + " identity=none");
+            return;
+        }
+        string biId = identity.GetId();
+        string steam64 = identity.GetPlainId();
+        string name = identity.GetName();
+        int playerId = identity.GetPlayerId();
+        string sessionText = "none";
+        string sameSession = "none";
+        NimbyAdminServerSession session;
+        bool found = s_Sessions.Find(biId, session);
+        if (found && session)
+        {
+            sessionText = session.number.ToString();
+            bool sessionSame = session.identity == identity;
+            sameSession = NimbyAdminLog.Bool(sessionSame);
+        }
+        string sameBody = "none";
+        string sameTwice = "none";
+        if (body)
+        {
+            PlayerIdentity first = body.GetIdentity();
+            PlayerIdentity second = body.GetIdentity();
+            bool bodySame = first == identity;
+            bool twiceSame = first == second;
+            sameBody = NimbyAdminLog.Bool(bodySame);
+            sameTwice = NimbyAdminLog.Bool(twiceSame);
+        }
+        string who = NimbyAdminLog.WhoFrom(name, biId, steam64);
+        string playerIdText = playerId.ToString();
+        NimbyAdminLog.Debug("identity check at=" + point + " " + who + " session=" + sessionText + " same.session=" + sameSession + " same.body=" + sameBody + " same.bodyTwice=" + sameTwice + " playerId=" + playerIdText);
     }
 
     // MissionServer.PlayerDisconnected (missionServer.c:690); the identity may already be gone, so
@@ -251,6 +324,7 @@ class NimbyAdminServerCore
             NimbyAdminLog.Gated(key, "request refused reason=sender-not-owner sender " + NimbyAdminLog.Who(sender) + " target " + NimbyAdminLog.Who(owner));
             return;
         }
+        CheckIdentity("rpc", sender, target);
         float now = GetGame().GetTickTime();
         NimbyAdminServerBucket rate;
         if (!s_Rates.Find(sender.GetId(), rate))
