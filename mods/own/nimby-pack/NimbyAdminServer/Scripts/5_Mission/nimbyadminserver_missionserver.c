@@ -22,7 +22,9 @@ modded class MissionServer extends MissionBase
     override void OnUpdate(float timeslice)
     {
         super.OnUpdate(timeslice);
-        NimbyAdminServerCore.Tick(GetGame().GetTickTime());
+        // Phase 1 A4: the tick time is a local, not a call inside Tick's arguments.
+        float now = GetGame().GetTickTime();
+        NimbyAdminServerCore.Tick(now);
     }
 
     override void InvokeOnConnect(PlayerBase player, PlayerIdentity identity)
