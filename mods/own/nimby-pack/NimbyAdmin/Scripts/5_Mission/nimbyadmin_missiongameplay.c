@@ -45,9 +45,14 @@ modded class MissionGameplay extends MissionBase
         NimbyAdminClient.Push().Insert(NimbyAdminOnPush);
         NimbyAdminClient.Chunk().Insert(NimbyAdminOnChunk);
         NimbyAdminClient.Done().Insert(NimbyAdminOnDone);
-        NimbySharedPauseButtons.Register(new NimbyAdminPauseEntry());
-        NimbyAdminPages.Register(new NimbyAdminPlayersPage());
-        NimbyAdminLog.Debug("client ready; input bound=" + NimbyAdminLog.Bool(m_NimbyAdminInput != null));
+        // Phase 1 A4: every value is a local before the call (the 164200 argument-slot rule).
+        NimbyAdminPauseEntry pauseEntry = new NimbyAdminPauseEntry();
+        NimbySharedPauseButtons.Register(pauseEntry);
+        NimbyAdminPage playersPage = new NimbyAdminPlayersPage();
+        NimbyAdminPages.Register(playersPage);
+        bool bound = m_NimbyAdminInput != null;
+        string boundText = NimbyAdminLog.Bool(bound);
+        NimbyAdminLog.Debug("client ready; input bound=" + boundText);
     }
 
     override void OnMissionFinish()
@@ -67,7 +72,8 @@ modded class MissionGameplay extends MissionBase
         float now = GetGame().GetTickTime();
         if (m_NimbyAdminPendingId != 0 && now - m_NimbyAdminPendingSince > NimbyAdminRules.REQUEST_TIMEOUT_SECONDS)
         {
-            NimbyAdminLog.Debug("request id=" + m_NimbyAdminPendingId.ToString() + " command=" + m_NimbyAdminPendingCommand + " no answer");
+            string pendingText = m_NimbyAdminPendingId.ToString();
+            NimbyAdminLog.Debug("request id=" + pendingText + " command=" + m_NimbyAdminPendingCommand + " no answer");
             m_NimbyAdminPendingId = 0;
             NimbyAdminStatus("No answer from the server.");
         }
@@ -99,12 +105,14 @@ modded class MissionGameplay extends MissionBase
     {
         if (!NimbyAdminPushKinds.IsKnown(kind))
         {
-            NimbyAdminLog.Debug("push dropped: unknown kind=" + kind.ToString());
+            string kindText = kind.ToString();
+            NimbyAdminLog.Debug("push dropped: unknown kind=" + kindText);
             return;
         }
         if (sequence <= m_NimbyAdminRoleSequence)
         {
-            NimbyAdminLog.Debug("push dropped: old sequence=" + sequence.ToString());
+            string oldText = sequence.ToString();
+            NimbyAdminLog.Debug("push dropped: old sequence=" + oldText);
             return;
         }
         m_NimbyAdminRoleSequence = sequence;
@@ -114,7 +122,8 @@ modded class MissionGameplay extends MissionBase
             role = payload;
         }
         m_NimbyAdminRole = role;
-        NimbyAdminLog.Debug("role received role=" + role + " sequence=" + sequence.ToString());
+        string sequenceText = sequence.ToString();
+        NimbyAdminLog.Debug("role received role=" + role + " sequence=" + sequenceText);
         if (m_NimbyAdminMenu)
         {
             if (!NimbyAdminHasRole())
@@ -132,12 +141,15 @@ modded class MissionGameplay extends MissionBase
         {
             m_NimbyAdminPendingId = 0;
         }
-        NimbyAdminLog.Debug("result id=" + requestId.ToString() + " code=" + NimbyAdminRules.CodeName(code) + " detail=" + detail);
+        string idText = requestId.ToString();
+        string codeName = NimbyAdminRules.CodeName(code);
+        NimbyAdminLog.Debug("result id=" + idText + " code=" + codeName + " detail=" + detail);
         if (requestId == 0)
         {
             return;
         }
-        NimbyAdminStatus(NimbyAdminRules.CodeName(code) + ": " + detail);
+        string statusText = codeName + ": " + detail;
+        NimbyAdminStatus(statusText);
     }
 
     protected void NimbyAdminOnChunk(int requestId, int index, string text)
@@ -146,7 +158,9 @@ modded class MissionGameplay extends MissionBase
         float now = GetGame().GetTickTime();
         if (!m_NimbyAdminList.AcceptChunk(requestId, index, text, now, why))
         {
-            NimbyAdminLog.Debug("chunk dropped id=" + requestId.ToString() + " index=" + index.ToString() + " why=" + why);
+            string chunkIdText = requestId.ToString();
+            string indexText = index.ToString();
+            NimbyAdminLog.Debug("chunk dropped id=" + chunkIdText + " index=" + indexText + " why=" + why);
             return;
         }
         NimbyAdminFinishList();
@@ -162,7 +176,8 @@ modded class MissionGameplay extends MissionBase
         float now = GetGame().GetTickTime();
         if (!m_NimbyAdminList.AcceptDone(requestId, chunkCount, readable, done.bytes, done.hash, now, why))
         {
-            NimbyAdminLog.Debug("done dropped id=" + requestId.ToString() + " why=" + why);
+            string doneIdText = requestId.ToString();
+            NimbyAdminLog.Debug("done dropped id=" + doneIdText + " why=" + why);
             return;
         }
         NimbyAdminFinishList();
@@ -182,9 +197,10 @@ modded class MissionGameplay extends MissionBase
         {
             m_NimbyAdminPendingId = 0;
         }
+        string listIdText = requestId.ToString();
         if (verdict != "intact")
         {
-            NimbyAdminLog.Info("client: players list rejected id=" + requestId.ToString() + " " + verdict);
+            NimbyAdminLog.Info("client: players list rejected id=" + listIdText + " " + verdict);
             NimbyAdminStatus("The player list arrived damaged; refresh.");
             return;
         }
@@ -193,10 +209,14 @@ modded class MissionGameplay extends MissionBase
         string error;
         if (!js.ReadFromString(list, payload, error))
         {
-            NimbyAdminLog.Info("client: players list unreadable id=" + requestId.ToString());
+            NimbyAdminLog.Info("client: players list unreadable id=" + listIdText);
             return;
         }
-        NimbyAdminLog.Debug("players list id=" + requestId.ToString() + " players=" + list.players.Count().ToString() + " bytes=" + payload.Length().ToString());
+        int listCount = list.players.Count();
+        string listCountText = listCount.ToString();
+        int payloadBytes = payload.Length();
+        string payloadText = payloadBytes.ToString();
+        NimbyAdminLog.Debug("players list id=" + listIdText + " players=" + listCountText + " bytes=" + payloadText);
         if (m_NimbyAdminMenu)
         {
             string notice = m_NimbyAdminMenu.SetPlayers(list);
@@ -214,7 +234,8 @@ modded class MissionGameplay extends MissionBase
     // Sends one request; returns its id, or 0 when there is no controlled player.
     protected int NimbyAdminSend(string command, string args)
     {
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+        Man man = GetGame().GetPlayer();
+        PlayerBase player = PlayerBase.Cast(man);
         if (!player)
         {
             return 0;
@@ -235,7 +256,8 @@ modded class MissionGameplay extends MissionBase
         int requestId = NimbyAdminSend(NimbyAdminRules.CMD_PLAYERS, "");
         if (requestId != 0)
         {
-            m_NimbyAdminList.Begin(requestId, GetGame().GetTickTime());
+            float now = GetGame().GetTickTime();
+            m_NimbyAdminList.Begin(requestId, now);
             NimbyAdminStatus("Refreshing...");
         }
     }
@@ -244,8 +266,12 @@ modded class MissionGameplay extends MissionBase
     {
         NimbyAdminArgs args = new NimbyAdminArgs();
         args.Set("target", target.biId);
-        args.Set("session", target.session.ToString());
-        if (NimbyAdminSend(NimbyAdminRules.CMD_TELEPORT_TO, args.Encode()) != 0)
+        // Phase 1 A4: the session number and the encoded args are locals before the calls.
+        string sessionText = target.session.ToString();
+        args.Set("session", sessionText);
+        string encoded = args.Encode();
+        int sent = NimbyAdminSend(NimbyAdminRules.CMD_TELEPORT_TO, encoded);
+        if (sent != 0)
         {
             NimbyAdminStatus("Teleport to " + target.name + " requested.");
         }
@@ -313,7 +339,8 @@ modded class MissionGameplay extends MissionBase
         }
         if (menuId != -1)
         {
-            NimbyAdminLog.Debug("hotkey ignored: another menu is open id=" + menuId.ToString());
+            string menuText = menuId.ToString();
+            NimbyAdminLog.Debug("hotkey ignored: another menu is open id=" + menuText);
             return;
         }
         NimbyAdminOpenMenu("hotkey");
