@@ -50,12 +50,21 @@ class NimbyAdminLog
         {
             return "player=<no identity>";
         }
-        return WhoFrom(identity.GetName(), identity.GetId(), identity.GetPlainId());
+        // Phase 1 A4: the three identity strings are locals, not calls inside WhoFrom's
+        // arguments (the 164200 argument-slot rule, 23b4e46).
+        string name = identity.GetName();
+        string biId = identity.GetId();
+        string steam64 = identity.GetPlainId();
+        return WhoFrom(name, biId, steam64);
     }
 
     static string WhoFrom(string name, string biId, string steam64)
     {
-        return "player=(" + Safe(biId) + ", " + Safe(steam64) + ") \"" + Escape(Safe(name)) + "\"";
+        string safeBiId = Safe(biId);
+        string safeSteam64 = Safe(steam64);
+        string safeName = Safe(name);
+        string escapedName = Escape(safeName);
+        return "player=(" + safeBiId + ", " + safeSteam64 + ") \"" + escapedName + "\"";
     }
 
     // Review finding 7 (October 31, 2026): at most SAFE_BYTES bytes (on a UTF-8 boundary), and
@@ -75,7 +84,8 @@ class NimbyAdminLog
         int b = 0;
         while (b < cut.Length())
         {
-            bytes.Insert(ByteAt(cut, b));
+            int value = ByteAt(cut, b);
+            bytes.Insert(value);
             b = b + 1;
         }
         string result = "";
