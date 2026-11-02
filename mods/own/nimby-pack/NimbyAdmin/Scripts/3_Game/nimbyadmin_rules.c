@@ -231,7 +231,10 @@ class NimbyAdminArgs
             {
                 text = text + ";";
             }
-            text = text + key + "=" + Escape(m_Values.Get(key));
+            // Phase 1 A4: the value is a local, not a call inside Escape's arguments.
+            string value = m_Values.Get(key);
+            string escaped = Escape(value);
+            text = text + key + "=" + escaped;
             i = i + 1;
         }
         return text;
@@ -392,7 +395,8 @@ class NimbyAdminArgs
                 return false;
             }
             string key = pair.Substring(0, eq);
-            string raw = pair.Substring(eq + 1, pair.Length() - eq - 1);
+            int pairLength = pair.Length();
+            string raw = pair.Substring(eq + 1, pairLength - eq - 1);
             if (!IsKey(key))
             {
                 why = "bad key";
