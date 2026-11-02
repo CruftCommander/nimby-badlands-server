@@ -113,11 +113,12 @@ class NimbyDevHarness
     }
 
     // A player connected (MissionServer.InvokeOnConnect). The online cases need the player
-    // in the world, so they wait.
-    static void OnPlayerConnected(PlayerBase player)
+    // in the world, so they wait. identity is InvokeOnConnect's own argument (Central
+    // Scrutinizer Phase 1, A1).
+    static void OnPlayerConnected(PlayerBase player, PlayerIdentity identity)
     {
         // Central Scrutinizer forged requests (nimbydevharness_admin.c, Plan 3 Phase 0, ruling 2).
-        NimbyDevHarnessAdmin.OnPlayerConnected(player);
+        NimbyDevHarnessAdmin.OnPlayerConnected(player, identity);
         if (!GetGame().IsServer() || !player || !ForgeHas("online"))
         {
             return;
@@ -416,6 +417,10 @@ class NimbyDevHarness
         ScriptReadWriteContext forged = NimbyDevHarnessAdmin.RequestContext(1, 7, "player.teleportTo", "target=x;session=2");
         Record("admin-forge-context-reads-back-as-the-router", NimbyDevHarnessAdmin.ReadsBackAsRouter(forged, 1, 7, "player.teleportTo", "target=x;session=2"), "one ctx.Read(Param4) of the forged context gives back protocol 1, id 7, the command and the args");
         Record("admin-id-headroom-refuses-int-max", !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 1) && !NimbyDevHarnessAdmin.HasIdHeadroom(int.MAX, 2), "a client hello with id 2147483647 leaves no headroom");
+        // Central Scrutinizer Phase 1 A1: the forge sender is the stored InvokeOnConnect object.
+        string mirrorDetail;
+        bool mirrorPass = NimbyDevHarnessAdmin.MirrorKeepsServerSession(mirrorDetail);
+        Record("admin-mirror-forges-with-the-connect-identity", mirrorPass, mirrorDetail);
         Delete(s_Wrench);
         Delete(s_Pliers);
         Delete(s_DummyA);
