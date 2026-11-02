@@ -55,7 +55,9 @@ modded class PlayerBase extends ManBase
         Param3<int, int, string> record = new Param3<int, int, string>(0, 0, "");
         if (!ctx.Read(record))
         {
-            NimbyAdminLog.Info("client: unreadable record rpc=" + rpc_type.ToString());
+            // Phase 1 A4: the number is a local, not a call inside Info's argument.
+            string rpcText = rpc_type.ToString();
+            NimbyAdminLog.Info("client: unreadable record rpc=" + rpcText);
             return;
         }
         if (rpc_type == NimbyAdminRules.RPC_RESULT)
@@ -81,6 +83,7 @@ modded class PlayerBase extends ManBase
     {
         Param4<int, int, string, string> request = new Param4<int, int, string, string>(NimbyAdminRules.PROTOCOL, requestId, command, args);
         GetGame().RPCSingleParam(this, NimbyAdminRules.RPC_REQUEST, request, true);
-        NimbyAdminLog.Debug("request sent id=" + requestId.ToString() + " command=" + command);
+        string idText = requestId.ToString();
+        NimbyAdminLog.Debug("request sent id=" + idText + " command=" + command);
     }
 }
