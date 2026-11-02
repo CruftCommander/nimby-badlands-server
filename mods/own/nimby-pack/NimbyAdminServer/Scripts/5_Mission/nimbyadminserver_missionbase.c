@@ -27,6 +27,10 @@ modded class MissionBase extends MissionBaseWorld
         {
             Print("[NIMBY][AdminServer][SelfTest] " + result);
         }
-        Print("[NIMBY][AdminServer] selftest complete; cases=" + results.Count().ToString() + " failures=" + failures.ToString());
+        // Phase 1 A4: the counts are locals, not calls inside Print's argument.
+        int cases = results.Count();
+        string casesText = cases.ToString();
+        string failuresText = failures.ToString();
+        Print("[NIMBY][AdminServer] selftest complete; cases=" + casesText + " failures=" + failuresText);
     }
 }
