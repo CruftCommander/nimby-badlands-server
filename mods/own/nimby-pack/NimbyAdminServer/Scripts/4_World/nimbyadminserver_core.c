@@ -102,10 +102,20 @@ class NimbyAdminServerCore
             Alert("bans.json and bans.json.lkg unusable: admission is refused to everyone outside permissions.json (enforced from Phase 1)");
         }
         s_Ready = true;
-        string line = "server ready; permissions source=" + s_Permissions.m_Source + " entries=" + s_Permissions.m_Active.Count().ToString();
-        line = line + " bootstrap=" + NimbyAdminLog.Bool(s_Permissions.m_BootstrapActive) + " editsRefused=" + NimbyAdminLog.Bool(s_Permissions.m_EditsRefused);
-        line = line + "; bans source=" + s_Bans.m_Source + " entries=" + s_Bans.m_Active.Count().ToString();
-        line = line + "; webhook=" + WebhookState() + " requestsPerSecond=" + s_Config.requestsPerSecond.ToString() + " permissionsReloadSeconds=" + s_Config.permissionsReloadSeconds.ToString();
+        // Phase 1 A4: one call per local, so no expression holds two results of one function.
+        int permissionEntries = s_Permissions.m_Active.Count();
+        string permissionEntriesText = permissionEntries.ToString();
+        string bootstrapText = NimbyAdminLog.Bool(s_Permissions.m_BootstrapActive);
+        string refusedText = NimbyAdminLog.Bool(s_Permissions.m_EditsRefused);
+        int banEntries = s_Bans.m_Active.Count();
+        string banEntriesText = banEntries.ToString();
+        string webhookText = WebhookState();
+        string rateText = s_Config.requestsPerSecond.ToString();
+        string reloadText = s_Config.permissionsReloadSeconds.ToString();
+        string line = "server ready; permissions source=" + s_Permissions.m_Source + " entries=" + permissionEntriesText;
+        line = line + " bootstrap=" + bootstrapText + " editsRefused=" + refusedText;
+        line = line + "; bans source=" + s_Bans.m_Source + " entries=" + banEntriesText;
+        line = line + "; webhook=" + webhookText + " requestsPerSecond=" + rateText + " permissionsReloadSeconds=" + reloadText;
         NimbyAdminLog.Info(line);
     }
 
@@ -275,7 +285,9 @@ class NimbyAdminServerCore
         if (s_Sessions.Contains(uid))
         {
             NimbyAdminServerSession session = s_Sessions.Get(uid);
-            NimbyAdminLog.Debug("session ended number=" + session.number.ToString() + " " + NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64));
+            string numberText = session.number.ToString();
+            string who = NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64);
+            NimbyAdminLog.Debug("session ended number=" + numberText + " " + who);
             s_Sessions.Remove(uid);
         }
         NimbyAdminHighWater.Clear(uid);
@@ -318,30 +330,46 @@ class NimbyAdminServerCore
             NimbyAdminLog.Gated(key, "request refused reason=null-sender");
             return;
         }
+        // Phase 1 A4: every value an argument list or a comparison needs is a local first (the
+        // 164200 argument-slot rule, 23b4e46), the two GetId results of the ownership check
+        // included.
         PlayerIdentity owner = target.GetIdentity();
-        if (!owner || owner.GetId() != sender.GetId())
+        string senderBiId = sender.GetId();
+        string ownerBiId = "";
+        if (owner)
         {
-            NimbyAdminLog.Gated(key, "request refused reason=sender-not-owner sender " + NimbyAdminLog.Who(sender) + " target " + NimbyAdminLog.Who(owner));
+            ownerBiId = owner.GetId();
+        }
+        if (!owner || ownerBiId != senderBiId)
+        {
+            string senderWho = NimbyAdminLog.Who(sender);
+            string ownerWho = NimbyAdminLog.Who(owner);
+            NimbyAdminLog.Gated(key, "request refused reason=sender-not-owner sender " + senderWho + " target " + ownerWho);
             return;
         }
         CheckIdentity("rpc", sender, target);
         float now = GetGame().GetTickTime();
         NimbyAdminServerBucket rate;
-        if (!s_Rates.Find(sender.GetId(), rate))
+        if (!s_Rates.Find(senderBiId, rate))
         {
             rate = new NimbyAdminServerBucket();
-            s_Rates.Set(sender.GetId(), rate);
+            s_Rates.Set(senderBiId, rate);
         }
         string limited = NimbyAdminServerRules.Admit(rate, s_Aggregate, now, s_Config.requestsPerSecond, NimbyAdminServerRules.RATE_BURST);
         if (limited != "")
         {
-            NimbyAdminLog.Gated("rate:" + key, "rate-limited " + NimbyAdminLog.Who(sender) + " aggregate=" + NimbyAdminLog.Bool(limited == NimbyAdminServerRules.LIMIT_AGGREGATE));
+            string limitedWho = NimbyAdminLog.Who(sender);
+            bool aggregate = limited == NimbyAdminServerRules.LIMIT_AGGREGATE;
+            string aggregateText = NimbyAdminLog.Bool(aggregate);
+            string rateKey = "rate:" + key;
+            NimbyAdminLog.Gated(rateKey, "rate-limited " + limitedWho + " aggregate=" + aggregateText);
             return;
         }
         Param4<int, int, string, string> request = new Param4<int, int, string, string>(0, 0, "", "");
         if (!ctx.Read(request))
         {
-            NimbyAdminLog.Gated(key, "request refused reason=unreadable " + NimbyAdminLog.Who(sender));
+            string unreadableWho = NimbyAdminLog.Who(sender);
+            NimbyAdminLog.Gated(key, "request refused reason=unreadable " + unreadableWho);
             return;
         }
         int requestId = request.param2;
@@ -368,7 +396,11 @@ class NimbyAdminServerCore
         string replay = session.seen.Check(requestId);
         if (replay == NimbyAdminServerSeen.DUPLICATE)
         {
-            NimbyAdminLog.Gated("dup:" + key, "duplicate id=" + requestId.ToString() + " command=" + NimbyAdminServerRules.CommandForLog(command) + " " + NimbyAdminLog.Who(sender));
+            string duplicateId = requestId.ToString();
+            string duplicateCommand = NimbyAdminServerRules.CommandForLog(command);
+            string duplicateWho = NimbyAdminLog.Who(sender);
+            string duplicateKey = "dup:" + key;
+            NimbyAdminLog.Gated(duplicateKey, "duplicate id=" + duplicateId + " command=" + duplicateCommand + " " + duplicateWho);
             return;
         }
         if (replay == NimbyAdminServerSeen.STALE)
@@ -377,7 +409,8 @@ class NimbyAdminServerCore
             return;
         }
         session.seen.Accept(requestId);
-        NimbyAdminHighWater.Publish(session.biId, session.seen.Highest());
+        int highest = session.seen.Highest();
+        NimbyAdminHighWater.Publish(session.biId, highest);
         if (!NimbyAdminServerRules.IsKnownCommand(command))
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "unknown command");
@@ -426,12 +459,25 @@ class NimbyAdminServerCore
     protected static void Reject(NimbyAdminServerActor actor, NimbyAdminServerSession session, int requestId, string command, int code, string reason)
     {
         string resultName = NimbyAdminRules.CodeName(code);
-        NimbyAdminLog.Gated("reject:" + actor.biId, "request " + resultName + " id=" + requestId.ToString() + " command=" + NimbyAdminServerRules.CommandForLog(command) + " reason=" + reason + " " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
+        string idText = requestId.ToString();
+        string commandLog = NimbyAdminServerRules.CommandForLog(command);
+        string who = NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64);
+        string gateKey = "reject:" + actor.biId;
+        NimbyAdminLog.Gated(gateKey, "request " + resultName + " id=" + idText + " command=" + commandLog + " reason=" + reason + " " + who);
         float now = GetGame().GetTickTime();
-        bool exempt = NimbyAdminServerRules.DenialRecordExempt(s_Permissions.RoleOf(actor.steam64));
-        if (exempt || NimbyAdminServerRules.DenialRecordAllowed(DenialBucketFor(actor.biId), s_DenialAggregate, now))
+        string actorRole = s_Permissions.RoleOf(actor.steam64);
+        bool exempt = NimbyAdminServerRules.DenialRecordExempt(actorRole);
+        // The bucket is taken only when the actor is not exempt, as before A4.
+        bool keep = exempt;
+        if (!keep)
         {
-            NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES), "result");
+            NimbyAdminServerBucket denialBucket = DenialBucketFor(actor.biId);
+            keep = NimbyAdminServerRules.DenialRecordAllowed(denialBucket, s_DenialAggregate, now);
+        }
+        if (keep)
+        {
+            string commandCut = NimbyAdminRules.CutBytes(command, NimbyAdminRules.MAX_COMMAND_BYTES);
+            NimbyAdminServerAuditRecord record = ActorRecord(actor, requestId, commandCut, "result");
             record.result = resultName;
             record.reason = reason;
             record.denied = true;
@@ -474,7 +520,8 @@ class NimbyAdminServerCore
         bool appended = NimbyAdminServerAudit.Append(record);
         // Re-review finding 12: cleared only after a successful append.
         string outcome = s_Suppressed.Finish(appended, now);
-        NimbyAdminLog.Info(NimbyAdminServerSuppressed.SummaryLine(total, senders, outcome));
+        string summary = NimbyAdminServerSuppressed.SummaryLine(total, senders, outcome);
+        NimbyAdminLog.Info(summary);
     }
 
     protected static NimbyAdminServerAuditRecord ActorRecord(NimbyAdminServerActor actor, int requestId, string command, string phase)
@@ -513,7 +560,9 @@ class NimbyAdminServerCore
         Alert(problem);
         if (changed)
         {
-            NimbyAdminLog.Info("permissions.json reloaded source=" + s_Permissions.m_Source + " entries=" + s_Permissions.m_Active.Count().ToString());
+            int entries = s_Permissions.m_Active.Count();
+            string entriesText = entries.ToString();
+            NimbyAdminLog.Info("permissions.json reloaded source=" + s_Permissions.m_Source + " entries=" + entriesText);
             PushChangedRoles();
         }
     }
@@ -536,7 +585,8 @@ class NimbyAdminServerCore
 
     protected static void PushRole(NimbyAdminServerSession session, string role, string reason)
     {
-        PlayerBase player = PlayerBase.Cast(session.identity.GetPlayer());
+        Man man = session.identity.GetPlayer();
+        PlayerBase player = PlayerBase.Cast(man);
         if (!player)
         {
             return;
@@ -546,7 +596,9 @@ class NimbyAdminServerCore
         string line = "";
         if (NimbyAdminServerRules.ShouldLogRoleSync(session.lastRole, role))
         {
-            line = NimbyAdminServerRules.RoleSyncLine(session.lastRole, role, NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64), RoleSource(session.steam64), session.number, reason);
+            string who = NimbyAdminLog.WhoFrom(session.name, session.biId, session.steam64);
+            string source = RoleSource(session.steam64);
+            line = NimbyAdminServerRules.RoleSyncLine(session.lastRole, role, who, source, session.number, reason);
         }
         session.pushSequence = session.pushSequence + 1;
         session.lastRole = role;
@@ -591,7 +643,8 @@ class NimbyAdminServerCore
             {
                 continue;
             }
-            PlayerBase player = PlayerBase.Cast(session.identity.GetPlayer());
+            Man man = session.identity.GetPlayer();
+            PlayerBase player = PlayerBase.Cast(man);
             NimbyAdminPlayerRow row = new NimbyAdminPlayerRow();
             row.session = session.number;
             row.biId = session.biId;
@@ -601,7 +654,8 @@ class NimbyAdminServerCore
             row.distance = -1;
             if (player)
             {
-                row.distance = vector.Distance(here, player.GetPosition());
+                vector there = player.GetPosition();
+                row.distance = vector.Distance(here, there);
             }
             list.players.Insert(row);
         }
@@ -619,7 +673,12 @@ class NimbyAdminServerCore
         string doneJson;
         js.WriteToString(done, false, doneJson);
         int chunks = NimbySharedChunkSender.Send(actor.player, actor.identity, NimbyAdminRules.RPC_CHUNK, NimbyAdminRules.RPC_DONE, requestId, payload, doneJson);
-        NimbyAdminLog.Debug("players list id=" + requestId.ToString() + " players=" + list.players.Count().ToString() + " bytes=" + payload.Length().ToString() + " chunks=" + chunks.ToString());
+        string idText = requestId.ToString();
+        int playerCount = list.players.Count();
+        string playersText = playerCount.ToString();
+        string bytesText = done.bytes.ToString();
+        string chunksText = chunks.ToString();
+        NimbyAdminLog.Debug("players list id=" + idText + " players=" + playersText + " bytes=" + bytesText + " chunks=" + chunksText);
     }
 
     protected static void HandleTeleportTo(NimbyAdminServerActor actor, NimbyAdminServerSession session, int requestId, NimbyAdminArgs args)
@@ -631,18 +690,24 @@ class NimbyAdminServerCore
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, argsWhy);
             return;
         }
+        // Phase 1 A4: the target arguments, the target body and its position are locals first.
+        string targetBiId = args.Get("target");
+        string sessionArg = args.Get("session");
         NimbyAdminServerSession targetSession;
-        if (!s_Sessions.Find(args.Get("target"), targetSession) || !targetSession.identity)
+        bool targetFound = s_Sessions.Find(targetBiId, targetSession);
+        if (!targetFound || !targetSession.identity)
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "target session ended");
             return;
         }
-        if (!NimbyAdminServerRules.SessionMatches(targetSession.number, args.Get("session")))
+        bool sameSession = NimbyAdminServerRules.SessionMatches(targetSession.number, sessionArg);
+        if (!sameSession)
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "target session ended");
             return;
         }
-        PlayerBase targetPlayer = PlayerBase.Cast(targetSession.identity.GetPlayer());
+        Man targetMan = targetSession.identity.GetPlayer();
+        PlayerBase targetPlayer = PlayerBase.Cast(targetMan);
         if (!targetPlayer || targetPlayer == actor.player)
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "target is the actor");
@@ -658,26 +723,31 @@ class NimbyAdminServerCore
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "target dead");
             return;
         }
-        if (actor.player.IsInVehicle() || targetPlayer.IsInVehicle())
+        bool actorInVehicle = actor.player.IsInVehicle();
+        bool targetInVehicle = targetPlayer.IsInVehicle();
+        if (actorInVehicle || targetInVehicle)
         {
             Reject(actor, session, requestId, command, NimbyAdminRules.CODE_INVALID, "in vehicle");
             return;
         }
+        vector targetAt = targetPlayer.GetPosition();
         NimbyAdminServerJsonObject target = new NimbyAdminServerJsonObject();
         target.Add("steam64", targetSession.steam64);
         target.Add("biId", targetSession.biId);
         target.Add("name", targetSession.name);
         target.AddInt("session", targetSession.number);
-        target.AddVector("position", targetPlayer.GetPosition());
+        target.AddVector("position", targetAt);
         NimbyAdminServerJsonObject argsJson = new NimbyAdminServerJsonObject();
-        argsJson.Add("target", args.Get("target"));
-        argsJson.Add("session", args.Get("session"));
+        argsJson.Add("target", targetBiId);
+        argsJson.Add("session", sessionArg);
         NimbyAdminServerAuditRecord intent = ActorRecord(actor, requestId, command, "intent");
         intent.target = target.ToJson();
         intent.args = argsJson.ToJson();
+        string idText = requestId.ToString();
+        string actorWho = NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64);
         if (!NimbyAdminServerAudit.Append(intent))
         {
-            NimbyAdminLog.Info("request failed id=" + requestId.ToString() + " command=" + command + " reason=audit unavailable " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64));
+            NimbyAdminLog.Info("request failed id=" + idText + " command=" + command + " reason=audit unavailable " + actorWho);
             NimbyAdminServerDiscord.Enqueue("[Central Scrutinizer] audit unavailable: a " + command + " by " + actor.name + " (" + actor.steam64 + ") was blocked");
             SendResult(actor, requestId, NimbyAdminRules.CODE_FAILED, "audit unavailable");
             return;
@@ -698,10 +768,14 @@ class NimbyAdminServerCore
         result.effects = effects.ToJson();
         if (!NimbyAdminServerAudit.Append(result))
         {
-            NimbyAdminLog.Info("audit result not written id=" + requestId.ToString() + " (the intent record stands)");
+            NimbyAdminLog.Info("audit result not written id=" + idText + " (the intent record stands)");
         }
-        NimbyAdminLog.Info("teleport done id=" + requestId.ToString() + " actor " + NimbyAdminLog.WhoFrom(actor.name, actor.biId, actor.steam64) + " target " + NimbyAdminLog.WhoFrom(targetSession.name, targetSession.biId, targetSession.steam64) + " offset=" + offsetName + " distance=" + distance.ToString());
-        NimbyAdminServerDiscord.Enqueue("[Central Scrutinizer] " + actor.name + " (" + actor.steam64 + ") teleported to " + targetSession.name + " (" + targetSession.steam64 + "), " + Math.Round(distance).ToString() + " m, id " + requestId.ToString());
+        string targetWho = NimbyAdminLog.WhoFrom(targetSession.name, targetSession.biId, targetSession.steam64);
+        string distanceText = distance.ToString();
+        float rounded = Math.Round(distance);
+        string roundedText = rounded.ToString();
+        NimbyAdminLog.Info("teleport done id=" + idText + " actor " + actorWho + " target " + targetWho + " offset=" + offsetName + " distance=" + distanceText);
+        NimbyAdminServerDiscord.Enqueue("[Central Scrutinizer] " + actor.name + " (" + actor.steam64 + ") teleported to " + targetSession.name + " (" + targetSession.steam64 + "), " + roundedText + " m, id " + idText);
         SendResult(actor, requestId, NimbyAdminRules.CODE_OK, "teleported to " + targetSession.name);
     }
 
@@ -736,12 +810,15 @@ class NimbyAdminServerCore
         array<Object> exclude = new array<Object>;
         exclude.Insert(actor);
         exclude.Insert(target);
+        // Phase 1 A4: the orientation is a local, not a call inside IsBoxColliding's arguments.
+        vector orientation = target.GetOrientation();
         int i = 0;
         while (i < offsets.Count())
         {
             vector candidate = spot + offsets.Get(i);
             vector center = candidate + "0 0.95 0";
-            if (!GetGame().IsBoxColliding(center, target.GetOrientation(), "0.6 1.8 0.6", exclude))
+            bool colliding = GetGame().IsBoxColliding(center, orientation, "0.6 1.8 0.6", exclude);
+            if (!colliding)
             {
                 offsetName = names.Get(i);
                 return candidate;
