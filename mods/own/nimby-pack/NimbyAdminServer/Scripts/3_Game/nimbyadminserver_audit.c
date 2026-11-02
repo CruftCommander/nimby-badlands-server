@@ -81,24 +81,36 @@ class NimbyAdminServerJsonObject
 {
     protected string m_Body = "";
 
+    // Phase 1 A4: every value is a local before Raw, and each vector component is converted on
+    // its own line (the 164200 argument-slot rule, 23b4e46).
     void Add(string key, string value)
     {
-        Raw(key, NimbyAdminServerRules.JsonString(value));
+        string json = NimbyAdminServerRules.JsonString(value);
+        Raw(key, json);
     }
 
     void AddInt(string key, int value)
     {
-        Raw(key, value.ToString());
+        string text = value.ToString();
+        Raw(key, text);
     }
 
     void AddFloat(string key, float value)
     {
-        Raw(key, value.ToString());
+        string text = value.ToString();
+        Raw(key, text);
     }
 
     void AddVector(string key, vector value)
     {
-        Raw(key, "[" + value[0].ToString() + "," + value[1].ToString() + "," + value[2].ToString() + "]");
+        float x = value[0];
+        float y = value[1];
+        float z = value[2];
+        string xText = x.ToString();
+        string yText = y.ToString();
+        string zText = z.ToString();
+        string text = "[" + xText + "," + yText + "," + zText + "]";
+        Raw(key, text);
     }
 
     void Raw(string key, string json)
@@ -178,7 +190,10 @@ class NimbyAdminServerAudit
         }
         string stream = StreamFor(record);
         string path = PathFor(record.ts, stream);
-        string why = WriteLine(path, record.ToJson(), record.phase == "intent");
+        // Phase 1 A4: the line and the readback flag are locals, not expressions inside the call.
+        string json = record.ToJson();
+        bool readBack = record.phase == "intent";
+        string why = WriteLine(path, json, readBack);
         bool wasFailing = s_FailingCommand;
         if (stream == STREAM_DENIED)
         {
