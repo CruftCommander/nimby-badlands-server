@@ -43,7 +43,9 @@ class NimbyAdminServerDiscordCallback extends RestCallback
 
     override void OnError(int errorCode)
     {
-        NimbyAdminServerDiscord.OnFinished(m_MessageId, m_Sequence, NimbyAdminServerDiscord.ErrorClass(errorCode), errorCode);
+        // Phase 1 A4: the class is a local, not a call inside OnFinished's arguments.
+        string errorClass = NimbyAdminServerDiscord.ErrorClass(errorCode);
+        NimbyAdminServerDiscord.OnFinished(m_MessageId, m_Sequence, errorClass, errorCode);
     }
 
     override void OnTimeout()
@@ -237,12 +239,16 @@ class NimbyAdminServerDiscord
         {
             return;
         }
-        if (!s_Queue.Add(NimbyAdminServerRules.DiscordPayload(text)))
+        // Phase 1 A4: the payload and the log number are locals, not calls inside an argument list.
+        string payload = NimbyAdminServerRules.DiscordPayload(text);
+        bool queued = s_Queue.Add(payload);
+        if (!queued)
         {
             if (!s_Overflowing)
             {
                 s_Overflowing = true;
-                NimbyAdminLog.Info("discord queue full max=" + s_Queue.m_Max.ToString() + "; newest messages dropped until it drains");
+                string maxText = s_Queue.m_Max.ToString();
+                NimbyAdminLog.Info("discord queue full max=" + maxText + "; newest messages dropped until it drains");
             }
             return;
         }
@@ -279,7 +285,8 @@ class NimbyAdminServerDiscord
             s_Callbacks.RemoveOrdered(0);
         }
         context.SetHeader("application/json");
-        context.POST(callback, NimbyAdminServerRules.WebhookRequestPath(s_Path), payload);
+        string requestPath = NimbyAdminServerRules.WebhookRequestPath(s_Path);
+        context.POST(callback, requestPath, payload);
     }
 
     // Runs inside the engine callback; the callback object stays referenced in s_Callbacks.
@@ -293,16 +300,20 @@ class NimbyAdminServerDiscord
         string outcome = s_Queue.OnCallback(messageId, sequence, kind, now);
         if (outcome == NimbyAdminServerDiscordQueue.IGNORED)
         {
-            NimbyAdminLog.Debug("discord late callback ignored seq=" + sequence.ToString() + " kind=" + kind);
+            string lateText = sequence.ToString();
+            NimbyAdminLog.Debug("discord late callback ignored seq=" + lateText + " kind=" + kind);
             return;
         }
         if (outcome == NimbyAdminServerDiscordQueue.DELIVERED)
         {
             s_LoggedClasses.Clear();
-            NimbyAdminLog.Debug("discord delivered seq=" + sequence.ToString() + " bytes=" + s_Queue.m_SettledBytes.ToString());
+            string deliveredText = sequence.ToString();
+            string bytesText = s_Queue.m_SettledBytes.ToString();
+            NimbyAdminLog.Debug("discord delivered seq=" + deliveredText + " bytes=" + bytesText);
             return;
         }
-        string line = NimbyAdminServerRules.DiscordFailedLine(kind, errorCode, outcome, s_Queue.Count());
+        int queuedCount = s_Queue.Count();
+        string line = NimbyAdminServerRules.DiscordFailedLine(kind, errorCode, outcome, queuedCount);
         if (s_LoggedClasses.Find(kind) < 0)
         {
             s_LoggedClasses.Insert(kind);
