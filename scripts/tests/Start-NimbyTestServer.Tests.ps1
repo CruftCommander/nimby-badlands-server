@@ -233,3 +233,23 @@ Describe 'Resolve-JoinPassword and Get-StandingJoinPassword' {
         Get-StandingJoinPassword -RepoRoot $root | Should -BeNullOrEmpty
     }
 }
+
+Describe 'Start-NimbyTestServer parameter contract' {
+    BeforeAll {
+        $command = Get-Command -Name (Join-Path $repo 'scripts\Start-NimbyTestServer.ps1')
+    }
+
+    It 'declares -InstanceId as an int limited to 997, 998 and 999 (shared rules, section 8; 997 is the Fang Phase 0 world, Plan 12 P2)' {
+        $parameter = $command.Parameters['InstanceId']
+        $parameter.ParameterType | Should -Be ([int])
+        $set = @($parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] })
+        $set.Count | Should -Be 1
+        @($set[0].ValidValues | Sort-Object) | Should -Be @('997', '998', '999')
+    }
+
+    It 'agrees with Test-TestInstanceId on every value in the set' {
+        $parameter = $command.Parameters['InstanceId']
+        $set = @($parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] })
+        foreach ($value in $set[0].ValidValues) { Test-TestInstanceId -InstanceId ([int]$value) | Should -BeTrue }
+    }
+}
