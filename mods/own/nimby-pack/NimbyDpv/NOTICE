@@ -1,0 +1,19 @@
+NimbyDpv (DPV, working name) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+
+Phase 0 (November 5, 2026): a config-only vehicle class, NimbyDpv_TestCar, that inherits the
+vanilla DayZ 1.30 OffroadHatchback (Bohemia Interactive) and reuses its model, parts, sounds,
+and physics unchanged, so the pack can prove on the local test server that a NIMBY vehicle
+class spawns, is entered, drives, and persists on 1.30 before a model is bought. No vanilla
+asset is copied into the pack; the class points at the vanilla model path through inheritance.
+
+Planned model (not yet acquired, not in this addon): "Desert Patrol Vehicle Low-poly" by carbuni,
+CGTrader model 1875658, Royalty Free License. When it lands, this NOTICE records the vendor,
+license, purchase date, and the shared rules 9.3 exception for the model source
+(docs/design/dpv-feasibility.md, D-2).
+
+Changes, newest first:
+
+- November 5, 2026, Phase 0: stub addon with the test class, the self-test (four
+  config cases) so the Build-NimbyPack boot gate has lines to count, and the
+  flag-gated test spawn ($profile:NimbyDpv\spawn-testcar) that answers NIMBY-T-003
+  for this addon's own tests.

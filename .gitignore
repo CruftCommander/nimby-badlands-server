@@ -34,3 +34,10 @@ build/
 
 # Reusable local test-server profiles (Start-NimbyTestServer.ps1 -ProfileName) - runtime state, never committed
 profiles/
+
+# NimbyDpv built model and textures - derived from a licensed model source (shared rules 9.3
+# exception, docs/design/dpv-feasibility.md D-2); copied in from D:\DayZProjects\NimbyDpv\data before a build, never committed
+mods/own/nimby-pack/NimbyDpv/data/
+
+# Python bytecode from the DPV model builder (scripts/dpv/)
+__pycache__/

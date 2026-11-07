@@ -32,6 +32,10 @@
 .PARAMETER DayZPath
     DayZ client install folder. Found through Steam when omitted.
 
+.PARAMETER Windowed
+    Start the game in a window (DayZ -window) instead of full screen, so the game and the
+    shells stay visible together during a test.
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Start-NimbyTestClient.ps1 -BuildPath D:\GitHub\nimby-badlands-server\build\@NIMBY-20261017-235142 -Connect 127.0.0.1 -Password <join password>
 #>
@@ -42,7 +46,8 @@ param(
     [ValidateRange(1, 65535)][int]$Port = 2302,
     [string]$Password,
     [string]$DayZPath,
-    [string]$RepoRoot
+    [string]$RepoRoot,
+    [switch]$Windowed
 )
 
 Set-StrictMode -Version Latest
@@ -70,6 +75,7 @@ $exe = Join-Path $DayZPath 'DayZ_BE.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "DayZ_BE.exe not found under $DayZPath" }
 
 $arguments = @("-mod=$BuildPath")
+if ($Windowed) { $arguments += "-window" }
 if ($Connect) {
     $arguments += "-connect=$Connect"
     $arguments += "-port=$Port"
