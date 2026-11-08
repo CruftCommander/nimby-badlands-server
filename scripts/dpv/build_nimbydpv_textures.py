@@ -96,9 +96,9 @@ def smdi(spec, gloss):
     return Image.fromarray((rgb * 255).astype(np.uint8), "RGB")
 
 
-def rvmat(path, base, spec, power, alpha=False):
+def rvmat(path, base, spec, power, alpha=False, emissive=(0, 0, 0, 1)):
     stages = [
-        'ambient[]={1,1,1,1};', 'diffuse[]={1,1,1,1};', 'forcedDiffuse[]={0,0,0,0};', 'emmisive[]={0,0,0,1};',
+        'ambient[]={1,1,1,1};', 'diffuse[]={1,1,1,1};', 'forcedDiffuse[]={0,0,0,0};', 'emmisive[]={%s,%s,%s,%s};' % emissive,
         'specular[]={%s,%s,%s,1};' % (spec, spec, spec), 'specularPower=%d;' % power,
         'PixelShaderID="Super";', 'VertexShaderID="Super";',
     ]
@@ -144,6 +144,12 @@ def main(argv):
     gloss = np.clip(0.35 + 0.5 * metal - 0.6 * dull, 0.05, 1.0)
     smdi(spec, gloss).save(out("dpv_body_smdi.tga"))
     rvmat(out("dpv_body.rvmat"), "dpv_body", 0.3, 400)
+    # Build 63 (November 8, 2026, 00:49): the headlight "on" material, swapped onto the light_left /
+    # light_right hidden selections by CarScript (frontReflectorMatOn). An rvmat's emissive is
+    # multiplied by the face's diffuse texel, and the DPV's lens texels are near-black glass, so the
+    # ADA's niva_lights.rvmat (1, 1, 0.75 at intensity 8, builds 18 to 62) lit the road and left the
+    # lenses dark. Same body stages, emissive scaled up for the dark lenses; warm white.
+    rvmat(out("dpv_lights_on.rvmat"), "dpv_body", 0.3, 400, emissive=(40, 38, 28, 1))
 
     # ---- wheel
     psd = PSDImage.open(os.path.join(args.source, "Desert_Patrol_Vehicle_wheels.psd"))

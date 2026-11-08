@@ -389,7 +389,11 @@ class CfgVehicles
             "NimbyDpv\data\dpv_body.rvmat",
             "NimbyDpv\data\dpv_body.rvmat"
         };
-        frontReflectorMatOn = "dz\vehicles\wheeled\offroadhatchback\data\niva_lights.rvmat";
+        // Build 63 (November 8, 2026, 00:49 night test): the lenses stayed dark with the ADA's
+        // niva_lights.rvmat (emissive 1, 1, 0.75 at 8) because an rvmat's emissive is multiplied
+        // by the face's own texel and the DPV lenses are near-black glass; dpv_lights_on.rvmat is
+        // the body material with the emissive scaled for them (scripts/dpv/build_nimbydpv_textures.py).
+        frontReflectorMatOn = "NimbyDpv\data\dpv_lights_on.rvmat";
         frontReflectorMatOff = "NimbyDpv\data\dpv_body.rvmat";
         fuelCapacity = 60;
         fuelConsumption = 9;

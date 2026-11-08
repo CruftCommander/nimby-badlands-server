@@ -420,7 +420,16 @@ def classify(verts, parts):
             else:
                 roles[i] = "seat_codriver"; facts["seat_codriver"] = {"center": c, "lo": lo, "hi": hi}
         elif p["group"] == "BODY" and c[1] > 1.85 and size[0] > 0.9 and size[2] < 0.3 and size[1] < 0.05:
+            # the light bar's guard hoop (110 faces, x -0.5 to 0.5, 3 cm deep): the reflector proxies
+            # and the light_left/right memory points are placed from its centre
             roles[i] = "lights"; facts["lights"] = {"center": c, "lo": lo, "hi": hi}
+        elif p["group"] == "BODY" and nf == 58 and c[1] > 1.85 and 0.15 < size[0] < 0.22 and size[2] < 0.15:
+            # build 64 (November 8, 2026): the four lamp housings behind the hoop (x 0.02 to 0.21 and
+            # 0.26 to 0.44 a side, y 1.90 to 1.97). Their forward faces are the lens glass that the
+            # light_left / light_right hidden selections must cover; builds 18 to 63 put those
+            # selections on the hoop, so the on-material lit the tubes and left the lenses dark
+            # (night test, 01:01).
+            roles[i] = "lamp"
         else:
             roles[i] = "body"
     for key in ("drivewheel", "seat_driver", "seat_codriver", "seat_cargo1", "lights"):
@@ -470,7 +479,8 @@ def build_visual(verts, uvs, faces, parts, roles, lod, include, split_lights=Tru
             a, b, c = (verts[corners[0][0]], verts[corners[1][0]], verts[corners[2][0]])
             n = v_norm(v_cross(v_sub(b, a), v_sub(c, a)))
             fsel = list(sel)
-            if role == "lights" and split_lights:
+            if role == "lamp" and split_lights and n[1] > 0.9:
+                # lens glass: the lamp housing's forward-facing faces only
                 cx = sum(verts[vi][0] for vi, _ in corners) / len(corners)
                 fsel.append("light_left" if cx < 0 else "light_right")
             if len(idx) > 4:        # n-gon: fan triangulate
@@ -787,7 +797,7 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     lods = []
     # ---- visual LOD 0
     lod0 = Lod(RES_VISUAL[0], "visual-1")
-    is_body = lambda r: r == "body" or r in ("drivewheel", "seat_driver", "seat_codriver", "seat_cargo1", "lights") or (isinstance(r, tuple) and r[0] == "disc")
+    is_body = lambda r: r == "body" or r in ("drivewheel", "seat_driver", "seat_codriver", "seat_cargo1", "lights", "lamp") or (isinstance(r, tuple) and r[0] == "disc")
     build_visual(verts, uvs, faces, parts, roles, lod0, is_body)
     add_antenna(lod0)
     add_wheel_post(lod0, spare)
