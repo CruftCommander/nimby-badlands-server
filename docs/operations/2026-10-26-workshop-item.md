@@ -33,6 +33,8 @@ Credits. Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Giv
 
 ### Every Workshop update, added October 27, 2026 (NIMBY-T-061)
 
+0. (Added November 8, 2026, NIMBY-T-106.) The source folder must come from a clone that holds the git-ignored `mods\own\nimby-pack\NimbyDpv\data\` (ODOL `dpv.p3d`, `dpvrail.p3d`, `dpvwheel.p3d`, the `.paa` and `.rvmat` set). The gate passes without it: build `@NIMBY-20261108-123417` from a fresh `main` checkout packed a 137 KB `NimbyDpv.pbo` with 11 entries and no model and still reported PASS. Check the build log's `ADDON OK NimbyDpv` line reads `entries=28` (and the PBO is about 9.3 MB) before publishing.
+
 The launcher downloads the pack only if the server reports the item id, which it reads from `/@NIMBY/meta.cpp`. Release 1 went out without it and no new player could join for about 19 hours (`docs/operations/2026-10-27-incident-launcher-workshop-id.md`).
 
 6. Before publishing: the source folder is a `Build-NimbyPack.ps1` build from `main` at or after d1a40b1, and its `meta.cpp` reads `publishedid = 3828109139;`.
