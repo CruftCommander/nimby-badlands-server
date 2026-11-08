@@ -1,6 +1,6 @@
-# Workshop description (draft)
+# Workshop description
 
-The text for the public Steam Workshop item `@NIMBY`. Drafted October 25, 2026 for the Tack troubleshooting section Jeff asked for; the rest is filled at release 1 (Legs, Ears, Scrawl, Greet; Tack follows). Keep it plain English: players read this, not operators. No em dashes.
+The text for the public Steam Workshop item `@NIMBY`. Drafted October 25, 2026 for the Tack troubleshooting section Jeff asked for; filled at release 1 (Legs, Ears, Scrawl, Greet, Tack, Hands) and extended for release 2 (DPV, credits) on November 8, 2026. Keep it plain English: players read this, not operators. No em dashes.
 
 ## NIMBY pack
 
@@ -10,6 +10,11 @@ One mod for the NIMBY | HARDCORE | BADLANDS | 1pp server. Subscribe once; the se
 - Ears: earplugs on a key.
 - Scrawl: write on paper with a pen.
 - Tack: pin a written note to a wall with a hammer and nail, duct tape, epoxy putty, or a knife through the sheet into wood. Others read it in place; pulling it down damages the sheet.
+- Hands: hold an item and press O to offer it to the player in front of you; empty hands and O asks for theirs.
+- Greet: the server welcome window (Insert reopens it) with the how-to for every mod and a "What's changed" tab.
+- DPV (release 2): a desert patrol buggy found at military sites. It spawns on its wheels; bring a battery, spark plug, bulbs and fuel. Side rails carry jerry cans, ammo cans, packs and tents, the roof a wooden crate, car tent or a teddy bear, the cabin a first aid kit. Look at an item on the car to take it.
+
+Credits: the DPV model is derived from "Desert Patrol Vehicle Low-poly" by carbuni (CGTrader), licensed for this use; Legs is a fork of SchanaModAutorun (Apache-2.0); Hands is a fork of Give&Take by affenb3rt, repacked with permission. Full notices ship in each addon's NOTICE file.
 
 ## Tack: why did my note not pin?
 
