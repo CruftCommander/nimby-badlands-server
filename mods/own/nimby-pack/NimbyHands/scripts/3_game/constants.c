@@ -10,6 +10,19 @@ class NimbyHandsConstants
     // that reaches this point is logged CONFIRMED only when the item is with the receiver.
     static const int TRANSFER_TIMEOUT_MS = 5000;
 
+    // NIMBY-T-063: step 1 waits until both players have left their actions before the hand
+    // event is dispatched (the holder's hand state machine drops it inside an action command).
+    // Polled every WAIT_TICK_MS; refused when the wait passes WAIT_CAP_MS.
+    static const int WAIT_TICK_MS = 50;
+    static const int WAIT_CAP_MS = 3000;
+
+    // NIMBY-T-063, October 29, 2026: minimum milliseconds between the step 1 landing and step 2,
+    // measured by the step 2 poll (NimbyHandsServer.Step2Tick, every WAIT_TICK_MS). One tick,
+    // as the October 20 diagnostic ran it. 1000 ms was tried once (build 174154) and changed
+    // nothing: the crashes were in how step 2 was scheduled, not when. Budget: the step 1 wait
+    // cap, the hand event (~400 ms) and this delay stay under TRANSFER_TIMEOUT_MS.
+    static const int STEP2_DELAY_MS = 50;
+
     // Meters added to an action's own reach when the server revalidates proximity at dispatch,
     // so a receiver who drifts during the animation is not refused for a few centimeters.
     static const float PROXIMITY_TOLERANCE = 0.5;
@@ -21,4 +34,17 @@ class NimbyHandsConstants
     // Server-side minimum interval between two pocket toggles of one player (review item 3).
     // A press inside it is refused silently: a refused repeat is not a consent change.
     static const int POCKET_TOGGLE_MIN_MS = 500;
+}
+
+// RPC ids for the client-driven step 1 (NIMBY-T-063, October 31, 2026). The 6552 block: Autorun
+// holds 6550, Greet 6551 (NimbyAutorunRpc, NimbyGreetRules). Both travel on the giver's own
+// PlayerBase (GetGame().RPCSingleParam with the giver's identity; PlayerBase.OnRPC).
+class NimbyHandsRpc
+{
+    // Server to the giver's client: stage the item in hands into the giver's own cargo.
+    // Param3<int, int, int>: transfer id, item network id low bits, item network id high bits.
+    static const int STAGE = 6552101;
+    // Giver's client to the server: the stage request could not be carried out.
+    // Param2<int, string>: transfer id, reason (NimbyHandsRules.ClientStageRefusal).
+    static const int STAGE_REFUSED = 6552102;
 }
