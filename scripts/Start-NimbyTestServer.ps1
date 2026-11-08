@@ -96,6 +96,11 @@
     (shared rules 9.2). No build is selected, no key is installed, and -BuildPath, -ServerModPath,
     and -DevPath are refused.
 
+.PARAMETER ThirdPerson
+    Write disable3rdPerson = 0 into the throwaway test config so the client may use the third-person
+    camera, on foot and in vehicles (DayZ has no vehicle-only setting). Default off: the test server
+    boots 1PP like the live server. Test-only; server/serverDZ.cfg is not touched.
+
 .PARAMETER Force
     Run a -BuildPath build that did not record SUMMARY PASS, or whose PBOs no longer match the
     sha256 values in its build log. The manifest records BUILD FORCED and each HASH MISMATCH.
@@ -123,6 +128,7 @@ param(
     [ValidateRange(5, 600)][int]$ShutdownTimeoutSeconds = 60,
     [ValidateSet(998, 999)][int]$InstanceId,
     [switch]$Vanilla,
+    [switch]$ThirdPerson,
     [switch]$Force
 )
 
@@ -310,7 +316,8 @@ function Get-TestServerConfigLine {
         [Parameter(Mandatory)][string]$Password,
         [Parameter(Mandatory)][int]$MaxPlayers,
         [Parameter(Mandatory)][int]$InstanceId,
-        [Parameter(Mandatory)][string]$Mission
+        [Parameter(Mandatory)][string]$Mission,
+        [switch]$ThirdPerson
     )
 
     if (-not (Test-TestInstanceId -InstanceId $InstanceId)) { throw "Refusing to write a test config for instanceId $InstanceId; only 998 and 999 are test instances." }
@@ -322,7 +329,7 @@ function Get-TestServerConfigLine {
         "maxPlayers = $MaxPlayers;",
         'verifySignatures = 2;',
         'forceSameBuild = 1;',
-        'disable3rdPerson = 1;',
+        ('disable3rdPerson = {0};' -f ([int](-not $ThirdPerson))),
         'BattlEye = 1;',
         "instanceId = $InstanceId;",
         'storageAutoFix = 0;',
@@ -614,7 +621,8 @@ try {
     $password = $join.Password
     Write-Manifest -LogPath $manifest -Line ("JOIN PASSWORD source={0}" -f $join.Source)
     $config = Join-Path $runDir 'serverDZ.test.cfg'
-    Set-Content -LiteralPath $config -Value (Get-TestServerConfigLine -Hostname $test.hostname -Password $password -MaxPlayers ([int]$test.maxPlayers) -InstanceId ([int]$test.instanceId) -Mission $test.mission) -Encoding ascii
+    Set-Content -LiteralPath $config -Value (Get-TestServerConfigLine -Hostname $test.hostname -Password $password -MaxPlayers ([int]$test.maxPlayers) -InstanceId ([int]$test.instanceId) -Mission $test.mission -ThirdPerson:$ThirdPerson) -Encoding ascii
+    Write-Manifest -LogPath $manifest -Line ("CONFIG disable3rdPerson={0}" -f ([int](-not $ThirdPerson)))
 
     $rconPassword = Get-NimbyRconPassword
     $rconPort = [int]$test.port + 3
