@@ -5,9 +5,8 @@
   APPLIED November 8, 2026, 13:17 Central (release 2 restart; Deploy-MissionPatches.ps1 -Upload, run deploy-20261108-131721, readback hash-identical; server started 13:22); was DRAFT - not applied to the live server. Each <type> below REPLACES the row of the same name in
   mpmissions/dayzOffline.nasdara/db/types.xml. Only nominal, min, restock and the count_in_* flags
   change; every other field is the live row as mirrored in server/live/db/types.xml (October 26, 2026,
-  21:33). Everything not listed here is unchanged. Re-check each Before value against the live file
-  pulled on the day of the edit before applying (the October 28 upload script refused a row that
-  did not match; do the same).
+  21:33). Everything not listed here was unchanged. Every Before value was re-checked against the live file
+  pulled on November 8, 2026 (Deploy-MissionPatches.ps1 plan: 16 REPLACE, 0 FAIL).
 
   Rows: the golden items go to a fixed count on the whole server, counted in hands, cargo and
   stashes, with a 12 hour respawn wait (AKM_Gold and its two golden magazines 2, Deagle_Gold and

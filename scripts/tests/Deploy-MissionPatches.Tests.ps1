@@ -211,11 +211,14 @@ Describe 'Get-FileNewLine and Save-XmlFile -NewLine' {
 }
 
 Describe 'The repository patch files against server\live' {
-    # Every APPLIED patch must be reflected in server\live: planning it against the mirrored live file
-    # (live as its own reference) gives ALREADY on every row. A DRAFT row here means Sync-LiveReplica.ps1
-    # has not run since the apply, or the mirror was never refreshed; a FAIL row means live has moved on
-    # top of the applied values. Get-PatchDescriptor refuses APPLIED headers, so the documents are read
-    # directly. The release 2 set was applied November 8, 2026 (logs\deploy-20261108-131721).
+    # Every APPLIED patch whose rows are still current must be reflected in server\live: planning it
+    # against the mirrored live file (live as its own reference, so Before always matches) gives ALREADY
+    # on every row. An ADD or REPLACE row here means the mirror is stale (Sync-LiveReplica.ps1 has not run
+    # since the apply) or the row was superseded by a later patch; a FAIL row means a duplicate name.
+    # When a later APPLIED patch supersedes any row of a patch listed here, remove that patch from the
+    # list (the three release 1 patches are already left out: the Oasis patch rewrote release1-loot's
+    # Akinaka row). Get-PatchDescriptor refuses APPLIED headers, so the documents are read directly.
+    # The release 2 set was applied November 8, 2026 (logs\deploy-20261108-131721).
     It '<PatchFile> (APPLIED) is already in server\live: every row ALREADY' -ForEach @(
         @{ PatchFile = 'db\types.dpv.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
         @{ PatchFile = 'db\types.release2-loot.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
@@ -233,7 +236,7 @@ Describe 'The repository patch files against server\live' {
         @($plan | Where-Object Mode -ne 'ALREADY' | ForEach-Object { '{0}={1}' -f $_.Name, $_.Mode }) | Should -BeNullOrEmpty
     }
 
-    It 'the release 2 row counts match the deploy manifest (3 + 4 + 16 type rows, 1 event, 1 spawnable type, 2 positions, 2 defaults)' {
+    It 'the release 2 row counts match the deploy manifest (3 + 4 + 16 type rows, 1 event, 1 spawnable type, 2 event position lists, 2 defaults)' {
         $count = {
             param($PatchFile, $Entry, $Container)
             $doc = Read-XmlFile -Path (Join-Path $overrides $PatchFile)
@@ -247,6 +250,60 @@ Describe 'The repository patch files against server\live' {
         (& $count 'cfgeventspawns.dpv.patch.xml' 'event' '') | Should -Be 2
         (& $count 'cfgeconomycore.logging.patch.xml' 'default' 'defaults') | Should -Be 2
     }
+
+    It 'a DRAFT fixture plans ADD and REPLACE against the live types.xml and the merge saves and re-reads' {
+        # Keeps the real-file merge path covered now that every repository patch is APPLIED: one new row
+        # (ADD) and one live row with its nominal flipped (REPLACE), applied to a copy of server\live.
+        $livePath = Join-Path $liveDir 'db\types.xml'
+        $live = Read-XmlFile -Path $livePath
+        $binoculars = (Get-NamedEntry -Document $live -Entry 'type' -Name 'Binoculars')[0]
+        $binoculars | Should -Not -BeNullOrEmpty
+        $nominal = [int]$binoculars.SelectSingleNode('./nominal').InnerText
+        $min = [int]$binoculars.SelectSingleNode('./min').InnerText
+        $patchPath = Write-Fixture -Path (Join-Path $TestDrive 'real\probe.patch.xml') -Content (@'
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- DRAFT - not applied to the live server. Test fixture. -->
+<types>
+  <type name="Binoculars">
+    <nominal>{0}</nominal>
+    <lifetime>7200</lifetime>
+    <restock>0</restock>
+    <min>{1}</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="tools"/>
+  </type>
+  <type name="NimbyTest_Probe">
+    <nominal>1</nominal>
+    <lifetime>60</lifetime>
+    <restock>0</restock>
+    <min>1</min>
+    <quantmin>-1</quantmin>
+    <quantmax>-1</quantmax>
+    <cost>100</cost>
+    <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    <category name="tools"/>
+  </type>
+</types>
+'@ -f ($nominal + 1), $min)
+        $patch = Get-PatchDescriptor -PatchPath $patchPath
+        $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument $live -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry 'type')
+        $plan.Count | Should -Be 2
+        ($plan | Where-Object Name -eq 'Binoculars').Mode | Should -Be 'REPLACE'
+        ($plan | Where-Object Name -eq 'NimbyTest_Probe').Mode | Should -Be 'ADD'
+        $before = Get-EntryCount -Document $live -Entry 'type'
+        $result = Merge-PatchIntoDocument -LiveDocument $live -Plan $plan -Entry 'type'
+        $result.Added | Should -Be 1
+        $result.Replaced | Should -Be 1
+        $out = Join-Path $TestDrive 'real\db\types.xml'
+        Save-XmlFile -Document $live -Path $out
+        $check = Read-XmlFile -Path $out
+        Get-EntryCount -Document $check -Entry 'type' | Should -Be ($before + 1)
+        (Get-NamedEntry -Document $check -Entry 'type' -Name 'Binoculars')[0].SelectSingleNode('./nominal').InnerText | Should -Be ([string]($nominal + 1))
+        @(Get-NamedEntry -Document $check -Entry 'type' -Name 'NimbyTest_Probe').Count | Should -Be 1
+    }
 }
 
 Describe 'Nested container (cfgeconomycore defaults)' {
@@ -255,6 +312,7 @@ Describe 'Nested container (cfgeconomycore defaults)' {
         $livePath = Join-Path $liveDir 'cfgeconomycore.xml'
         $live = Read-XmlFile -Path $livePath
         $current = (Get-NamedEntry -Document $live -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value')
+        $vehicleBefore = (Get-NamedEntry -Document $live -Entry 'default' -Name 'log_ce_vehicle' -Container 'defaults')[0].GetAttribute('value')
         $flipped = if ($current -eq 'true') { 'false' } else { 'true' }
         $patchPath = Write-Fixture -Path (Join-Path $TestDrive 'eco\patch.xml') -Content ("<?xml version=`"1.0`" encoding=`"UTF-8`" standalone=`"yes`"?>`r`n<!-- DRAFT - not applied to the live server. -->`r`n<economycore>`r`n  <defaults>`r`n    <default name=`"log_ce_loop`" value=`"{0}`"/>`r`n  </defaults>`r`n</economycore>" -f $flipped)
         $patch = Get-PatchDescriptor -PatchPath $patchPath
@@ -270,7 +328,7 @@ Describe 'Nested container (cfgeconomycore defaults)' {
         $check = Read-XmlFile -Path $out
         Get-EntryCount -Document $check -Entry 'default' -Container 'defaults' | Should -Be $before
         (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value') | Should -Be $flipped
-        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_vehicle' -Container 'defaults')[0].GetAttribute('value') | Should -Be 'true'
+        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_vehicle' -Container 'defaults')[0].GetAttribute('value') | Should -Be $vehicleBefore
         @($check.DocumentElement.SelectNodes('./classes/rootclass')).Count | Should -Be 10
     }
 

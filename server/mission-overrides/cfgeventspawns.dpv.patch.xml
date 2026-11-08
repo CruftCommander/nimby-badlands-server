@@ -4,7 +4,7 @@
   Jeff's rulings, November 8, 2026, 01:30 to 01:40 Central (/interview after the draft of 01:25); D-5 of docs/design/dpv-feasibility.md (November 5, 2026: nominal 4, max 6, military sites only, per-part chance).
   APPLIED November 8, 2026, 13:17 Central (release 2 restart; Deploy-MissionPatches.ps1 -Upload, run deploy-20261108-131721, readback hash-identical; server started 13:22); was DRAFT - not applied to the live server. In mpmissions/dayzOffline.nasdara/cfgeventspawns.xml the
   VehicleNimbyDpv <event> below is ADDED and the VehicleOffroad02 <event> below REPLACES the live one.
-  Everything not listed here is unchanged.
+  Everything not listed here was unchanged.
 
   Why these: D-5 says military sites only. The 21 VehicleOffroad02 positions are the only vanilla vehicle
   spots on Nasdara that all sit at military sites (nearest Military-usage building 10 to 55 m; measured
@@ -13,8 +13,8 @@
   Humvee, whose event keeps nominal 5, min 2, max 3 (child max 5) in events.xml.
 
   Source: the stock 1.30 cfgeventspawns.xml of the October 15, 2026 server install (D:\DayZServer); the live
-  file is not mirrored by Sync-LiveReplica.ps1 until the November 8 change lands. The deploy step pulls the
-  live file and refuses unless the live VehicleOffroad02 event holds exactly these 21 positions.
+  file is not mirrored by Sync-LiveReplica.ps1 until the November 8 change lands. The deploy step pulled the
+  live file and would have refused unless the live VehicleOffroad02 event held exactly these 21 positions (it did).
 -->
 <eventposdef>
 		<event name="VehicleNimbyDpv">
