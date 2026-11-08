@@ -54,6 +54,32 @@ class NimbyDpvSelfTest
         failures += WheelCases(results, "Front", "Right", "2_1", "wheelfrontright");
         failures += WheelCases(results, "Rear", "Left", "1_2", "wheelbackleft");
         failures += WheelCases(results, "Rear", "Right", "2_2", "wheelbackright");
+
+        // Rail storage (build 37, November 6, 2026; four side-rail slots since build 47): the slots exist, point at the model
+        // selections the builder writes, sit in the car's attachments[], and the vanilla item
+        // patch reached CanisterGasoline and AmmoBox (CGame.ConfigGetTextArray, Game.c:558).
+        failures += RailCases(results, "1");
+        failures += RailCases(results, "2");
+        failures += RailCases(results, "3");
+        failures += RailCases(results, "4");
+        // build 53: the backpack twin slots (config.cpp CfgSlots Slot_NimbyDpvRailBag_N)
+        failures += RailBagCases(results, "1");
+        failures += RailBagCases(results, "2");
+        failures += RailBagCases(results, "3");
+        failures += RailBagCases(results, "4");
+        failures += Case(results, "railbag-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRailBag_1") && ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRailBag_4"));
+        failures += Case(results, "railbag-proxy-registered", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailBag_1") && ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailBag_4"));
+        failures += Case(results, "railbag-ui-group", ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Rail attachmentSlots", "NimbyDpvRailBag_2"));
+        failures += Case(results, "rail-bag-not-on-rail-slot", !ConfigArrayHas("CfgVehicles HuntingBag inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles HuntingBag inventorySlot", "NimbyDpvRailBag_1"));
+        failures += Case(results, "rail-box-not-on-bag-slot", !ConfigArrayHas("CfgVehicles AmmoBox inventorySlot", "NimbyDpvRailBag_1") && !ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRailBag_1"));
+        failures += Case(results, "rail-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRail_1") && ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRail_4"));
+        failures += Case(results, "rail-canister-patched", ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRail_4"));
+        failures += Case(results, "rail-bag-patched-keeps-back", ConfigArrayHas("CfgVehicles TaloonBag_ColorBase inventorySlot", "NimbyDpvRailBag_3") && ConfigArrayHas("CfgVehicles TaloonBag_ColorBase inventorySlot", "Back"));
+        failures += Case(results, "rail-smersh-keeps-vestbackpack", ConfigArrayHas("CfgVehicles SmershBag inventorySlot", "VestBackpack") && ConfigArrayHas("CfgVehicles SmershBag inventorySlot", "NimbyDpvRailBag_1"));
+        failures += Case(results, "rail-proxy-registered-1", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRail_1"));
+        failures += Case(results, "rail-proxy-registered-4", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRail_4"));
+        failures += Case(results, "rail-ui-group", ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Rail attachmentSlots", "NimbyDpvRail_3"));
+        failures += Case(results, "rail-ammobox-patched", ConfigArrayHas("CfgVehicles AmmoBox inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles AmmoBox inventorySlot", "NimbyDpvRail_4"));
         return failures;
     }
 
@@ -71,6 +97,39 @@ class NimbyDpvSelfTest
         GetGame().ConfigGetText(path + "inventorySlot", text);
         failures += Case(results, "car-wheel-" + xy + "-slot=" + text, text == "NimbyDpvWheel_" + xy);
         return failures;
+    }
+
+    protected static int RailCases(out array<string> results, string n)
+    {
+        int failures = 0;
+        string text;
+        string path = "CfgSlots Slot_NimbyDpvRail_" + n;
+        failures += Case(results, "rail-" + n + "-slot-exists", GetGame().ConfigIsExisting(path));
+        GetGame().ConfigGetText(path + " name", text);
+        failures += Case(results, "rail-" + n + "-slot-name=" + text, text == "NimbyDpvRail_" + n);
+        GetGame().ConfigGetText(path + " selection", text);
+        failures += Case(results, "rail-" + n + "-slot-selection=" + text, text == "rail_" + n);
+        return failures;
+    }
+
+    protected static int RailBagCases(out array<string> results, string n)
+    {
+        int failures = 0;
+        string text;
+        string path = "CfgSlots Slot_NimbyDpvRailBag_" + n;
+        failures += Case(results, "railbag-" + n + "-slot-exists", GetGame().ConfigIsExisting(path));
+        GetGame().ConfigGetText(path + " name", text);
+        failures += Case(results, "railbag-" + n + "-slot-name=" + text, text == "NimbyDpvRailBag_" + n);
+        GetGame().ConfigGetText(path + " selection", text);
+        failures += Case(results, "railbag-" + n + "-slot-selection=" + text, text == "railbag_" + n);
+        return failures;
+    }
+
+    protected static bool ConfigArrayHas(string path, string value)
+    {
+        TStringArray values = new TStringArray;
+        GetGame().ConfigGetTextArray(path, values);
+        return values.Find(value) >= 0;
     }
 
     protected static int Case(out array<string> results, string name, bool passed)

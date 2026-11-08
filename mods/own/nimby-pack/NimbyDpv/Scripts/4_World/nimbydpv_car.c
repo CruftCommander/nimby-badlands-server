@@ -232,6 +232,7 @@ class NimbyDpv_Car extends CarScript
     static const float TC_WHEEL_RADIUS_M = 0.40;      // NimbyDpv_Wheel radius (config.cpp)
     static const float TC_SLIP_RATIO = 0.25;          // wheel ahead of ground by 25 per cent...
     static const float TC_SLIP_FLOOR_MPS = 3.0;       // ...or by 3 m/s, whichever is larger
+    static const float TC_REVERSE_MARGIN_SCALE = 2.0; // build 39: reverse gets double the margin (Jeff, November 7: "traction a bit too good in reverse", could not spin the car round)
     static const float TC_THROTTLE_CAP = 0.3;         // throttle while a cut is active
     static const int TC_FIRST_REAR_WHEEL = 2;         // wheels are counted left-front to rear-right
     protected bool m_NimbyDpvTcWantCap;               // this step asked for the cap
@@ -256,6 +257,8 @@ class NimbyDpv_Car extends CarScript
 
         float ground = Math.AbsFloat(GetSpeedometer()) / 3.6;
         float margin = Math.Max(TC_SLIP_FLOOR_MPS, ground * TC_SLIP_RATIO);
+        if (GetGear() == CarGear.REVERSE)
+            margin = margin * TC_REVERSE_MARGIN_SCALE;
         bool air = false;
         bool slipping = false;
         int wheelCount = WheelCount();
@@ -442,5 +445,42 @@ class NimbyDpv_Car extends CarScript
         inventory.CreateInInventory("NimbyDpv_Wheel");
         inventory.CreateInInventory("NimbyDpv_Wheel");
         inventory.CreateInInventory("NimbyDpv_Wheel");
+    }
+
+    // Build 53 (Jeff, "go 1", November 7, 2026): each rail position has two slots, NimbyDpvRail_N
+    // for a jerry can or ammo can and NimbyDpvRailBag_N for a backpack (config.cpp CfgSlots), because
+    // one slot draws everything in it in one frame and the two families need different ones. A
+    // position holds one item: while either twin is filled the other refuses items and is hidden in
+    // the inventory screen. InventorySlots.GetSlotName (3_Game/DayZ/Systems/Inventory/
+    // InventorySlots.c:48), GameInventory.FindAttachment, EntityAI.CanDisplayAttachmentSlot(int)
+    // (3_Game/DayZ/Entities/EntityAI.c:1788), CarScript.CanReceiveAttachment (CarScript.c:609).
+    protected bool NimbyDpvRailTwinOccupied(int slotId)
+    {
+        string slotName = InventorySlots.GetSlotName(slotId);
+        string twin = "";
+        if (slotName.IndexOf("NimbyDpvRailBag_") == 0)
+            twin = "NimbyDpvRail_" + slotName.Substring(16, slotName.Length() - 16);
+        else if (slotName.IndexOf("NimbyDpvRail_") == 0)
+            twin = "NimbyDpvRailBag_" + slotName.Substring(13, slotName.Length() - 13);
+        if (twin == "")
+            return false;
+        int twinId = InventorySlots.GetSlotIdFromString(twin);
+        if (twinId == InventorySlots.INVALID)
+            return false;
+        return GetInventory().FindAttachment(twinId) != null;
+    }
+
+    override bool CanReceiveAttachment(EntityAI attachment, int slotId)
+    {
+        if (NimbyDpvRailTwinOccupied(slotId))
+            return false;
+        return super.CanReceiveAttachment(attachment, slotId);
+    }
+
+    override bool CanDisplayAttachmentSlot(int slot_id)
+    {
+        if (NimbyDpvRailTwinOccupied(slot_id))
+            return false;
+        return super.CanDisplayAttachmentSlot(slot_id);
     }
 }

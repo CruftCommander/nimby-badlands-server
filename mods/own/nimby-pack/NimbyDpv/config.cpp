@@ -19,7 +19,9 @@ class CfgPatches
 {
     class NimbyDpv
     {
-        requiredAddons[] = { "DZ_Data", "DZ_Scripts", "DZ_Vehicles_Wheeled", "DZ_Sounds_Effects" };
+        // DZ_Vehicles_Parts and DZ_Gear_Containers: the rail-storage patch below appends to
+        // CanisterGasoline and AmmoBox, so this addon must load after them (build 37)
+        requiredAddons[] = { "DZ_Data", "DZ_Scripts", "DZ_Vehicles_Wheeled", "DZ_Sounds_Effects", "DZ_Vehicles_Parts", "DZ_Gear_Containers", "DZ_Characters_Backpacks" };
         units[] = { "NimbyDpv_Car", "NimbyDpv_Wheel", "NimbyDpv_TestCar" };
         weapons[] = {};
     };
@@ -80,6 +82,62 @@ class CfgSlots
         name = "NimbyDpvWheel_Spare_1";
         selection = "wheel_spare_1";
     };
+    // Phase 3 rail storage (builds 37 and 38, November 6 and 7, 2026; Jeff, 23:08 and 09:35):
+    // Build 47 (Jeff, November 7, 11:34): all four slots are on the side rails (1 and 2 behind the
+    // seats, 3 and 4 ahead of them toward the front wheels) and each takes a jerry can, an ammo
+    // can or a backpack, in any combination. The item classes get these slot names at the end of
+    // CfgVehicles.
+    class Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRail_1";
+        displayName = "Rail";
+        selection = "rail_1";
+        ghostIcon = "set:dayz_inventory image:cargo";
+    };
+    class Slot_NimbyDpvRail_2 : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRail_2";
+        selection = "rail_2";
+    };
+    class Slot_NimbyDpvRail_3 : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRail_3";
+        selection = "rail_3";
+    };
+    class Slot_NimbyDpvRail_4 : Slot_NimbyDpvRail_3
+    {
+        name = "NimbyDpvRail_4";
+        selection = "rail_4";
+    };
+    // Build 53 (Jeff, "go 1", November 7, 17:40): a second slot at each of the four rail positions,
+    // for backpacks only. One slot draws every item in it in one frame (build 51 and 52 diag and
+    // drives: InventorySlotsOffsets moves nothing visible on this vehicle), and a backpack needs
+    // the opposite yaw, a lower frame and a 2 inch aft shift from what an ammo can needs. So the
+    // NimbyDpvRail_N slots keep the can and box frame, these carry the bag frame at the same
+    // spot, bags list only these, cans and boxes only those, and NimbyDpv_Car refuses and hides
+    // a slot whose twin at the same position is filled (CanReceiveAttachment,
+    // CanDisplayAttachmentSlot). Capacity stays four items in any mix.
+    class Slot_NimbyDpvRailBag_1 : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRailBag_1";
+        displayName = "Rail (pack)";
+        selection = "railbag_1";
+    };
+    class Slot_NimbyDpvRailBag_2 : Slot_NimbyDpvRailBag_1
+    {
+        name = "NimbyDpvRailBag_2";
+        selection = "railbag_2";
+    };
+    class Slot_NimbyDpvRailBag_3 : Slot_NimbyDpvRailBag_1
+    {
+        name = "NimbyDpvRailBag_3";
+        selection = "railbag_3";
+    };
+    class Slot_NimbyDpvRailBag_4 : Slot_NimbyDpvRailBag_1
+    {
+        name = "NimbyDpvRailBag_4";
+        selection = "railbag_4";
+    };
 };
 
 // The wheel proxy: the model placed at every proxy:\NimbyDpv\data\dpvwheel.NNN triangle,
@@ -94,6 +152,7 @@ class CfgSlots
 class CfgNonAIVehicles
 {
     class ProxyVehiclePart;
+    class ProxyAttachment;    // the base of every proxy that draws the attached entity (base building, weapons)
     class ProxyDpvWheel : ProxyVehiclePart
     {
         model = "\NimbyDpv\data\dpvwheel.p3d";
@@ -106,11 +165,42 @@ class CfgNonAIVehicles
             "NimbyDpvWheel_Spare_1"
         };
     };
+    // Rail storage (build 39, November 7, 2026). A proxy is only an attachment point when its
+    // model path is registered here with simulation ProxyInventory (inherited from
+    // ProxyVehiclePart, wheeled.config.cpp:23901) and the slots it serves; an unregistered
+    // proxy is static decoration, which is what builds 37 and 38 drew (a JerryCan.p3d at every
+    // rail slot whatever was attached, and the attached items invisible). The lookup is by
+    // class NAME, "Proxy" plus the p3d file name (ProxyBattery_Car, ProxyNivaWheel,
+    // ProxyCrew_Cargo, this addon's ProxyDpvWheel); build 39's ProxyNimbyDpvRailCan and
+    // ProxyNimbyDpvRailBox were never found and stayed static (build 40, November 7, 2026).
+    // Build 40, named right, took the proxies under engine control but drew nothing with items
+    // in the slots. ProxyVehiclePart is the base vanilla uses for wheels and doors, which the
+    // vehicle simulation handles; the battery, plug and headlights that do render on the DPV
+    // use ProxyPart (scope 2, reversed 1, "DZ\..." paths), so build 41 mirrored that exactly;
+    // still nothing, with the diag showing the items at the car origin. The rule (DayZ Modding
+    // Knowledge Pack, rip-vehicle-import attach-invisible.md, measured in game 2026-09-09):
+    // simulation ProxyInventory (ProxyVehiclePart, ProxyPart) draws the CLASS model, right for a
+    // wheel whose proxy model is the wheel; ProxyAttachment places the attached ENTITY, which is
+    // what an inventory slot needs. Build 43: ProxyAttachment, as the base-building proxies
+    // (DZ/gear/camping/config.cpp:11254 ProxyBaseBuilding : ProxyAttachment { scope = 2; }).
+    // Build 44: one ProxyAttachment class over the addon's own minimal proxy model dpvrail.p3d
+    // for all four slots (Knowledge Pack recipe: never the vanilla item model as the proxy path;
+    // the engine draws the attached item's own model at the proxy). Builds 40 to 43, with the
+    // item models as proxy paths, drew nothing and the diag showed the items at the car origin.
+    class ProxyDpvRail : ProxyAttachment
+    {
+        scope = 2;
+        model = "\NimbyDpv\data\dpvrail.p3d";
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
 };
 
 class CfgVehicles
 {
     class CarWheel;
+    class Bottle_Base;
+    class Container_Base;
+    class Clothing;
     class OffroadHatchback;
     // NimbyDpv_Car inherits CarScript directly and writes Crew, SimulationModule and
     // AnimationSources out in full, the way the Arma2Quad does (its config.cpp forward-declares
@@ -231,7 +321,15 @@ class CfgVehicles
             "NimbyDpvWheel_1_2",
             "NimbyDpvWheel_2_1",
             "NimbyDpvWheel_2_2",
-            "NimbyDpvWheel_Spare_1"
+            "NimbyDpvWheel_Spare_1",
+            "NimbyDpvRail_1",
+            "NimbyDpvRail_2",
+            "NimbyDpvRail_3",
+            "NimbyDpvRail_4",
+            "NimbyDpvRailBag_1",
+            "NimbyDpvRailBag_2",
+            "NimbyDpvRailBag_3",
+            "NimbyDpvRailBag_4"
         };
         hiddenSelections[] =
         {
@@ -273,6 +371,17 @@ class CfgVehicles
                 description = "";
                 icon = "set:dayz_inventory image:cat_vehicle_chassis";
                 attachmentSlots[] = { "NimbyDpvWheel_1_1", "NimbyDpvWheel_2_1", "NimbyDpvWheel_1_2", "NimbyDpvWheel_2_2" };
+            };
+            // build 38: the vehicle inventory panel shows only the slots listed here, which is why
+            // build 37's auto-attached jerry cans had no inventory entry and no detach route
+            class Rail
+            {
+                name = "Rail";
+                description = "";
+                icon = "set:dayz_inventory image:cat_vehicle_body";
+                // build 53: both slot sets; a filled position hides its twin, so the group shows
+                // eight icons empty and four full
+                attachmentSlots[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
             };
         };
         // Engine, tyre, skid, rain, damper and wind sound sets. Vanilla cars do not get these from
@@ -642,5 +751,119 @@ class CfgVehicles
                 };
             };
         };
+    };
+
+    // Rail storage item patch (builds 37 to 47): the vanilla items that may ride on the DPV's
+    // rail slots. A vanilla item only accepts a slot its own inventorySlot[] names, so the slot
+    // names are written here. Full lists rather than +=, because += appends to the value
+    // inherited from the parent, not to the class's own original list (SmershBag would lose
+    // VestBackpack). Originals: CanisterGasoline {} (DZ/vehicles/parts/config.cpp:646), AmmoBox
+    // none (DZ/gear/containers/config.cpp:650), every bag {"Back"} except SmershBag {"Back",
+    // "VestBackpack"} (DZ/characters/backpacks/config.cpp). Config only, no script, nothing
+    // saved changes; the first NIMBY addon to modify vanilla item classes (Jeff, November 6,
+    // 23:08; shared-rules registry line owed). Ghillie items and the packed tent also carry the
+    // Back slot but are not backpacks and stay out.
+    class CanisterGasoline : Bottle_Base
+    {
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+    };
+    class AmmoBox : Container_Base
+    {
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+        // Builds 49 to 51 carried an InventorySlotsOffsets position[] here (-0.10, -0.20, -0.275):
+        // on this vehicle it moved the server entity (diag rails: y 0.485 then 0.410) but never
+        // the drawn item, so it only pulled the "Take to hands" hitbox away from the picture
+        // (build 51, Jeff: box unmoved, prompt hard to find). Removed in build 52; the drawn
+        // frame is the slot proxy alone (scripts/dpv/build_nimbydpv_model.py, rail_pos).
+    };
+    // Builds 50 and 51 gave every bag class an InventorySlotsOffsets block (position -0.20; yaw
+    // 180, then a per-slot orientation[] calibration). Build 51's diag proved orientation[] inert
+    // on this vehicle (identical axes under { 0, 0, 0 }, { 180, 0, 0 }, { 0, 180, 0 }) and position[]
+    // moving only the server entity, not the drawn bag, so build 52 removes them: a bag's back
+    // is on its forward face, so the slot proxies now point forward outboard, and the front pair
+    // sits lower for the base-origin items (box, bag). Slot lists only below.
+    class SmershBag : Clothing
+    {
+        inventorySlot[] = { "Back", "VestBackpack", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class TaloonBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class TortillaBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class CourierBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class FurCourierBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class ImprovisedBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class FurImprovisedBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class DryBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class HuntingBag : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class MountainBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class ChildBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class LeatherSack_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class AssaultBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class Attack2Bag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class CoyoteBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class AliceBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class SlingBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class ArmyPouch_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class DuffelBagSmall_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class CanvasBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    class DrysackBag_ColorBase : Clothing
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
     };
 };

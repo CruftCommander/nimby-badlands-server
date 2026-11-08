@@ -17,6 +17,8 @@
 //           map position (height from the road surface) before the cars are placed, so a test
 //           can start on tarmac; the cars then face north from there. The surface type at the
 //           point is logged. Without the line the player's own position is used, as before.
+//           Build 53: a line "+ <class>" adds one item of that class to the DPV's cargo after
+//           the fill (any number of lines; the rail test rotates bag classes this way).
 // Hook    : MissionServer.InvokeOnConnect (5_Mission/DayZ/mission/missionServer.c:435),
 //           which both the new-character path (:336, ClientNewEventTypeID) and the
 //           ready path (:357, ClientReadyEventTypeID) call; OnClientReadyEvent (:599)
@@ -36,6 +38,8 @@ modded class MissionServer extends MissionBase
 {
     protected bool m_NimbyDpvTestCarSpawned;
     protected bool m_NimbyDpvTestCarFlagLogged;
+    // build 53: extra cargo items from the flag file ("+ <class>" lines), see the header
+    protected ref array<string> m_NimbyDpvTestExtras = new array<string>();
 
     override void InvokeOnConnect(PlayerBase player, PlayerIdentity identity)
     {
@@ -69,6 +73,11 @@ modded class MissionServer extends MissionBase
                     {
                         array<string> parts = new array<string>();
                         line.Split(" ", parts);
+                        if (parts[0] == "+" && parts.Count() >= 2)
+                        {
+                            m_NimbyDpvTestExtras.Insert(parts[1]);
+                            continue;
+                        }
                         if (parts[0] == "@" && parts.Count() >= 3)
                         {
                             spawnPos[0] = parts[1].ToFloat();
@@ -148,6 +157,19 @@ modded class MissionServer extends MissionBase
         }
     }
 
+    // build 51: one item onto one named rail slot, logged either way so a refused attach is
+    // visible in the script log (a class that does not list the slot in inventorySlot[] returns
+    // null here rather than failing loudly)
+    protected void NimbyDpvAttachToRail(EntityAI car, string type, string slotName)
+    {
+        int slotId = InventorySlots.GetSlotIdFromString(slotName);
+        EntityAI item = car.GetInventory().CreateAttachmentEx(type, slotId);
+        if (item)
+            Print("[NIMBY][Dpv] test-car rail attach " + type + " -> " + slotName + " ok");
+        else
+            Print("[NIMBY][Dpv] test-car rail attach " + type + " -> " + slotName + " FAILED (slot id " + slotId.ToString() + ")");
+    }
+
     // the debug-spawn fill, now or after the flag line's delay, followed by one diag snapshot
     // so the wheel state right after the attach can be compared with the 5 s timer lines
     protected void NimbyDpvDebugSpawnLater(EntityAI car, string diagTag)
@@ -157,8 +179,54 @@ modded class MissionServer extends MissionBase
             Print("[NIMBY][Dpv] test-car debug-spawn SKIPPED tag=" + diagTag + " (car gone)");
             return;
         }
+        // Build 51 (November 7, 2026, orientation calibration): the rail items go on BEFORE the
+        // debug fill, each to a named slot (GameInventory.CreateAttachmentEx, 3_Game/DayZ/Systems/
+        // Inventory/Inventory.c:215; InventorySlots.GetSlotIdFromString, InventorySlots.c:42),
+        // so the items land on known slots (build 51 put three HuntingBags on Rail_1 to Rail_3
+        // for the orientation[] calibration, which proved the attribute inert). The vanilla
+        // fill's two jerry cans take the rails left free. Test-only: spawn-testcar flag path.
+        if (car.IsInherited(NimbyDpv_Car))
+        {
+            // build 53: the bag on its own slot (NimbyDpvRailBag_3, which then hides and blocks
+            // NimbyDpvRail_3), the box on Rail_4; the vanilla fill's jerry cans take Rail_1 and 2
+            NimbyDpvAttachToRail(car, "HuntingBag", "NimbyDpvRailBag_3");
+            NimbyDpvAttachToRail(car, "AmmoBox", "NimbyDpvRail_4");
+        }
         car.OnDebugSpawn();
         Print("[NIMBY][Dpv] test-car debug-spawn done tag=" + diagTag + " class=" + car.GetType());
+        // Build 38 (November 7, 2026, rail storage test): two ammo cans for the rail
+        // slots. The vanilla debug fill (CarScript.SpawnAdditionalItems, CarScript.c:2538) already
+        // supplies two jerry cans, which CreateInInventory attaches to the first free fitting
+        // slot, so the DPV spawns with its side rails loaded; the ammo cans land on the deck the
+        // same way. Test-only: this path only runs from the spawn-testcar flag.
+        // builds 38 to 50 added two AmmoBoxes and a HuntingBag here, after the fill (they took
+        // whatever rails the jerry cans left, the bag always the cargo); build 51 places them
+        // above. Build 53: the cargo gets the "+ <class>" lines of the flag file (Jeff: the other
+        // bag classes, four at a time on the rails, moved about by hand) or, with none listed, a
+        // spare AmmoBox and HuntingBag. Cargo is 10 x 20; an item that does not fit is logged.
+        // Build 54: CreateEntityInCargo (3_Game/DayZ/Systems/Inventory/Inventory.c:143), not
+        // CreateInInventory: that one picks a free fitting attachment slot first, the car refuses
+        // it under the twin rule (its partner holds a can), and the engine returns null instead of
+        // falling through to the cargo (build 53: all five extras FAILED).
+        if (car.IsInherited(NimbyDpv_Car))
+        {
+            array<string> extras = new array<string>();
+            if (m_NimbyDpvTestExtras.Count() > 0)
+                extras.Copy(m_NimbyDpvTestExtras);
+            else
+            {
+                extras.Insert("AmmoBox");
+                extras.Insert("HuntingBag");
+            }
+            foreach (string extra : extras)
+            {
+                EntityAI made = car.GetInventory().CreateEntityInCargo(extra);
+                if (made)
+                    Print("[NIMBY][Dpv] test-car cargo extra " + extra + " ok");
+                else
+                    Print("[NIMBY][Dpv] test-car cargo extra " + extra + " FAILED (no room or unknown class)");
+            }
+        }
         CarScript carScript = CarScript.Cast(car);
         if (carScript && NimbyDpvDiag.Enabled())
         {

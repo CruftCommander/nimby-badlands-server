@@ -56,6 +56,27 @@ WHEEL_PROXY = "\\" + DATA + r"\dpvwheel"
 # inventory slot names (config CfgSlots / attachments[]), in wheel_names order FL, FR, RL, RR
 WHEEL_SLOTS = ("nimbydpvwheel_1_1", "nimbydpvwheel_2_1", "nimbydpvwheel_1_2", "nimbydpvwheel_2_2")
 SPARE_SLOT = "nimbydpvwheel_spare_1"              # proxy:\NimbyDpv\data\dpvwheel.NNN
+# Phase 3 rail storage. History, builds 37 to 46 (the layout below is superseded: since build 47
+# all four slots sit on the side shelves, see rail_pos). Builds 37 and 38: four attachment slots
+# (config CfgSlots Slot_NimbyDpvRail_N, selection rail_N): 1 and 2 on the side rails beside the
+# driver and co-driver for a jerry can, 3 and 4 on the rear cargo deck for an ammo can (Jeff,
+# November 7, 09:35). The proxy model is a placeholder: the engine draws whatever item is
+# attached in its place, with the item origin at the proxy origin.
+# Build 39: the proxy model is what CfgNonAIVehicles keys on (ProxyNimbyDpvRailCan,
+# ProxyNimbyDpvRailBox), so the side slots carry the jerry can model and the deck slots the
+# ammo can model; an unregistered proxy renders as static decoration (builds 37 and 38).
+RAIL_SLOTS = ("nimbydpvrail_1", "nimbydpvrail_2", "nimbydpvrail_3", "nimbydpvrail_4")
+# Build 44: the addon's own minimal proxy model for every rail slot (DayZ Modding Knowledge Pack,
+# dayz-model-pipeline memory-and-selections.md: "you do NOT reference the vanilla model directly
+# in the proxy selection name; create your own proxy .p3d ... the engine then renders the
+# attached item's own model at the proxy position"). Written by build_rail_proxy below;
+# config class ProxyDpvRail : ProxyAttachment maps it to the four slots.
+RAIL_PROXY_MODEL = "\\" + DATA + r"\dpvrail"
+RAIL_PROXY = {slot: RAIL_PROXY_MODEL for slot in RAIL_SLOTS}
+# Build 53: the backpack twin of each rail slot (config Slot_NimbyDpvRailBag_N, bone railbag_N),
+# same proxy model, proxy numbers 5 to 8, its own frame (see railbag_pos below).
+RAILBAG_SLOTS = ("nimbydpvrailbag_1", "nimbydpvrailbag_2", "nimbydpvrailbag_3", "nimbydpvrailbag_4")
+RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in RAILBAG_SLOTS})
 CREW_DRIVER_PROXY = r"\dz\vehicles\wheeled\proxies\crew_driver"
 CREW_CARGO_PROXY = r"\dz\vehicles\wheeled\proxies\crew_cargo"
 PART_PROXIES = {                                      # vanilla part proxies the ADA uses
@@ -445,6 +466,69 @@ def build_visual(verts, uvs, faces, parts, roles, lod, include, split_lights=Tru
     return pmap
 
 
+def add_antenna(lod, base=(-0.43, -1.45, 2.04), height=0.98, bend=0.12, r0=0.014, r1=0.004, sides=8, segs=10):
+    """A whip antenna on the rear-left cage corner (build 47, Jeff, November 7, 2026): a tapered
+    tube rising from the cage top (z 2.16 at x -0.45, y -1.45) with a gentle rearward curve, in the
+    frame's own texel of the body texture (UV 0.978, 0.617 read from the cage tube beside it).
+    Visual only: a static curve reads as flexible; real flex would need a model.cfg animation.
+    Build 48: base lowered 8 cm into the tube and widened (it hovered an inch above it on 47)."""
+    rings = []
+    for k in range(segs + 1):
+        t = k / float(segs)
+        cx, cy, cz = base[0], base[1] - bend * t * t, base[2] + height * t
+        r = r0 + (r1 - r0) * t
+        ring = []
+        for i in range(sides):
+            a = 2.0 * math.pi * i / sides
+            ring.append(lod.add_point((cx + r * math.cos(a), cy + r * math.sin(a), cz)))
+        rings.append(ring)
+    uv = [(0.978, 0.617)] * 4
+    for k in range(segs):
+        for i in range(sides):
+            j = (i + 1) % sides
+            a0, a1, b1, b0 = rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i]
+            ang = 2.0 * math.pi * (i + 0.5) / sides
+            n = (math.cos(ang), math.sin(ang), 0.0)
+            lod.add_face([a0, a1, b1, b0], [n] * 4, uv, TEX_BODY, MAT_BODY)
+    tip = lod.add_point((base[0], base[1] - bend, base[2] + height + 0.01))
+    for i in range(sides):
+        j = (i + 1) % sides
+        lod.add_face([rings[segs][i], rings[segs][j], tip], [(0.0, 0.0, 1.0)] * 3, uv[:3], TEX_BODY, MAT_BODY)
+
+
+def add_textured_box(lod, lo, hi, uv_point, sel=()):
+    """Axis-aligned box in a visual LOD, every face on one texel of the body texture (the
+    antenna's approach), so it needs no UV layout of its own."""
+    x0, y0, z0 = lo; x1, y1, z1 = hi
+    c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
+         (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
+    ids = [lod.add_point(q) for q in c]
+    quads = [((0, 3, 2, 1), (0, 0, -1)), ((4, 5, 6, 7), (0, 0, 1)),
+             ((0, 1, 5, 4), (0, -1, 0)), ((2, 3, 7, 6), (0, 1, 0)),
+             ((1, 2, 6, 5), (1, 0, 0)), ((3, 0, 4, 7), (-1, 0, 0))]
+    for q, n in quads:
+        lod.add_face([ids[i] for i in q], [n] * 4, [uv_point] * 4, TEX_BODY, MAT_BODY, sel=sel)
+    return ids
+
+
+def add_wheel_post(lod, spare, hood_z=0.891, post=0.04, top_z=1.15, plate=0.16):
+    """Spare-wheel holder on the hood (build 53, Jeff, November 7, 2026: a bare tyre lying on
+    the hood "would simply fly off"; wanted something for the rim to be placed over). A square
+    post up through the spare's centre on a small base plate, in the frame texel like the
+    antenna. Hood under the spare centre (0, 1.45) is z 0.891 in the source mesh, falling
+    8.4 degrees toward the nose; the tyre (0.29 wide, centre z 1.06) spans z 0.915 to 1.205, so
+    build 53 ran the post to 1.30 (10 cm proud of the tyre); build 54 (Jeff: "a bit too high,
+    cut it down by about 6 inches") stops at 1.15, inside the tyre when the spare is on and a
+    24 cm stub when it is off. The plate sits 3 cm into the hood so its downhill edge does
+    not float. Visual only."""
+    uv = (0.978, 0.617)
+    cx, cy = spare[0], spare[1]
+    h = plate / 2.0
+    add_textured_box(lod, (cx - h, cy - h, hood_z - 0.03), (cx + h, cy + h, hood_z + 0.025), uv)
+    q = post / 2.0
+    add_textured_box(lod, (cx - q, cy - q, hood_z + 0.02), (cx + q, cy + q, top_z), uv)
+
+
 def roles_fact(parts, roles, name):
     return [i for i, r in roles.items() if r == name]
 
@@ -554,12 +638,97 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # -0.85, z 0.5 to 0.75. The battery sits there, where the real vehicle carries it. The
     # slot boxes and memory points follow these numbers.
     part_pos = {
-        "carbattery": (0.42, -0.95, 0.62),
+        # build 46 (Jeff, November 7, 11:18): the battery stands on the rear deck directly behind
+        # the rear seat back (y -1.45), between the two seat-back support rails (x +-0.20), base
+        # on the deck (z 1.23), origin taken as the model centre; until build 45 it sat in the
+        # pocket behind the passenger seat at (0.42, -0.95, 0.62)
+        # build 47: flat on the deck (terminals up) behind the rear seat, centred now that the
+        # deck carries nothing else; the proxy frame below lays it down
+        # build 48 (Jeff, 11:59): down 5 inches (its origin is near its base, not the centre),
+        # label face to the rear, and pitched 25 degrees nose-down to sit flush on the deck mesh
+        # build 51 (Jeff, build 50: "its bottom flat on the mesh"): the deck top the battery sits
+        # on is the ALPHA mesh panel, one plane from z 1.213 at y -1.81 to 1.263 at y -1.51
+        # (rises toward the seats, 9.4 degrees, no roll; measured from the source OBJ faces
+        # with normal z > 0.9 in the footprint). The earlier "z 1.20 to 1.23, 3.9 degrees"
+        # was the BODY tube tops under the mesh. battery_car.p3d ODOL header: origin at the
+        # base (geometry y -0.013 to about 0.19), so the origin goes ON the mesh: at y -1.60
+        # the mesh is z 1.248, plus 0.013 along the normal, 1.26. 1.205 had the base 5 cm in.
+        # build 52 (Jeff, build 51: "almost perfect, lower by about 1 more inch"): 1.235
+        "carbattery": (0.0, -1.60, 1.235),
         "sparkplug": (0.0, rear_y + 0.9, 0.85),
-        "reflector_1_1": (lights["center"][0] - 0.3, lights["center"][1], lights["center"][2]),
-        "reflector_2_1": (lights["center"][0] + 0.3, lights["center"][1], lights["center"][2]),
+        # build 49 (NIMBY-T-103): the light bar housing is 3 cm deep (y 1.987 to 2.015) and the bulb
+        # model protruded through the lenses at its centre; 7 cm back puts the bulb inside
+        "reflector_1_1": (lights["center"][0] - 0.3, lights["center"][1] - 0.07, lights["center"][2]),
+        "reflector_2_1": (lights["center"][0] + 0.3, lights["center"][1] - 0.07, lights["center"][2]),
     }
-    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z,
+    # Rail slots, measured from the source mesh (November 6 and 7, 2026). Rear deck: tube tops
+    # at z 1.20 to 1.23 with the mesh panel above them rising from z 1.21 (y -1.81) to 1.26
+    # (y -1.51), x -0.34 to 0.34, y -1.95 to -1.47, a cross tube above it at y -1.86 to
+    # -1.81, z 1.33. Side rails: tub edge x 0.73 to 0.78 with the side tube at z 0.8 to 1.0,
+    # seats at y -0.10, suspension arms outboard (x 1.06) at y -0.1 and 0.5 but only to z 0.7.
+    # Build 37 put two jerry cans on the deck: slots bind and the vanilla debug fill attached
+    # them, but the can sat a quarter of its height into the deck (its origin is about 0.12 m
+    # above its base) and Jeff wants the cans beside the seats and the ammo cans at the rear.
+    # Build 38 hung the cans against the side tube turned 90 degrees (forward along x): they
+    # rendered lying flat on the mesh side shelf (the shelf is at z about 0.50, outboard of the
+    # tub to the wheel line). Build 39 (Jeff, November 7, 09:53: standing, at one end of the
+    # rail): the deck orientation of build 37, which stood the can upright, at the rear end of
+    # the shelf behind the seats, base on the shelf; ammo cans on the deck as build 38.
+    # Build 40 (Jeff, 10:13): with the deck triangle the ammo box rendered upside down and
+    # the can lying on its broad side, cap to the rear: JerryCan.p3d is authored lying flat
+    # (its cap along model forward, broad faces along model up) and the add_proxy "identity"
+    # carries a 180 degree roll a wheel cannot show. Box: up negated. Can: model forward to
+    # world up (standing on its end), model up along x (broad face against the tub wall).
+    # Origins treated as model centres: box 0.19 tall on the deck at 1.23, can 0.47 tall on
+    # the shelf at 0.50, 0.17 thick against the wall at x 0.78.
+    # Build 47 (Jeff, 11:34): all storage on the side rails. 1 and 2 at the rear end of the
+    # shelf behind the seats (build 45 pass), 3 and 4 at the front end toward the front wheels
+    # (shelf z 0.47 to 0.50 runs y -0.74 to 1.12; tub wall x about 0.70 there). Every slot takes
+    # a jerry can, an ammo can or a backpack, all drawn in the same frame: up to world up, the
+    # item's forward axis inboard (outboard since build 52, see rail_up).
+    # build 48: all four down 2 inches (Jeff, 11:59)
+    # build 49: rear slots 2 inches forward, front slots 1 inch back (Jeff, 12:22); the ammo
+    # box's extra 4 inch drop is per item, config.cpp AmmoBox InventorySlotsOffsets
+    # Build 52: the drawn item sits with its model origin at the proxy and nothing in config moves
+    # it (build 51 diag: InventorySlotsOffsets position[] moved the entity, not the picture;
+    # orientation[] nothing). ODOL headers: JerryCan.p3d origin 0.235 above its base (flush on the
+    # z 0.50 shelf from 0.685), 300RoundBox.p3d 0.10 (floated 8.5 cm, Jeff's "3 inches"),
+    # hunting_g.p3d 0.0 (floated 18.5 cm, Jeff's "foot"). One frame per slot, so the front pair
+    # is tuned for the base-origin items (ammo cans toward the front tyres, Jeff, build 46):
+    # Build 52 tried z 0.55 for the front pair (box 5 cm into the mesh, Jeff: "mesh going through
+    # the bottoms, raise about 3 inches"); build 53: 0.625, box base 2.5 cm above the mesh plane.
+    # Rear pair stays at 0.685 for the jerry cans. Backpacks have their own slots (railbag_pos).
+    rail_pos = {"nimbydpvrail_1": (-0.865, -0.50, 0.685), "nimbydpvrail_2": (0.865, -0.50, 0.685),
+                "nimbydpvrail_3": (-0.82, 0.875, 0.625), "nimbydpvrail_4": (0.82, 0.875, 0.625)}
+    # Build 53 backpack twins: same x and y as the rail slot (front pair 2 inches aft, Jeff,
+    # build 52), z 0.55 (the bag's origin is at its base; build 52 drew it there and Jeff asked
+    # only for the aft shift), item forward OUTBOARD so the bag's back shows (build 52).
+    railbag_pos = {"nimbydpvrailbag_1": (-0.865, -0.50, 0.55), "nimbydpvrailbag_2": (0.865, -0.50, 0.55),
+                   "nimbydpvrailbag_3": (-0.82, 0.825, 0.55), "nimbydpvrailbag_4": (0.82, 0.825, 0.55)}
+    railbag_up = {"nimbydpvrailbag_1": (-1, 0, 0), "nimbydpvrailbag_2": (1, 0, 0),
+                  "nimbydpvrailbag_3": (-1, 0, 0), "nimbydpvrailbag_4": (1, 0, 0)}
+    # Build 50: front pair back 0.05 (Jeff: the front can "needs to come back about two inches").
+    # Build 45 rendered (the rail_N bones in model.cfg were the missing piece): cans pass; the
+    # ammo cans sat about 3 inches low with their labels forward. Build 46: boxes up 0.075,
+    # turned 180 degrees (labels to the rear), moved back and outboard to clear the battery
+    # that now stands behind the rear seat (part_pos carbattery).
+    # Builds 40 to 42 drew nothing: the proxy classes were ProxyInventory (class-model) proxies,
+    # not ProxyAttachment (build 43, config.cpp CfgNonAIVehicles). Proxy frame rule (DayZ Modding
+    # Knowledge Pack, dayz-proxy-align: angle-sort, engine identity P' = [[-1,0,0],[0,0,1],[0,1,0]]):
+    # the SHORT leg (add_proxy "up") is where the attached item's FORWARD axis points and the LONG
+    # leg (add_proxy "forward") where its UP axis points. Build 39's triangle (short up, long back)
+    # therefore laid the can on its broad face with the cap to the rear and the box lid-backward,
+    # which is what Jeff saw. JerryCan.p3d is authored upright, cap +Y, broad faces +-Z.
+    # Box: up to world up, latch side to the rear. Can: up to world up, broad face along x (flat
+    # against the tub wall), mirrored per side. Origins taken as model centres.
+    rail_fwd = {"nimbydpvrail_1": (0, 0, 1), "nimbydpvrail_2": (0, 0, 1),
+                "nimbydpvrail_3": (0, 0, 1), "nimbydpvrail_4": (0, 0, 1)}
+    # Item forward INBOARD for the can and box slots (builds 47 to 51; build 52 turned them
+    # outboard for the bags and Jeff sent the ammo can back: "flip 180"). Bags live on the
+    # railbag slots, whose frame is outboard (railbag_up).
+    rail_up = {"nimbydpvrail_1": (1, 0, 0), "nimbydpvrail_2": (-1, 0, 0),
+               "nimbydpvrail_3": (1, 0, 0), "nimbydpvrail_4": (-1, 0, 0)}
+    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z, "rail": rail_pos, "railbag": railbag_pos,
               "crew_driver": crew_origin(seat_d), "crew_codriver": crew_origin(seat_c),
               "crew_cargo1": crew_origin(seat_r), "spare": spare, "engine": engine}
 
@@ -568,6 +737,8 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     lod0 = Lod(RES_VISUAL[0], "visual-1")
     is_body = lambda r: r == "body" or r in ("drivewheel", "seat_driver", "seat_codriver", "seat_cargo1", "lights") or (isinstance(r, tuple) and r[0] == "disc")
     build_visual(verts, uvs, faces, parts, roles, lod0, is_body)
+    add_antenna(lod0)
+    add_wheel_post(lod0, spare)
     def add_vehicle_proxies(lod, with_crew=True, with_wheels=True, with_parts=True):
         n = 1
         if with_wheels:
@@ -590,10 +761,22 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
             lod.add_proxy(CREW_CARGO_PROXY, 1, crew_origin(seat_c), forward=(0, -1, 0), sel=("crewcodriver",), crew=True)
             lod.add_proxy(CREW_CARGO_PROXY, 2, crew_origin(seat_r), forward=(0, -1, 0), sel=("crewcargo1",), crew=True)
         if with_parts:
-            lod.add_proxy(PART_PROXIES["battery"], 1, part_pos["carbattery"], forward=(0, -1, 0), sel=("battery",))
+            # battery flat, terminals up, front face to the rear (build 47; it stood on end with the
+            # default triangle, which points the item's up axis backward, see the rail note)
+            # build 49: label was north, so the item forward flips to -x; plus 10 degrees of roll
+            # (left side down) on top of the 25 degree pitch, both from Jeff's in-game reading
+            # Build 53 (Jeff, build 52): the battery is required but not drawn, like the spark
+            # plug. No proxy here: the carbattery slot, its memory point and CarScript's
+            # IsVitalCarBattery check are untouched, so the engine still needs one and the
+            # inventory screen still takes it; nothing shows on the deck. Builds 46 to 52 drew it
+            # on the rear deck (part_pos carbattery; frame history in the comments above).
             lod.add_proxy(PART_PROXIES["sparkplug"], 1, part_pos["sparkplug"], forward=(0, -1, 0), sel=("sparkplug",))
             lod.add_proxy(PART_PROXIES["reflector_1_1"], 1, part_pos["reflector_1_1"], forward=(0, -1, 0), sel=("reflector_1_1",))
             lod.add_proxy(PART_PROXIES["reflector_2_1"], 2, part_pos["reflector_2_1"], forward=(0, -1, 0), sel=("reflector_2_1",))
+            for i, slot in enumerate(RAIL_SLOTS, 1):
+                lod.add_proxy(RAIL_PROXY[slot], i, rail_pos[slot], forward=rail_fwd[slot], up=rail_up[slot], sel=("rail_%d" % i,))
+            for i, slot in enumerate(RAILBAG_SLOTS, 1):
+                lod.add_proxy(RAIL_PROXY[slot], 4 + i, railbag_pos[slot], forward=(0, 0, 1), up=railbag_up[slot], sel=("railbag_%d" % i,))
     add_vehicle_proxies(lod0)
     lod0.properties.append(("lodnoshadow", "1"))
     lods.append(lod0)
@@ -677,6 +860,21 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     vg.add_box((spare[0] - sr, spare[1] - sr, spare[2] - sw), (spare[0] + sr, spare[1] + sr, spare[2] + sw), sel=(SPARE_SLOT, "component%02d" % vk)); vk += 1
     for slot, pos in part_slot_positions().items():
         vg.add_box((pos[0] - 0.12, pos[1] - 0.12, pos[2] - 0.12), (pos[0] + 0.12, pos[1] + 0.12, pos[2] + 0.12), sel=(slot, "component%02d" % vk)); vk += 1
+    # Build 50: the rail interaction pad is a small slab on the shelf top (z 0.47 to 0.52), not a
+    # 0.24 x 0.36 x 0.24 box around the proxy. The big box enclosed the ammo box entirely, so the
+    # cursor raycast (View Geometry) hit the car first and the only prompt was "Push car"; the can
+    # and the bag only worked because they poke out of it. Empty slot: look at the pad to attach.
+    # Self-review, build 50: the pad stays outboard of the tub box (component01, x to 0.80, z to
+    # 0.62) or its inner strip is buried under it; the front pair at x 0.82 is clipped to 0.805.
+    # build 53: the pad carries both slot names of its position; ActionAttachOnSelection tries every
+    # selection on the hit component (ActionAttachOnSelection.c:17-50), so a bag finds the railbag
+    # slot and a can or box the rail slot from the same pad
+    for slot, bagslot in zip(RAIL_SLOTS, RAILBAG_SLOTS):
+        pos = rail_pos[slot]
+        sx = 1.0 if pos[0] > 0 else -1.0
+        xin = sx * max(abs(pos[0]) - 0.06, 0.805)
+        xout = sx * (abs(pos[0]) + 0.06)
+        vg.add_box((min(xin, xout), pos[1] - 0.10, 0.470), (max(xin, xout), pos[1] + 0.10, 0.520), sel=(slot, bagslot, "component%02d" % vk)); vk += 1
     vg.add_box((-0.80, 0.80, 0.62), (0.80, front_y - 0.25, 0.95), sel=("component%02d" % vk,)); vk += 1       # hood deck
     vg.add_box((-0.80, rear_y + 0.15, 0.62), (0.80, -1.45, 1.00), sel=("component%02d" % vk,)); vk += 1      # rear engine box
     lods.append(vg)
@@ -737,8 +935,14 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # else (build 18, November 6, 2026). NimbyDpv_Car.CanReachSeatFromDoors widens the reach for
     # this seat so the three natural approaches (either side, behind) all qualify.
     mp("seat_con_1_2", (0.0, seat_r["center"][1], 0.5))
+    # Build 49 (NIMBY-T-102, Jeff, November 7, 12:22: the wheel turned about an off-centre axis):
+    # the rim's plane normal, fitted from the drivewheel part's vertices, is (0, 0.931, -0.366),
+    # a column running forward and DOWN 21.5 degrees; the axis used until build 48 ran forward
+    # and UP 18 degrees, so the wheel spun about an axis 40 degrees off its own. The rim centre
+    # coincides with the part's bounding-box centre (both (-0.304, 0.35, 1.036)).
     dwc = dw["center"]
-    a = mem.add_point((dwc[0], dwc[1] - 0.3, dwc[2] - 0.1)); b = mem.add_point((dwc[0], dwc[1] + 0.3, dwc[2] + 0.1))
+    dwn = (0.0, 0.931, -0.366)
+    a = mem.add_point((dwc[0] - 0.3 * dwn[0], dwc[1] - 0.3 * dwn[1], dwc[2] - 0.3 * dwn[2])); b = mem.add_point((dwc[0] + 0.3 * dwn[0], dwc[1] + 0.3 * dwn[1], dwc[2] + 0.3 * dwn[2]))
     mem.select_points("axis_drivewheel", [a, b])
     mp("light_left", (lc[0] - 0.3, lc[1] + 0.02, lc[2])); mp("light_left_dir", (lc[0] - 0.3, lc[1] + 1.0, lc[2]))
     mp("light_right", (lc[0] + 0.3, lc[1] + 0.02, lc[2])); mp("light_right_dir", (lc[0] + 0.3, lc[1] + 1.0, lc[2]))
@@ -756,6 +960,10 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     mp(SPARE_SLOT, spare)
     for slot, pos in part_slot_positions().items():
         mp(slot, pos)
+    for slot in RAIL_SLOTS:
+        mp(slot, rail_pos[slot])
+    for slot in RAILBAG_SLOTS:
+        mp(slot, railbag_pos[slot])
     lods.append(mem)
     # No LandContact LOD: neither the vanilla ADA (ODOL resolution table read 2026-11-05) nor the
     # working Arma2Quad 1.30 port carries one; a car's placement comes from the wheel simulation.
@@ -815,6 +1023,20 @@ def build_wheel(verts, uvs, faces, parts, roles, facts):
     return [lod, geo, mem, vgw, fgw]
 
 
+# ----------------------------------------------------------------------------- rail proxy model
+def build_rail_proxy():
+    """Minimal proxy p3d for the rail slots: one tiny untextured triangle in a visual LOD
+    (selection "zbytek", as the vanilla proxy models carry) plus a Memory LOD with ce_center.
+    The engine draws the attached item in place of it; the triangle itself is never seen."""
+    lod = Lod(RES_VISUAL[0], "rail-visual")
+    ids = [lod.add_point((0.0, 0.0, 0.0)), lod.add_point((0.01, 0.0, 0.0)), lod.add_point((0.0, 0.0, 0.01))]
+    lod.add_face(ids, [(0.0, -1.0, 0.0)] * 3, [(0.0, 0.0)] * 3, sel=("zbytek",))
+    lod.properties.append(("lodnoshadow", "1"))
+    mem = Lod(RES_MEMORY, "rail-memory")
+    mem.select_points("ce_center", [mem.add_point((0.0, 0.0, 0.0))])
+    return [lod, mem]
+
+
 # ----------------------------------------------------------------------------- main
 def main(argv):
     ap = argparse.ArgumentParser()
@@ -838,6 +1060,7 @@ def main(argv):
     size = write_mlod(os.path.join(args.out, "dpv.p3d"), lods)
     wlods = build_wheel(verts, uvs, faces, parts, roles, facts)
     wsize = write_mlod(os.path.join(args.out, "dpvwheel.p3d"), wlods)
+    rsize = write_mlod(os.path.join(args.out, "dpvrail.p3d"), build_rail_proxy())
     role_counts = Counter(r if isinstance(r, str) else r[0] for r in roles.values())
     report.update({
         "source": os.path.abspath(args.source),
@@ -846,7 +1069,7 @@ def main(argv):
         "lods": [{"name": l.name, "resolution": l.resolution, "points": len(l.points), "faces": len(l.faces),
                   "selections": sorted(l.selections.keys())} for l in lods],
         "wheel_lods": [{"name": l.name, "points": len(l.points), "faces": len(l.faces)} for l in wlods],
-        "bytes": {"dpv.p3d": size, "dpvwheel.p3d": wsize},
+        "bytes": {"dpv.p3d": size, "dpvwheel.p3d": wsize, "dpvrail.p3d": rsize},
         "blender": use_blender,
     })
     with open(os.path.join(args.out, "build-report.json"), "w") as fh:
