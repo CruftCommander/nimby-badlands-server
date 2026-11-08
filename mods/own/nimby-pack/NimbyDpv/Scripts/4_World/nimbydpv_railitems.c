@@ -43,3 +43,48 @@ modded class Backpack_Base
 		AddAction(ActionDetach);
 	}
 }
+
+// Build 55: packed tents on the per-side tent slots. TentBase.SetActions (TentBase.c:852) has the
+// pack, unpack and deploy actions and neither of these; same reasoning as the box and the bags.
+modded class TentBase
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}
+
+// Build 55: small storage (Jeff, 18:15). The three are Container_Base children with no vanilla
+// attach or detach action (containers.c:20, :74; ScientificBriefcase.c:1); modded one by one rather
+// than at Container_Base so barrels, crates and chests stay as vanilla left them.
+modded class FirstAidKit
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}
+
+modded class SmallProtectorCase
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}
+
+modded class ScientificBriefcase
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}

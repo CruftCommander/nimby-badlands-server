@@ -120,11 +120,15 @@ class NimbyDpvDiag
         if (car.IsInherited(NimbyDpv_Car))
         {
             string rails = "";
-            // build 53: both slot sets, eight names
-            for (int r = 1; r <= 8; r++)
+            // build 53: both slot sets, eight names; build 55: plus the two tent slots
+            for (int r = 1; r <= 10; r++)
             {
                 string slotName = "NimbyDpvRail_" + r.ToString();
-                if (r > 4)
+                if (r == 9)
+                    slotName = "NimbyDpvRailTent_L";
+                else if (r == 10)
+                    slotName = "NimbyDpvRailTent_R";
+                else if (r > 4)
                     slotName = "NimbyDpvRailBag_" + (r - 4).ToString();
                 int slotId = InventorySlots.GetSlotIdFromString(slotName);
                 EntityAI att = car.GetInventory().FindAttachment(slotId);

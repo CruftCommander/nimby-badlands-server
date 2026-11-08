@@ -138,6 +138,20 @@ class CfgSlots
         name = "NimbyDpvRailBag_4";
         selection = "railbag_4";
     };
+    // Build 55 (Jeff, build 54 interview): one packed-tent slot per side, centred on the shelf. It
+    // takes the whole side: NimbyDpv_Car blocks it while any of that side's four slots is filled
+    // and blocks those four while it is filled. Left = odd rail numbers (x negative).
+    class Slot_NimbyDpvRailTent_L : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRailTent_L";
+        displayName = "Rail (tent)";
+        selection = "railtent_l";
+    };
+    class Slot_NimbyDpvRailTent_R : Slot_NimbyDpvRailTent_L
+    {
+        name = "NimbyDpvRailTent_R";
+        selection = "railtent_r";
+    };
 };
 
 // The wheel proxy: the model placed at every proxy:\NimbyDpv\data\dpvwheel.NNN triangle,
@@ -191,7 +205,7 @@ class CfgNonAIVehicles
     {
         scope = 2;
         model = "\NimbyDpv\data\dpvrail.p3d";
-        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4", "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
     };
 };
 
@@ -200,6 +214,7 @@ class CfgVehicles
     class CarWheel;
     class Bottle_Base;
     class Container_Base;
+    class TentBase;
     class Clothing;
     class OffroadHatchback;
     // NimbyDpv_Car inherits CarScript directly and writes Crew, SimulationModule and
@@ -329,7 +344,9 @@ class CfgVehicles
             "NimbyDpvRailBag_1",
             "NimbyDpvRailBag_2",
             "NimbyDpvRailBag_3",
-            "NimbyDpvRailBag_4"
+            "NimbyDpvRailBag_4",
+            "NimbyDpvRailTent_L",
+            "NimbyDpvRailTent_R"
         };
         hiddenSelections[] =
         {
@@ -381,7 +398,7 @@ class CfgVehicles
                 icon = "set:dayz_inventory image:cat_vehicle_body";
                 // build 53: both slot sets; a filled position hides its twin, so the group shows
                 // eight icons empty and four full
-                attachmentSlots[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+                attachmentSlots[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4", "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
             };
         };
         // Engine, tyre, skid, rain, damper and wind sound sets. Vanilla cars do not get these from
@@ -763,6 +780,42 @@ class CfgVehicles
     // saved changes; the first NIMBY addon to modify vanilla item classes (Jeff, November 6,
     // 23:08; shared-rules registry line owed). Ghillie items and the packed tent also carry the
     // Back slot but are not backpacks and stay out.
+    // Build 55: packed tents on the per-side tent slots (Jeff: all four tent classes). The colour
+    // variants (MediumTent_Green, PartyTent_Blue, ...) inherit these lists. Tents have no vanilla
+    // inventorySlot[] (DZ/gear/camping/config.cpp), so the list is the two rail names alone.
+    class MediumTent : TentBase
+    {
+        inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+    };
+    class LargeTent : TentBase
+    {
+        inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+    };
+    class CarTent : TentBase
+    {
+        inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+    };
+    class PartyTent : TentBase
+    {
+        inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+    };
+    // Build 55 (Jeff, 18:15): small storage on the rails too. Slot set by model origin (ODOL
+    // headers): FirstAidKit.p3d and Protector_Case.p3d are centre-origin like the ammo can, so
+    // they take the can/box set; ScientificCase.p3d is base-origin and upright like a bag, so it
+    // takes the bag set. Drysacks (DryBag, DrysackBag) were already in the bag list. Vanilla
+    // gives none of the three an inventorySlot[] (DZ/gear/containers/config.cpp:454, :541, :2306).
+    class FirstAidKit : Container_Base
+    {
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+    };
+    class SmallProtectorCase : Container_Base
+    {
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+    };
+    class ScientificBriefcase : Container_Base
+    {
+        inventorySlot[] = { "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
     class CanisterGasoline : Bottle_Base
     {
         inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };

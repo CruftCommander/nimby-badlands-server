@@ -77,6 +77,10 @@ RAIL_PROXY = {slot: RAIL_PROXY_MODEL for slot in RAIL_SLOTS}
 # same proxy model, proxy numbers 5 to 8, its own frame (see railbag_pos below).
 RAILBAG_SLOTS = ("nimbydpvrailbag_1", "nimbydpvrailbag_2", "nimbydpvrailbag_3", "nimbydpvrailbag_4")
 RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in RAILBAG_SLOTS})
+# Build 55: one packed-tent slot per side (config Slot_NimbyDpvRailTent_L/R, bones railtent_l/r),
+# proxies 9 and 10, centred on the shelf (see railtent_pos).
+RAILTENT_SLOTS = ("nimbydpvrailtent_l", "nimbydpvrailtent_r")
+RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in RAILTENT_SLOTS})
 CREW_DRIVER_PROXY = r"\dz\vehicles\wheeled\proxies\crew_driver"
 CREW_CARGO_PROXY = r"\dz\vehicles\wheeled\proxies\crew_cargo"
 PART_PROXIES = {                                      # vanilla part proxies the ADA uses
@@ -707,6 +711,13 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
                    "nimbydpvrailbag_3": (-0.82, 0.825, 0.55), "nimbydpvrailbag_4": (0.82, 0.825, 0.55)}
     railbag_up = {"nimbydpvrailbag_1": (-1, 0, 0), "nimbydpvrailbag_2": (1, 0, 0),
                   "nimbydpvrailbag_3": (-1, 0, 0), "nimbydpvrailbag_4": (1, 0, 0)}
+    # Build 55 tent slots: shelf centre (y -0.74 to 1.12 gives 0.19), x on the rear pair line,
+    # z 0.55 (packed tents are base-origin bags as far as the inventory icons show; unproven).
+    # First frame: item up to world up, item forward outboard like the bags. The packed tent's
+    # long axis in its own model is unknown (the item P3D holds the pitched tent too, so the
+    # ODOL header cannot say); the build 55 drive calibrates this frame.
+    railtent_pos = {"nimbydpvrailtent_l": (-0.865, 0.19, 0.55), "nimbydpvrailtent_r": (0.865, 0.19, 0.55)}
+    railtent_up = {"nimbydpvrailtent_l": (-1, 0, 0), "nimbydpvrailtent_r": (1, 0, 0)}
     # Build 50: front pair back 0.05 (Jeff: the front can "needs to come back about two inches").
     # Build 45 rendered (the rail_N bones in model.cfg were the missing piece): cans pass; the
     # ammo cans sat about 3 inches low with their labels forward. Build 46: boxes up 0.075,
@@ -728,7 +739,7 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # railbag slots, whose frame is outboard (railbag_up).
     rail_up = {"nimbydpvrail_1": (1, 0, 0), "nimbydpvrail_2": (-1, 0, 0),
                "nimbydpvrail_3": (1, 0, 0), "nimbydpvrail_4": (-1, 0, 0)}
-    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z, "rail": rail_pos, "railbag": railbag_pos,
+    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z, "rail": rail_pos, "railbag": railbag_pos, "railtent": railtent_pos,
               "crew_driver": crew_origin(seat_d), "crew_codriver": crew_origin(seat_c),
               "crew_cargo1": crew_origin(seat_r), "spare": spare, "engine": engine}
 
@@ -777,6 +788,8 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
                 lod.add_proxy(RAIL_PROXY[slot], i, rail_pos[slot], forward=rail_fwd[slot], up=rail_up[slot], sel=("rail_%d" % i,))
             for i, slot in enumerate(RAILBAG_SLOTS, 1):
                 lod.add_proxy(RAIL_PROXY[slot], 4 + i, railbag_pos[slot], forward=(0, 0, 1), up=railbag_up[slot], sel=("railbag_%d" % i,))
+            for i, slot in enumerate(RAILTENT_SLOTS, 1):
+                lod.add_proxy(RAIL_PROXY[slot], 8 + i, railtent_pos[slot], forward=(0, 0, 1), up=railtent_up[slot], sel=("railtent_%s" % "lr"[i - 1],))
     add_vehicle_proxies(lod0)
     lod0.properties.append(("lodnoshadow", "1"))
     lods.append(lod0)
@@ -871,10 +884,11 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # slot and a can or box the rail slot from the same pad
     for slot, bagslot in zip(RAIL_SLOTS, RAILBAG_SLOTS):
         pos = rail_pos[slot]
+        tentslot = RAILTENT_SLOTS[0] if pos[0] < 0 else RAILTENT_SLOTS[1]   # build 55: the side's tent slot too
         sx = 1.0 if pos[0] > 0 else -1.0
         xin = sx * max(abs(pos[0]) - 0.06, 0.805)
         xout = sx * (abs(pos[0]) + 0.06)
-        vg.add_box((min(xin, xout), pos[1] - 0.10, 0.470), (max(xin, xout), pos[1] + 0.10, 0.520), sel=(slot, bagslot, "component%02d" % vk)); vk += 1
+        vg.add_box((min(xin, xout), pos[1] - 0.10, 0.470), (max(xin, xout), pos[1] + 0.10, 0.520), sel=(slot, bagslot, tentslot, "component%02d" % vk)); vk += 1
     vg.add_box((-0.80, 0.80, 0.62), (0.80, front_y - 0.25, 0.95), sel=("component%02d" % vk,)); vk += 1       # hood deck
     vg.add_box((-0.80, rear_y + 0.15, 0.62), (0.80, -1.45, 1.00), sel=("component%02d" % vk,)); vk += 1      # rear engine box
     lods.append(vg)
@@ -964,6 +978,8 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
         mp(slot, rail_pos[slot])
     for slot in RAILBAG_SLOTS:
         mp(slot, railbag_pos[slot])
+    for slot in RAILTENT_SLOTS:
+        mp(slot, railtent_pos[slot])
     lods.append(mem)
     # No LandContact LOD: neither the vanilla ADA (ODOL resolution table read 2026-11-05) nor the
     # working Arma2Quad 1.30 port carries one; a car's placement comes from the wheel simulation.

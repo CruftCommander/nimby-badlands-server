@@ -189,7 +189,11 @@ modded class MissionServer extends MissionBase
         {
             // build 53: the bag on its own slot (NimbyDpvRailBag_3, which then hides and blocks
             // NimbyDpvRail_3), the box on Rail_4; the vanilla fill's jerry cans take Rail_1 and 2
-            NimbyDpvAttachToRail(car, "HuntingBag", "NimbyDpvRailBag_3");
+            // build 55: a packed MediumTent takes the left side; the right side keeps the bag (now
+            // on RailBag_2) and the box (Rail_4); the fill's jerry cans find every rail blocked and
+            // land in the cargo with the other tents
+            NimbyDpvAttachToRail(car, "MediumTent", "NimbyDpvRailTent_L");
+            NimbyDpvAttachToRail(car, "HuntingBag", "NimbyDpvRailBag_2");
             NimbyDpvAttachToRail(car, "AmmoBox", "NimbyDpvRail_4");
         }
         car.OnDebugSpawn();

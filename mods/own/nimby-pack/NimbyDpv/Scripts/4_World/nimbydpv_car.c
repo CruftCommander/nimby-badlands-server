@@ -454,20 +454,55 @@ class NimbyDpv_Car extends CarScript
     // the inventory screen. InventorySlots.GetSlotName (3_Game/DayZ/Systems/Inventory/
     // InventorySlots.c:48), GameInventory.FindAttachment, EntityAI.CanDisplayAttachmentSlot(int)
     // (3_Game/DayZ/Entities/EntityAI.c:1788), CarScript.CanReceiveAttachment (CarScript.c:609).
+    // Build 55: a per-side tent slot (NimbyDpvRailTent_L/R) joins the rule. Left is the odd rail
+    // numbers (x negative), right the even. A tent slot is blocked while any of its side's four
+    // slots is filled; each of those is blocked while its twin or its side's tent is filled.
+    protected bool NimbyDpvRailSlotFilled(string slotName)
+    {
+        int id = InventorySlots.GetSlotIdFromString(slotName);
+        if (id == InventorySlots.INVALID)
+            return false;
+        return GetInventory().FindAttachment(id) != null;
+    }
+
     protected bool NimbyDpvRailTwinOccupied(int slotId)
     {
         string slotName = InventorySlots.GetSlotName(slotId);
+        string n = "";
         string twin = "";
         if (slotName.IndexOf("NimbyDpvRailBag_") == 0)
-            twin = "NimbyDpvRail_" + slotName.Substring(16, slotName.Length() - 16);
+        {
+            n = slotName.Substring(16, slotName.Length() - 16);
+            twin = "NimbyDpvRail_" + n;
+        }
+        else if (slotName.IndexOf("NimbyDpvRailTent_") == 0)
+        {
+            string side = slotName.Substring(17, slotName.Length() - 17);
+            string a = "1";
+            string b = "3";
+            if (side == "R")
+            {
+                a = "2";
+                b = "4";
+            }
+            // build 55 gate: Enforce rejects a continuation line that starts with ||, so one test per line
+            if (NimbyDpvRailSlotFilled("NimbyDpvRail_" + a) || NimbyDpvRailSlotFilled("NimbyDpvRailBag_" + a))
+                return true;
+            return NimbyDpvRailSlotFilled("NimbyDpvRail_" + b) || NimbyDpvRailSlotFilled("NimbyDpvRailBag_" + b);
+        }
         else if (slotName.IndexOf("NimbyDpvRail_") == 0)
-            twin = "NimbyDpvRailBag_" + slotName.Substring(13, slotName.Length() - 13);
+        {
+            n = slotName.Substring(13, slotName.Length() - 13);
+            twin = "NimbyDpvRailBag_" + n;
+        }
         if (twin == "")
             return false;
-        int twinId = InventorySlots.GetSlotIdFromString(twin);
-        if (twinId == InventorySlots.INVALID)
-            return false;
-        return GetInventory().FindAttachment(twinId) != null;
+        if (NimbyDpvRailSlotFilled(twin))
+            return true;
+        string tent = "NimbyDpvRailTent_L";
+        if (n == "2" || n == "4")
+            tent = "NimbyDpvRailTent_R";
+        return NimbyDpvRailSlotFilled(tent);
     }
 
     override bool CanReceiveAttachment(EntityAI attachment, int slotId)
