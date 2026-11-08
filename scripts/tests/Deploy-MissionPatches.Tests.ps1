@@ -10,7 +10,7 @@ BeforeAll {
     $overrides = Join-Path $repo 'server\mission-overrides'
     $liveDir = Join-Path $repo 'server\live'
     Import-Module (Join-Path $repo 'scripts\modules\NimbyCommon.psm1') -Force
-    . (Get-ScriptFunctionBlock -Path $deployScript -Name 'Read-XmlFile', 'Get-PatchDescriptor', 'ConvertTo-CanonicalXml', 'Get-NamedEntry', 'Get-PatchPlan', 'Merge-PatchIntoDocument', 'Get-FileNewLine', 'Save-XmlFile', 'Get-EntryCount', 'Join-RemotePath', 'Resolve-PatchPath')
+    . (Get-ScriptFunctionBlock -Path $deployScript -Name 'Read-XmlFile', 'Get-PatchDescriptor', 'ConvertTo-CanonicalXml', 'Get-NamedEntry', 'Get-PatchPlan', 'Merge-PatchIntoDocument', 'Get-FileNewLine', 'Save-XmlFile', 'Get-EntryCount', 'Get-EntryParent', 'Join-RemotePath', 'Resolve-PatchPath')
     $script:PatchTargets = (Get-ScriptAssignmentValue -Path $deployScript -Name 'PatchTargets')[0]
 
     function Write-Fixture {
@@ -60,14 +60,21 @@ Describe 'Get-PatchDescriptor' {
         @{ PatchFile = 'db\types.dpv.patch.xml'; Relative = 'db\types.xml'; Entry = 'type' }
         @{ PatchFile = 'db\types.release2-loot.patch.xml'; Relative = 'db\types.xml'; Entry = 'type' }
         @{ PatchFile = 'db\events.dpv.patch.xml'; Relative = 'db\events.xml'; Entry = 'event' }
-        @{ PatchFile = 'db\events.helicrash.patch.xml'; Relative = 'db\events.xml'; Entry = 'event' }
         @{ PatchFile = 'cfgspawnabletypes.dpv.patch.xml'; Relative = 'cfgspawnabletypes.xml'; Entry = 'type' }
         @{ PatchFile = 'cfgeventspawns.dpv.patch.xml'; Relative = 'cfgeventspawns.xml'; Entry = 'event' }
-        @{ PatchFile = 'mapgroupproto.cisterns.patch.xml'; Relative = 'mapgroupproto.xml'; Entry = 'group' }
+        @{ PatchFile = 'cfgeconomycore.logging.patch.xml'; Relative = 'cfgeconomycore.xml'; Entry = 'default' }
     ) {
         $descriptor = Get-PatchDescriptor -PatchPath (Join-Path $overrides $PatchFile)
         $descriptor.Relative | Should -Be $Relative
         $descriptor.Entry | Should -Be $Entry
+    }
+
+    It 'refuses an applied patch (header says APPLIED): <PatchFile>' -ForEach @(
+        @{ PatchFile = 'db\events.helicrash.patch.xml' }
+        @{ PatchFile = 'db\types.release1-loot.patch.xml' }
+        @{ PatchFile = 'mapgroupproto.cisterns.patch.xml' }
+    ) {
+        { Get-PatchDescriptor -PatchPath (Join-Path $overrides $PatchFile) } | Should -Throw '*APPLIED*'
     }
 
     It 'refuses a root element it does not know' {
@@ -214,6 +221,33 @@ Describe 'The repository patch files against server\live' {
         $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument (Read-XmlFile -Path $livePath) -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry 'event')
         ($plan | Where-Object Name -eq 'VehicleNimbyDpv').Mode | Should -Be 'ADD'
         ($plan | Where-Object Name -eq 'VehicleOffroad02').Mode | Should -Be 'REPLACE'
+    }
+}
+
+Describe 'Nested container (cfgeconomycore defaults)' {
+    It 'plans the logging patch as REPLACE under the defaults container and applies it to a copy of server\live' {
+        $livePath = Join-Path $liveDir 'cfgeconomycore.xml'
+        $patch = Get-PatchDescriptor -PatchPath (Join-Path $overrides 'cfgeconomycore.logging.patch.xml')
+        $patch.Container | Should -Be 'defaults'
+        $live = Read-XmlFile -Path $livePath
+        $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument $live -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry 'default' -Container 'defaults')
+        $plan.Count | Should -Be 2
+        @($plan | Where-Object Mode -ne 'REPLACE') | Should -BeNullOrEmpty
+        $before = Get-EntryCount -Document $live -Entry 'default' -Container 'defaults'
+        $result = Merge-PatchIntoDocument -LiveDocument $live -Plan $plan -Entry 'default' -Container 'defaults'
+        $result.Replaced | Should -Be 2
+        $out = Join-Path $TestDrive 'eco\cfgeconomycore.xml'
+        Save-XmlFile -Document $live -Path $out
+        $check = Read-XmlFile -Path $out
+        Get-EntryCount -Document $check -Entry 'default' -Container 'defaults' | Should -Be $before
+        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_vehicle' -Container 'defaults')[0].GetAttribute('value') | Should -Be 'true'
+        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value') | Should -Be 'false'
+        @($check.DocumentElement.SelectNodes('./classes/rootclass')).Count | Should -Be 10
+    }
+
+    It 'refuses a missing container' {
+        $doc = Read-XmlFile -Path (Write-Fixture -Path (Join-Path $TestDrive 'eco\nodefaults.xml') -Content '<economycore><classes/></economycore>')
+        { Get-EntryParent -Document $doc -Container 'defaults' } | Should -Throw '*Expected one <defaults>*'
     }
 }
 

@@ -12,6 +12,7 @@
     drafted against. Each patch file carries whole entries (a <type>, <event> or <group>) and says
     nothing about mode; the mode comes from the reference copy in server\live\:
 
+      A patch file whose header comment says APPLIED is refused: it is the record of a past change.
       REPLACE  the entry exists in the reference. The live entry must be byte-for-byte the
                reference entry (comments and whitespace ignored), or the run FAILS before any
                file is written.
@@ -23,7 +24,8 @@
     Steps:
       1. Resolve each -Patch file to the mission file it targets by its root element:
          <types> -> db\types.xml, <events> -> db\events.xml, <spawnabletypes> -> cfgspawnabletypes.xml,
-         <eventposdef> -> cfgeventspawns.xml, <prototype> -> mapgroupproto.xml.
+         <eventposdef> -> cfgeventspawns.xml, <prototype> -> mapgroupproto.xml,
+         <economycore> -> cfgeconomycore.xml (its <default> rows live under <defaults>).
       2. Pull each targeted live file into <repo>\logs\deploy-<stamp>\live\ (Posh-SSH), or copy it
          from -LiveDir when given (a dry run against a local copy; no network).
       3. Plan: every entry of every patch gets ADD, REPLACE, ALREADY or FAIL. One FAIL stops the run
@@ -106,12 +108,14 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'modules\NimbyCommon.psm1') -Force
 
 # Root element of a patch file -> the mission file it targets and the entry element inside it.
+# Container: the element under the root that holds the entries ('' = the root itself).
 $script:PatchTargets = @{
-    'types'          = @{ Relative = 'db\types.xml'; Entry = 'type' }
-    'events'         = @{ Relative = 'db\events.xml'; Entry = 'event' }
-    'spawnabletypes' = @{ Relative = 'cfgspawnabletypes.xml'; Entry = 'type' }
-    'eventposdef'    = @{ Relative = 'cfgeventspawns.xml'; Entry = 'event' }
-    'prototype'      = @{ Relative = 'mapgroupproto.xml'; Entry = 'group' }
+    'types'          = @{ Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
+    'events'         = @{ Relative = 'db\events.xml'; Entry = 'event'; Container = '' }
+    'spawnabletypes' = @{ Relative = 'cfgspawnabletypes.xml'; Entry = 'type'; Container = '' }
+    'eventposdef'    = @{ Relative = 'cfgeventspawns.xml'; Entry = 'event'; Container = '' }
+    'prototype'      = @{ Relative = 'mapgroupproto.xml'; Entry = 'group'; Container = '' }
+    'economycore'    = @{ Relative = 'cfgeconomycore.xml'; Entry = 'default'; Container = 'defaults' }
 }
 
 function Read-XmlFile {
@@ -132,11 +136,19 @@ function Get-PatchDescriptor {
         throw ("{0}: root element <{1}> is not a mission file this script knows ({2})." -f $PatchPath, $rootName, (($script:PatchTargets.Keys | Sort-Object) -join ', '))
     }
     $target = $script:PatchTargets[$rootName]
+    # A patch whose header records APPLIED is history, not an input: release 1's
+    # mapgroupproto.cisterns.patch.xml carries the changed lines only (no <point> rows), so replaying it
+    # would strip the live groups' points. The LOOT-CHANGELOG rule marks every applied patch this way.
+    $header = @($doc.ChildNodes | Where-Object { $_.NodeType -eq 'Comment' } | Select-Object -First 1)
+    if ($header.Count -eq 1 -and $header[0].Value -cmatch '\bAPPLIED\b') {   # case-sensitive: DRAFT headers say "not applied"
+        throw ("{0}: its header says APPLIED; an applied patch is a record, not a deploy input." -f $PatchPath)
+    }
     return [PSCustomObject]@{
         PatchPath = (Resolve-Path -LiteralPath $PatchPath).ProviderPath
         Root      = $rootName
         Relative  = $target.Relative
         Entry     = $target.Entry
+        Container = $target.Container
         Document  = $doc
     }
 }
@@ -163,15 +175,31 @@ function ConvertTo-CanonicalXml {
     return $builder.ToString()
 }
 
+function Get-EntryParent {
+    # The element that holds the entries: the root, or the single child named -Container
+    # (cfgeconomycore.xml keeps its <default> rows under <defaults>). Throws when the container is
+    # missing or repeated, so a patch never lands in the wrong place.
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlDocument]$Document,
+        [AllowEmptyString()][string]$Container = ''
+    )
+    if (-not $Container) { return $Document.DocumentElement }
+    $found = @($Document.DocumentElement.SelectNodes(("./*[local-name()='{0}']" -f $Container)))
+    if ($found.Count -ne 1) { throw ("Expected one <{0}> under <{1}>, found {2}." -f $Container, $Document.DocumentElement.LocalName, $found.Count) }
+    return $found[0]
+}
+
 function Get-NamedEntry {
-    # The direct children of the root with the given element name and name="..." attribute.
+    # The children of the entry parent with the given element name and name="..." attribute.
     param(
         [Parameter(Mandatory)][System.Xml.XmlDocument]$Document,
         [Parameter(Mandatory)][string]$Entry,
-        [Parameter(Mandatory)][string]$Name
+        [Parameter(Mandatory)][string]$Name,
+        [AllowEmptyString()][string]$Container = ''
     )
+    $parent = Get-EntryParent -Document $Document -Container $Container
     # The leading comma keeps a one-element result an array when the function returns it.
-    return , @($Document.DocumentElement.SelectNodes(("./*[local-name()='{0}'][@name='{1}']" -f $Entry, $Name)))
+    return , @($parent.SelectNodes(("./*[local-name()='{0}'][@name='{1}']" -f $Entry, $Name)))
 }
 
 function Get-PatchPlan {
@@ -182,11 +210,13 @@ function Get-PatchPlan {
         [Parameter(Mandatory)][System.Xml.XmlDocument]$PatchDocument,
         [Parameter(Mandatory)][System.Xml.XmlDocument]$LiveDocument,
         [Parameter(Mandatory)][System.Xml.XmlDocument]$ReferenceDocument,
-        [Parameter(Mandatory)][string]$Entry
+        [Parameter(Mandatory)][string]$Entry,
+        [AllowEmptyString()][string]$Container = ''
     )
     $rows = [System.Collections.Generic.List[object]]::new()
     $seen = @{}
-    foreach ($node in @($PatchDocument.DocumentElement.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })) {
+    $patchParent = Get-EntryParent -Document $PatchDocument -Container $Container
+    foreach ($node in @($patchParent.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })) {
         $name = $node.GetAttribute('name')
         $mode = 'FAIL'; $reason = ''
         if ($node.LocalName -ne $Entry) {
@@ -200,8 +230,8 @@ function Get-PatchPlan {
         }
         else {
             $seen[$name] = $true
-            $live = Get-NamedEntry -Document $LiveDocument -Entry $Entry -Name $name
-            $reference = Get-NamedEntry -Document $ReferenceDocument -Entry $Entry -Name $name
+            $live = Get-NamedEntry -Document $LiveDocument -Entry $Entry -Name $name -Container $Container
+            $reference = Get-NamedEntry -Document $ReferenceDocument -Entry $Entry -Name $name -Container $Container
             $patchCanonical = ConvertTo-CanonicalXml -Node $node
             if ($live.Count -gt 1) {
                 $reason = ("live holds {0} entries of that name" -f $live.Count)
@@ -230,13 +260,14 @@ function Merge-PatchIntoDocument {
     param(
         [Parameter(Mandatory)][System.Xml.XmlDocument]$LiveDocument,
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Plan,
-        [Parameter(Mandatory)][string]$Entry
+        [Parameter(Mandatory)][string]$Entry,
+        [AllowEmptyString()][string]$Container = ''
     )
-    $root = $LiveDocument.DocumentElement
+    $root = Get-EntryParent -Document $LiveDocument -Container $Container
     $added = 0; $replaced = 0
     foreach ($row in $Plan) {
         if ($row.Mode -eq 'REPLACE') {
-            $existing = (Get-NamedEntry -Document $LiveDocument -Entry $Entry -Name $row.Name)[0]
+            $existing = (Get-NamedEntry -Document $LiveDocument -Entry $Entry -Name $row.Name -Container $Container)[0]
             [void]$root.ReplaceChild($LiveDocument.ImportNode($row.Node, $true), $existing)
             $replaced++
         }
@@ -313,8 +344,9 @@ function Resolve-PatchPath {
 }
 
 function Get-EntryCount {
-    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document, [Parameter(Mandatory)][string]$Entry)
-    return @($Document.DocumentElement.SelectNodes(("./*[local-name()='{0}']" -f $Entry))).Count
+    param([Parameter(Mandatory)][System.Xml.XmlDocument]$Document, [Parameter(Mandatory)][string]$Entry, [AllowEmptyString()][string]$Container = '')
+    $parent = Get-EntryParent -Document $Document -Container $Container
+    return @($parent.SelectNodes(("./*[local-name()='{0}']" -f $Entry))).Count
 }
 
 function Get-FileSha256 {
@@ -438,9 +470,9 @@ try {
             $fail++
             continue
         }
-        if (-not $plans.ContainsKey($descriptor.Relative)) { $plans[$descriptor.Relative] = @{ Live = (Read-XmlFile -Path $livePath); Rows = [System.Collections.Generic.List[object]]::new(); Entry = $descriptor.Entry } }
+        if (-not $plans.ContainsKey($descriptor.Relative)) { $plans[$descriptor.Relative] = @{ Live = (Read-XmlFile -Path $livePath); Rows = [System.Collections.Generic.List[object]]::new(); Entry = $descriptor.Entry; Container = $descriptor.Container } }
         $reference = Read-XmlFile -Path $referencePath
-        $rows = @(Get-PatchPlan -PatchDocument $descriptor.Document -LiveDocument $plans[$descriptor.Relative].Live -ReferenceDocument $reference -Entry $descriptor.Entry)
+        $rows = @(Get-PatchPlan -PatchDocument $descriptor.Document -LiveDocument $plans[$descriptor.Relative].Live -ReferenceDocument $reference -Entry $descriptor.Entry -Container $descriptor.Container)
         foreach ($row in $rows) {
             $line = ("PLAN {0} {1} {2}" -f $descriptor.Relative, $row.Mode, $row.Name)
             if ($row.Reason) { $line += (" ({0})" -f $row.Reason) }
@@ -459,13 +491,13 @@ try {
     $staged = [System.Collections.Generic.List[object]]::new()
     foreach ($relative in @($targets | Where-Object { $planFailures -eq 0 })) {
         $plan = $plans[$relative]
-        $before = Get-EntryCount -Document $plan.Live -Entry $plan.Entry
-        $result = Merge-PatchIntoDocument -LiveDocument $plan.Live -Plan $plan.Rows.ToArray() -Entry $plan.Entry
+        $before = Get-EntryCount -Document $plan.Live -Entry $plan.Entry -Container $plan.Container
+        $result = Merge-PatchIntoDocument -LiveDocument $plan.Live -Plan $plan.Rows.ToArray() -Entry $plan.Entry -Container $plan.Container
         $outPath = Join-Path $patchedOut $relative
         $newLine = Get-FileNewLine -Path (Join-Path $liveOut $relative)
         Save-XmlFile -Document $plan.Live -Path $outPath -NewLine $newLine
         $check = Read-XmlFile -Path $outPath   # re-parse: a broken file never leaves this step
-        $after = Get-EntryCount -Document $check -Entry $plan.Entry
+        $after = Get-EntryCount -Document $check -Entry $plan.Entry -Container $plan.Container
         if ($after -ne ($before + $result.Added)) { throw ("{0}: {1} entries before, {2} added, but {3} after the write." -f $relative, $before, $result.Added, $after) }
         $alreadyCount = @($plan.Rows | Where-Object { $_.Mode -eq 'ALREADY' }).Count
         $eol = if ($newLine -eq "`r`n") { 'CRLF' } else { 'LF' }

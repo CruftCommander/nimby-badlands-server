@@ -66,6 +66,8 @@ Ruled by: Jeff Fabish, November 8, 2026, 01:30 to 01:40 Central (/interview afte
 | `types.release2-loot.patch.xml` | `Engraved1911` | nominal 10, min 7 | nominal 5, min 4 | As above |
 | `types.release2-loot.patch.xml` | `Mag_1911_7Rnd` | nominal 70, min 60 | nominal 35, min 30 | As above; magazines keep the pistol ratio |
 | `types.release2-loot.patch.xml` | `Binoculars` | nominal 45, min 40 | nominal 22, min 20 | Too many binoculars at the SW military checkpoint (carried in the hub since October 30, 2026; Jeff, November 8: half); usage flags unchanged |
+| `cfgeconomycore.logging.patch.xml` | `defaults/log_ce_vehicle` | false | true | CE vehicle lifecycle lines in the RPT, so DPV and Humvee spawns can be verified (Jeff and Jay, November 8, 2026, 12:17) |
+| `cfgeconomycore.logging.patch.xml` | `defaults/log_ce_dynamicevent` | false | true | CE event lines in the RPT (vehicle events included); set back to false at a later restart if noisy |
 
 ## Earlier changes
 
