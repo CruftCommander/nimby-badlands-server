@@ -49,6 +49,31 @@ Before (live) was confirmed against the live `events.xml` pulled at 13:29 Centra
 
 APPLIED October 28, 2026, 13:38 Central (panel Restart), by Jeff (upload) and Claude (restart), from backup panel `manual-backup-2026-10-28_11-01.zip`. After the restart the panel query and the DZSA launcher API both answered: map `nasdara`, 0/80, version 1.30.164200, @NIMBY 3828109139 offered. The `server/live/` copy of `events.xml` moves forward at the next `Sync-LiveReplica.ps1` run.
 
+## Oasis military loot (ruled November 7, 2026; DRAFT)
+
+Ruled by: Jeff Fabish, November 7, 2026, 19:35 Central (the ask: tone down the military loot at the Oasis; golden AK Oasis-only and very rare; plate carriers rare there; night vision bunker-only; LARs and VSDs rare there, fewer LAR buttstocks; anything golden very rare; Akinaka very rare). Figures ruled by Jeff at 19:55 Central (golden AK, Magnum and Deagle 2 or 3 per map counted everywhere, including survivors' inventories; Magnum_Gold 3; plate carriers 3/1 each; Akinaka 2/1). Drafted by: Claude (this session), from the live files mirrored October 26, 2026, 21:33 (`docs/operations/2026-11-07-oasis-military-loot.md`). Status: **DRAFT**, not on live. Patch file: `db/types.oasis-military.patch.xml` (16 rows). Usage and value flags are unchanged on every row; the Oasis-only rows (Hunting + Unique, which only the three trade tents at grid 148 084 can take) stay Oasis-only.
+
+"Counted everywhere" below means `count_in_cargo`, `count_in_hoarder`, `count_in_map` and `count_in_player` all `1` (live rows count on the map only, except `Deagle_Gold`, which already counted players).
+
+| File | Entry | Before (live) | After | Why |
+| --- | --- | --- | --- | --- |
+| `types.oasis-military.patch.xml` | `AKM_Gold` | nominal 1, min 1, restock 2700, map only | nominal 2, min 1, restock 43200, counted everywhere | Golden AK: two on the server at a time, in hands and stashes included; when down to one, the next spawns no sooner than 12 h later; was respawning 45 min after every pickup (Jeff, November 7, 2026, 19:55) |
+| `types.oasis-military.patch.xml` | `Mag_AKM_Drum75Rnd_Gold` | nominal 1, min 1, restock 7200, map only | nominal 2, min 1, restock 43200, counted everywhere | Golden drum, as the rifle |
+| `types.oasis-military.patch.xml` | `Mag_AKM_30Rnd_Gold` | nominal 2, min 1, restock 0, map only | nominal 2, min 1, restock 43200, counted everywhere | Anything golden very rare: count unchanged but now counted everywhere with a 12 h wait; each golden AK still spawns with one attached |
+| `types.oasis-military.patch.xml` | `Deagle_Gold` | nominal 5, min 2, restock 0, map and player | nominal 3, min 1, restock 43200, counted everywhere | Anything golden very rare (Jeff: 2 or 3 per map) |
+| `types.oasis-military.patch.xml` | `Magnum_Gold` | nominal 24, min 20, restock 0, map only | nominal 3, min 1, restock 43200, counted everywhere | Anything golden very rare (Jeff ruled 3) |
+| `types.oasis-military.patch.xml` | `FAL` | nominal 1, min 1, restock 3600, map only | nominal 1, min 0, restock 21600, counted everywhere | LAR rare at the Oasis: one at a time, 6 h wait |
+| `types.oasis-military.patch.xml` | `Fal_FoldingBttstck` | nominal 3, min 1, restock 0 | nominal 1, min 0, restock 21600 | Too many LAR buttstocks: six to two across the two rows |
+| `types.oasis-military.patch.xml` | `Fal_OeBttstck` | nominal 3, min 1, restock 0 | nominal 1, min 0, restock 21600 | As above |
+| `types.oasis-military.patch.xml` | `Mag_FAL_20Rnd` | nominal 2, min 1, restock 2700 | nominal 1, min 0, restock 10800 | Moves with the rifle |
+| `types.oasis-military.patch.xml` | `SVD_Wooden` | nominal 1, min 1, restock 1800, map only | nominal 1, min 0, restock 21600, counted everywhere | VSD rare at the Oasis; the crash-site `SVD` row (deloot 1) untouched |
+| `types.oasis-military.patch.xml` | `PlateCarrierVest`, `PlateCarrierHolster`, `PlateCarrierPouches` | nominal 6, min 4, restock 0 each | nominal 3, min 1, restock 7200 each | Plate carriers rare at the Oasis (Jeff ruled 3/1); shared with the tunnel; every active bunker crate still holds a set |
+| `types.oasis-military.patch.xml` | `NVGoggles` | nominal 2, min 1, restock 7200 | nominal 0, min 0, restock 0 | Night vision bunker-only: out of the loot economy, the active bunker crate (`StorageBox_Wooden`, chance 1.0) is the only source |
+| `types.oasis-military.patch.xml` | `NVGHeadstrap` | nominal 4, min 2, restock 0 | nominal 0, min 0, restock 0 | As the goggles |
+| `types.oasis-military.patch.xml` | `Akinaka` | nominal 45, min 35, restock 0 | nominal 2, min 1, restock 14400 | Akinaka knife very rare (Jeff ruled 2/1) |
+
+Before applying: pull the live `types.xml` of the day and confirm each Before value; the October 26 mirror predates release 1, and these rows were not part of release 1, but confirm anyway. When applied, add the line `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>` here and run `Sync-LiveReplica.ps1`.
+
 ## Earlier changes
 
 Changes made in the HostHavoc panel before this log existed (the October 15, 2026 wipe and map switch, CF removal, `lightingConfig`, the hardcore profile) are recorded in `docs/operations/` and the Notion hub, not here.

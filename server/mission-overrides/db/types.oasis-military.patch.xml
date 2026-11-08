@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Oasis military loot (Jeff, November 7, 2026, 19:35; figures ruled 19:55;
+  docs/operations/2026-11-07-oasis-military-loot.md).
+  DRAFT - not applied to the live server. Each <type> below REPLACES the row of the same name in
+  mpmissions/dayzOffline.nasdara/db/types.xml. Only nominal, min, restock and the count_in_* flags
+  change; every other field is the live row as mirrored in server/live/db/types.xml (October 26, 2026,
+  21:33). Everything not listed here is unchanged. Re-check each Before value against the live file
+  pulled on the day of the edit before applying (the October 28 upload script refused a row that
+  did not match; do the same).
+
+  Rows: the golden items go to a fixed count on the whole server, counted in hands, cargo and
+  stashes, with a 12 hour respawn wait (AKM_Gold and its two golden magazines 2, Deagle_Gold and
+  Magnum_Gold 3); the Oasis rifles (FAL, SVD_Wooden) go to one in the world at a time with a 6 hour
+  wait; the LAR buttstocks and magazine, the three plate carrier parts (3/1) and the Akinaka knife
+  (2/1) come down; the two night-vision rows leave the loot economy
+  (the bunker crate keeps them). Spawn places (usage and value flags) are unchanged: the
+  Hunting+Unique rows still spawn only in the three trade tents at the Oasis.
+-->
+<types>
+    <!-- AKM_Gold: golden AK: two on the server at a time, counted in hands, cargo and stashes; when down to one, the next spawns no sooner than 12 h later (Jeff, November 7, 2026: golden AK, Magnum and Deagle 2 or 3 per map, counted everywhere); live 1/1, restock 2700, counted on the map only -->
+    <type name="AKM_Gold">
+        <nominal>2</nominal>
+        <lifetime>14400</lifetime>
+        <restock>43200</restock>
+        <min>1</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Mag_AKM_Drum75Rnd_Gold: golden drum: as the rifle; live 1/1, restock 7200 -->
+    <type name="Mag_AKM_Drum75Rnd_Gold">
+        <nominal>2</nominal>
+        <lifetime>14400</lifetime>
+        <restock>43200</restock>
+        <min>1</min>
+        <quantmin>20</quantmin>
+        <quantmax>40</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Mag_AKM_30Rnd_Gold: golden 30-round: two loose (another arrives attached to each golden AK through cfgspawnabletypes); live 2/1, restock 0, counted on the map only -->
+    <type name="Mag_AKM_30Rnd_Gold">
+        <nominal>2</nominal>
+        <lifetime>14400</lifetime>
+        <restock>43200</restock>
+        <min>1</min>
+        <quantmin>20</quantmin>
+        <quantmax>40</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Deagle_Gold: golden Deagle: three on the server at a time, towns map-wide, counted everywhere; live 5/2, restock 0, counted on the map and on players -->
+    <type name="Deagle_Gold">
+        <nominal>3</nominal>
+        <lifetime>28800</lifetime>
+        <restock>43200</restock>
+        <min>1</min>
+        <quantmin>30</quantmin>
+        <quantmax>80</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Town"/>
+        <value name="Tier2"/>
+    </type>
+    <!-- Magnum_Gold: golden Magnum: three on the server at a time, counted everywhere (Jeff ruled 3); live 24/20, restock 0 -->
+    <type name="Magnum_Gold">
+        <nominal>3</nominal>
+        <lifetime>14400</lifetime>
+        <restock>43200</restock>
+        <min>1</min>
+        <quantmin>20</quantmin>
+        <quantmax>60</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Farm"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Hunting"/>
+        <value name="Tier2"/>
+    </type>
+    <!-- FAL: LAR: one in the world at a time, respawn no sooner than 6 h after it is gone; live 1/1, restock 3600 -->
+    <type name="FAL">
+        <nominal>1</nominal>
+        <lifetime>28800</lifetime>
+        <restock>21600</restock>
+        <min>0</min>
+        <quantmin>30</quantmin>
+        <quantmax>80</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Fal_FoldingBttstck: LAR folding buttstock: live 3/1, restock 0 -->
+    <type name="Fal_FoldingBttstck">
+        <nominal>1</nominal>
+        <lifetime>14400</lifetime>
+        <restock>21600</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Fal_OeBttstck: LAR fixed buttstock: live 3/1, restock 0 -->
+    <type name="Fal_OeBttstck">
+        <nominal>1</nominal>
+        <lifetime>14400</lifetime>
+        <restock>21600</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Mag_FAL_20Rnd: LAR magazine: live 2/1, restock 2700 -->
+    <type name="Mag_FAL_20Rnd">
+        <nominal>1</nominal>
+        <lifetime>28800</lifetime>
+        <restock>10800</restock>
+        <min>0</min>
+        <quantmin>5</quantmin>
+        <quantmax>50</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- SVD_Wooden: VSD (wooden, the Oasis one): one in the world at a time, 6 h; live 1/1, restock 1800. The crash-site SVD row (deloot=1) is untouched -->
+    <type name="SVD_Wooden">
+        <nominal>1</nominal>
+        <lifetime>14400</lifetime>
+        <restock>21600</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="1" count_in_hoarder="1" count_in_map="1" count_in_player="1" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <value name="Unique"/>
+    </type>
+    <!-- PlateCarrierVest: plate carrier: live 6/4, restock 0 (Jeff ruled 3/1); also in every active bunker crate -->
+    <type name="PlateCarrierVest">
+        <nominal>3</nominal>
+        <lifetime>14400</lifetime>
+        <restock>7200</restock>
+        <min>1</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="clothes"/>
+        <usage name="Hunting"/>
+        <usage name="ContaminatedArea"/>
+        <value name="Unique"/>
+    </type>
+    <!-- PlateCarrierHolster: as the vest; live 6/4 -->
+    <type name="PlateCarrierHolster">
+        <nominal>3</nominal>
+        <lifetime>14400</lifetime>
+        <restock>7200</restock>
+        <min>1</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="clothes"/>
+        <usage name="Hunting"/>
+        <usage name="ContaminatedArea"/>
+        <value name="Unique"/>
+    </type>
+    <!-- PlateCarrierPouches: as the vest; live 6/4 -->
+    <type name="PlateCarrierPouches">
+        <nominal>3</nominal>
+        <lifetime>14400</lifetime>
+        <restock>7200</restock>
+        <min>1</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="clothes"/>
+        <usage name="Hunting"/>
+        <usage name="ContaminatedArea"/>
+        <value name="Unique"/>
+    </type>
+    <!-- NVGoggles: night vision: removed from the loot economy; the active bunker crate still carries one (cfgspawnabletypes StorageBox_Wooden, chance 1.0); live 2/1, restock 7200 -->
+    <type name="NVGoggles">
+        <nominal>0</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Hunting"/>
+        <usage name="ContaminatedArea"/>
+        <value name="Unique"/>
+    </type>
+    <!-- NVGHeadstrap: as the goggles; live 4/2 -->
+    <type name="NVGHeadstrap">
+        <nominal>0</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="tools"/>
+        <usage name="Hunting"/>
+        <usage name="ContaminatedArea"/>
+        <value name="Unique"/>
+    </type>
+    <!-- Akinaka: Akinaka knife: live 45/35, restock 0 -->
+    <type name="Akinaka">
+        <nominal>2</nominal>
+        <lifetime>14400</lifetime>
+        <restock>14400</restock>
+        <min>1</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="weapons"/>
+        <usage name="Town"/>
+        <usage name="Village"/>
+        <usage name="Hunting"/>
+    </type>
+</types>
