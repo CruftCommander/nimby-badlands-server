@@ -26,6 +26,31 @@
 // in hands; step 2 refused (receiver filled between the steps) leaves it in the
 // giver's cargo. Jeff ruled on October 21, 2026 that all three verbs deliver into
 // cargo only, so an item that fits only a worn slot is a documented REFUSED.
+//
+// NIMBY-T-063, October 28, 2026: step 1 is not dispatched from inside the action.
+// The request is registered (PENDING), NimbyHandsServer ends both consent loops and
+// polls Poll until both players are free (cap NimbyHandsConstants.WAIT_CAP_MS), and
+// only then Submit revalidates, writes REQUESTED and dispatches. The October 21
+// production dispatched at once, from inside Take, Give or Put In Pockets, and the
+// giver's hand state machine dropped every hand event (feasibility study H-B): 12 of
+// 12 transfers UNCONFIRMED with the item still in hands. The October 20 diagnostic's
+// V3 waited, and confirmed.
+//
+// NIMBY-T-063, October 29, 2026: step 2 no longer calls ServerTakeToDst as one native. It
+// runs the same natives one at a time (NimbyHandsServer.MoveStep2) with a debug line after
+// each, after three server crashes in step 2 on October 28; a crash log now names the native.
+//
+// NIMBY-T-063, October 31, 2026 (build 12): a connected giver no longer gets a server hand event at
+// all. Submit sends NimbyHandsRpc.STAGE to the giver's client, which posts PredictiveTakeToDst from
+// hands into its own cargo (NimbyHandsClient); the engine applies that as any player-made move and
+// signal 1 writes STAGED as before. Dispatch (ServerTakeToDst) remains the dummy path.
+//
+// Build 20 (November 1, 2026): the build 10 probe that dispatched a connected giver's step 1
+// from inside its own CommandHandler (PlayerBase.ModCommandHandlerBefore ->
+// NimbyHandsServer.OnCommandHandler -> Poll in the giver's frame) is removed. The cause of
+// NIMBY-T-063 was the Enforce VM's compound store misfire (build 19, NimbyHandsRules.StoreProbe),
+// not the dispatch frame; every request now dispatches from the wait tick again, as before build
+// 10. Record: docs/testing/2026-10-27-patch-1-session.md.
 // -----------------------------------------------------------------------------
 
 class NimbyHandsMoveItemToPlayer
@@ -48,6 +73,9 @@ class NimbyHandsMoveItemToPlayer
     protected EntityAI m_ExpectedItem;
     protected string m_ExpectedGiverId;
     protected string m_ExpectedReceiverId;
+    // NIMBY-T-063: the registered request while it waits, and when the wait began.
+    protected ref NimbyHandsWorldTransfer m_Transfer;
+    protected int m_WaitStartMs;
 
     // requester is the player whose action made the request (the taker for Take, the
     // holder for Give and Put In Pockets); dst_player is the receiver.
@@ -185,6 +213,65 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
+        // NIMBY-T-063: nothing is validated or dispatched inside the action. The request holds
+        // until both players are free; Poll revalidates and dispatches then.
+        m_Transfer = transfer;
+        m_WaitStartMs = GetGame().GetTime();
+        NimbyHandsServer.Defer(this, transfer);
+        return true;
+    }
+
+    // The registered request, or null before Execute or when Execute refused it unregistered.
+    // The registry evicts a terminal entry, so this is how the dev harness reads a request's
+    // state and detail after the wait tick.
+    NimbyHandsWorldTransfer Transfer()
+    {
+        return m_Transfer;
+    }
+
+    // Polled every NimbyHandsConstants.WAIT_TICK_MS from the wait tick (NimbyHandsServer.Tick)
+    // while the request waits. Returns true when the wait is over: dispatched or refused.
+    bool Poll(int nowMs)
+    {
+        NimbyHandsWorldTransfer transfer = m_Transfer;
+        if (!transfer || transfer.state != NimbyHandsState.PENDING)
+        {
+            return true;
+        }
+        int waited = nowMs - m_WaitStartMs;
+        int capMs = NimbyHandsConstants.WAIT_CAP_MS;
+        bool giverFree = NimbyHandsServer.IsFree(transfer.giver, true);
+        bool receiverFree = NimbyHandsServer.IsFree(m_DstPlayer, false);
+        int verdict = NimbyHandsRules.WaitVerdict(giverFree, receiverFree, waited, capMs);
+        if (verdict == NimbyHandsRules.WAIT_HOLD)
+        {
+            return false;
+        }
+        if (verdict == NimbyHandsRules.WAIT_CAP)
+        {
+            NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait cap waited=" + waited.ToString() + " giverFree=" + NimbyHandsLog.Bool(giverFree) + " receiverFree=" + NimbyHandsLog.Bool(receiverFree));
+            NimbyHandsServer.Advance(transfer, NimbyHandsState.REFUSED, NimbyHandsRules.WaitCapDetail(capMs));
+            return true;
+        }
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " wait free waited=" + waited.ToString());
+        // Consent was read when the request was made and the loop that carried it has ended;
+        // open pockets are a standing state, so they are read again.
+        if (m_ActionName == "NimbyHandsActionPutInPockets")
+        {
+            bool open = false;
+            if (m_DstPlayer)
+            {
+                open = m_DstPlayer.NimbyHandsGetPocketsOpen();
+            }
+            SetConsent(open, "receiver's pockets are closed");
+        }
+        return Submit(transfer, waited);
+    }
+
+    // Revalidates, writes REQUESTED, dispatches step 1, and schedules the timeout. The
+    // observation period starts here, not at registration.
+    protected bool Submit(NimbyHandsWorldTransfer transfer, int waitedMs)
+    {
         InventoryLocation src = new InventoryLocation;
         InventoryLocation stage = new InventoryLocation;
         InventoryLocation dst = new InventoryLocation;
@@ -196,12 +283,26 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
 
-        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst);
+        transfer.startedMs = GetGame().GetTime();
+        string via = NimbyHandsServer.StageVia(transfer.giver);
+        string requested = "stage=" + NimbyHandsServer.DescribeLocation(stage) + " dst=" + NimbyHandsServer.DescribeLocation(dst) + " waited=" + waitedMs.ToString() + " via=" + via;
         NimbyHandsServer.Advance(transfer, NimbyHandsState.REQUESTED, requested);
-        bool accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
+        // Client-driven step 1 (October 31, 2026): a connected giver stages from its own client;
+        // the RPC has no result to read here, so the request counts as accepted and the landing,
+        // a STAGE_REFUSED reply, or the timeout decides. A dummy giver keeps the server hand event.
+        bool accepted = true;
+        if (via == NimbyHandsRules.VIA_CLIENT)
+        {
+            NimbyHandsServer.RequestClientStage(transfer, src, stage);
+        }
+        else
+        {
+            accepted = NimbyHandsServer.Dispatch(transfer, src, stage);
+        }
         // A server hand event is deferred to the holder's next inventory update
         // (DayZPlayerInventory.c:4448, 4623-4634), so no signal is expected inside the call;
-        // if one did land the item, its line is already written and step 2 is scheduled.
+        // if one did land the item, its line is already written. Step 2 is run by the poll
+        // started here, outside the engine's move callback (NimbyHandsServer.Step2Tick).
         if (NimbyHandsState.IsTerminal(transfer.state))
         {
             return transfer.state == NimbyHandsState.CONFIRMED;
@@ -209,6 +310,7 @@ class NimbyHandsMoveItemToPlayer
         if (transfer.state == NimbyHandsState.STAGED)
         {
             NimbyHandsServer.ScheduleTimeout(transfer);
+            NimbyHandsServer.EnsureStep2Poll();
             return true;
         }
         if (!accepted)
@@ -217,6 +319,7 @@ class NimbyHandsMoveItemToPlayer
             return false;
         }
         NimbyHandsServer.ScheduleTimeout(transfer);
+        NimbyHandsServer.EnsureStep2Poll();
         return true;
     }
 
@@ -241,8 +344,19 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.samePlayer = giver == m_DstPlayer;
-        f.giverReplaced = m_HasExpected && m_ExpectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != m_ExpectedGiverId;
-        f.receiverReplaced = m_HasExpected && m_ExpectedReceiverId != "" && NimbyHandsActionData.IdentityId(m_DstPlayer) != m_ExpectedReceiverId;
+        // Build 19 (November 1, 2026, NIMBY-T-063): every compound bool is evaluated into a local
+        // and the local is stored. The compound form `f.x = m_HasExpected && ... != m_Expected...`
+        // is stored by the VM into the object whose members the chain read (here this move object;
+        // in CollectStep2Facts the transfer), at the facts field's offset. See NimbyHandsProbeSource.
+        bool hasExpected = m_HasExpected;
+        string expectedGiverId = m_ExpectedGiverId;
+        string expectedReceiverId = m_ExpectedReceiverId;
+        string giverIdNow = NimbyHandsActionData.IdentityId(giver);
+        string receiverIdNow = NimbyHandsActionData.IdentityId(m_DstPlayer);
+        bool giverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedGiverId, giverIdNow);
+        bool receiverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedReceiverId, receiverIdNow);
+        f.giverReplaced = giverReplaced;
+        f.receiverReplaced = receiverReplaced;
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
             return f;
@@ -262,8 +376,14 @@ class NimbyHandsMoveItemToPlayer
         {
             return f;
         }
-        f.itemAtSource = src.GetType() == InventoryLocationType.HANDS && src.GetParent() == giver;
-        f.itemReplaced = m_HasExpected && m_ExpectedItem != m_Item;
+        int srcType = src.GetType();
+        EntityAI srcParent = src.GetParent();
+        bool itemAtSource = srcType == InventoryLocationType.HANDS && srcParent == giver;
+        f.itemAtSource = itemAtSource;
+        EntityAI expectedItem = m_ExpectedItem;
+        EntityAI item = m_Item;
+        bool itemReplaced = hasExpected && expectedItem != item;
+        f.itemReplaced = itemReplaced;
         if (!f.itemAtSource || f.itemReplaced)
         {
             return f;
@@ -316,11 +436,16 @@ class NimbyHandsMoveItemToPlayer
             return;
         }
 
-        // HumanInventory.TakeToDst with neither end in hands falls through to
-        // GameInventory.TakeToDst(SERVER): LocationSyncMoveEntity plus SendServerMove
-        // (HumanInventory.c:243-251, Inventory.c:1057-1066). Its EEItemLocationChanged fires
-        // inside the call and writes CONFIRMED; its return value is the result.
-        bool moved = transfer.giver.ServerTakeToDst(src, dst);
+        // The natives ServerTakeToDst runs with neither end in hands, one per debug line
+        // (NimbyHandsServer.MoveStep2; HumanInventory.c:243-251, Inventory.c:1057-1066). The
+        // EEItemLocationChanged inside the first writes CONFIRMED; its return value is the result.
+        bool moved = NimbyHandsServer.MoveStep2(transfer, src, dst);
+        if (NimbyHandsServer.IsQuarantined(transfer))
+        {
+            // The guard canary at the entry of MoveStep2 quarantined the entry (a pointer test, no
+            // read through the transfer); nothing here may read or write it again.
+            return;
+        }
         if (NimbyHandsState.IsTerminal(transfer.state))
         {
             return;
@@ -364,8 +489,22 @@ class NimbyHandsMoveItemToPlayer
             return f;
         }
         f.samePlayer = giver == receiver;
-        f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && NimbyHandsActionData.IdentityId(giver) != transfer.expectedGiverId;
-        f.receiverReplaced = transfer.hasExpected && transfer.expectedReceiverId != "" && NimbyHandsActionData.IdentityId(receiver) != transfer.expectedReceiverId;
+        // Build 19 (November 1, 2026, NIMBY-T-063): the three statements that damaged the transfer in
+        // crashes 1 to 15 and runs 202718 and 204404. The compound form
+        // `f.giverReplaced = transfer.hasExpected && transfer.expectedGiverId != "" && Id(giver) != transfer.expectedGiverId`
+        // was stored by the VM at the facts field's offset (+0x24, +0x28, +0x48) into transfer, the
+        // object whose members the chain read, zeroing the high half of detail, the low half of
+        // giver and the low half of itemText. Every operand is read into a local, the result is a
+        // local, and the local is stored. See NimbyHandsProbeSource and NimbyHandsRules.StoreProbe.
+        bool hasExpected = transfer.hasExpected;
+        string expectedGiverId = transfer.expectedGiverId;
+        string expectedReceiverId = transfer.expectedReceiverId;
+        string giverIdNow = NimbyHandsActionData.IdentityId(giver);
+        string receiverIdNow = NimbyHandsActionData.IdentityId(receiver);
+        bool giverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedGiverId, giverIdNow);
+        bool receiverReplaced = NimbyHandsRules.Replaced(hasExpected, expectedReceiverId, receiverIdNow);
+        f.giverReplaced = giverReplaced;
+        f.receiverReplaced = receiverReplaced;
         if (f.samePlayer || f.giverReplaced || f.receiverReplaced)
         {
             return f;
@@ -385,9 +524,18 @@ class NimbyHandsMoveItemToPlayer
         {
             return f;
         }
-        bool giverIsRoot = transfer.item.GetHierarchyRootPlayer() == giver;
-        f.itemAtSource = giverIsRoot && NimbyHandsServer.IsAtStagedLocation(transfer, src);
-        f.itemReplaced = transfer.hasExpected && transfer.expectedItem != transfer.item;
+        // NIMBY-T-063 (two server crashes here on October 28, access violation in a native on
+        // the first staged transfer, 0 ms and 50 ms after the signal): no hierarchy walk and no
+        // cargo-cell compare in step 2. The item is at its source when its current location has
+        // the staged type and the staged parent entity; the giver still owns that parent
+        // because the request was revalidated 50 ms ago and the reach check above holds.
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: location read");
+        f.itemAtSource = NimbyHandsServer.IsAtStagedLocation(transfer, src);
+        NimbyHandsLog.Debug("id=" + transfer.id.ToString() + " step 2 facts: at source=" + NimbyHandsLog.Bool(f.itemAtSource));
+        EntityAI expectedItem = transfer.expectedItem;
+        EntityAI item = transfer.item;
+        bool itemReplaced = hasExpected && expectedItem != item;
+        f.itemReplaced = itemReplaced;
         if (!f.itemAtSource || f.itemReplaced)
         {
             return f;
@@ -422,7 +570,8 @@ class NimbyHandsMoveItemToPlayer
         {
             return NimbyHandsRules.CheckParty(role, false, false, false, false, false, false, false);
         }
-        bool connected = player.GetIdentity() != null;
+        // A dummy with no identity counts as connected only while the dev harness says so.
+        bool connected = player.GetIdentity() != null || NimbyHandsServer.DummyPartiesAllowed();
         bool alive = player.IsAlive();
         bool conscious = !player.IsUnconscious();
         return NimbyHandsRules.CheckParty(role, true, connected, alive, conscious, player.IsRestrained(), player.IsInVehicle(), player.IsSwimming());
