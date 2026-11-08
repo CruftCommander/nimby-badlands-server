@@ -30,8 +30,8 @@ NimbyDpv_Car
 | 8 | Scrawl | Read | Hold left mouse on the note: text shows; a second player reads the same text (optional) | PASS | |
 | 9 | Tack | Pin | Hammer in hands, nail in inventory, look at a wall, hold the action key: note pinned, readable | PASS | |
 | 10 | Tack | Take down | Take down once: sheet returned worn; relog: a pinned note is still on the wall | PASS | |
-| 11 | Hands | Offer | Player A holds an item, presses O; player B takes it from A's hands into cargo; both get the notification | SKIPPED | no second client on; rides the release gate two-client session |
-| 12 | Hands | Request | B with empty hands presses O at A: A's item moves to B; a full receiver is refused with a notice | SKIPPED | as 11 |
+| 11 | Hands | Offer | Player A holds an item, presses O; player B takes it from A's hands into cargo; both get the notification | PASS (live) | Jeff and Jay on production, November 8, 2026, about 15:50 to 17:20 Central, release 2 pack; the first two-client transfer since NIMBY-T-063 |
+| 12 | Hands | Request | B with empty hands presses O at A: A's item moves to B; a full receiver is refused with a notice | PASS (live) | as 11 |
 | 13 | DPV | Drive and storage | Enter, start, drive, headlights; bear and tent on the car; "Take to hands" on both | PASS | repeat of the 11:40 look, one line |
 | 14 | DPV | Persistence | Graceful restart (Enter in the server window), rejoin: car and items back | SKIPPED | passed at 11:40 on this build (ODOL look, check 8) |
 | 15 | Pack | Boot | RPT of the run: no `SCRIPT (E)`, no `Scripted variables corrupted`, every addon's `selftest complete` line present | PASS | all 11 RPTs of November 8 (00:12 to 12:02): 0 hits; the 5 hits Select-String showed were the November 6 15:31 RPT, T-089 history |corrupted'` should print nothing |
@@ -43,6 +43,10 @@ Pass rule: every row 1 to 15 PASS, or a FAIL with a finding number and a decisio
 
 November 8, 2026, 12:03 to 12:14 Central, build 65 `@NIMBY-20261108-111218`, Jeff alone on the local test server (third person, server time 01:00, fresh `storage_998`), greet.json v2 with the What's changed tab. Rows 1 to 10, 13 and 15 PASS; 11, 12 and 14 skipped with reasons in the table; 16 not run. Verdict: the pack is release-ready on this build; the two Hands rows are owed at the release gate's two-client session.
 
+**Live, November 8, 2026, 15:50 to 17:20 Central (Jeff and Jay on production, release 2 `@NIMBY-20261108-123656`):** rows 11 and 12 PASS, offer and request both completed between two real clients, the first since NIMBY-T-063. Pockets were also tried: opening them showed the toast, but the other player could not view or take from them. That is the as-built behaviour (G3: deposit only, through the Put In Pockets action); viewing and taking is NIMBY-T-062, ruled October 27 and not yet built. Not a regression; recorded under Findings. Jeff's other two observations from the session are not Hands rows: the vehicle push should be stronger (the DPV first; Tweaker list, `docs/research/candidate-features.md`) and the helicopter crash sites are still too many (ruled: Chinooks to 2, small sites to 1 each; `db/events.helicrash-cut3.patch.xml`, DRAFT).
+
 ## Findings
 
-None new. Row 15 note for the next run: scope the RPT pattern to the day's files (`DayZServer_x64_<date>_*.RPT`), or old T-089 hits mislead.
+None new from the build 65 run. Row 15 note for the next run: scope the RPT pattern to the day's files (`DayZServer_x64_<date>_*.RPT`), or old T-089 hits mislead.
+
+Live session, November 8, 2026: no new finding number. The pockets observation is NIMBY-T-062 (open, ruled, unbuilt), not a defect in the shipped code; the player-facing texts (Workshop description, Greet How-to, roadmap post) should say that open pockets accept deposits until T-062 ships. Server-side evidence for rows 11 and 12 (the `[NIMBY][Hands]` `REQUESTED` and `CONFIRMED` lines) is in the live script log of the 11:22 boot (panel clock) and is read at the next `Get-ServerLogs.ps1` pull.
