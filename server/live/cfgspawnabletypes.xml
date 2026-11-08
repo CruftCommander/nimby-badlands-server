@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 
 <spawnabletypes>
 	<type name="Barrel_Blue">
@@ -4998,7 +4998,7 @@
 	</type>
 	<type name="StorageBox_Wooden">
 		<cargo chance="1.0">
-			<item name="GunCase_Black" chance="0.5" >
+			<item name="GunCase_Black" chance="0.5">
 				<damage min="0.0" max="0.0" />
 				<cargo chance="1.0">
 					<item name="SCARH" chance="1.0" />
@@ -5111,5 +5111,111 @@
 	</type>
 	<type name="MK4Optic_Tan">
 		<damage min="0.0" max="0.0" />
+	</type>
+	<type name="NimbyDpv_Car">
+		<attachments chance="1.00">	<!-- wheel 1 of 4: always (Jeff: a spawned DPV is always drivable on its wheels) -->
+			<item name="NimbyDpv_Wheel" chance="1.00" />
+		</attachments>
+		<attachments chance="1.00">	<!-- wheel 2 of 4: always (Jeff: a spawned DPV is always drivable on its wheels) -->
+			<item name="NimbyDpv_Wheel" chance="1.00" />
+		</attachments>
+		<attachments chance="1.00">	<!-- wheel 3 of 4: always (Jeff: a spawned DPV is always drivable on its wheels) -->
+			<item name="NimbyDpv_Wheel" chance="1.00" />
+		</attachments>
+		<attachments chance="1.00">	<!-- wheel 4 of 4: always (Jeff: a spawned DPV is always drivable on its wheels) -->
+			<item name="NimbyDpv_Wheel" chance="1.00" />
+		</attachments>
+		<attachments chance="1.00">	<!-- fifth wheel fills NimbyDpvWheel_Spare_1 (hatchback value) -->
+			<item name="NimbyDpv_Wheel" chance="0.40" />
+		</attachments>
+		<attachments chance="1.00">	<!-- hatchback value -->
+			<item name="CarBattery" chance="0.60" />
+		</attachments>
+		<attachments chance="1.00">	<!-- hatchback value -->
+			<item name="SparkPlug" chance="0.60" />
+		</attachments>
+		<attachments chance="1.00">	<!-- Reflector_1_1 (hatchback value) -->
+			<item name="HeadlightH7" chance="0.40" />
+		</attachments>
+		<attachments chance="1.00">	<!-- Reflector_2_1 (hatchback value) -->
+			<item name="HeadlightH7" chance="0.40" />
+		</attachments>
+		<attachments chance="0.30">	<!-- rail can roll: one jerry can or ammo can on the first free NimbyDpvRail_n -->
+			<item name="CanisterGasoline" chance="0.5000" />
+			<item name="AmmoBox" chance="0.5000" />
+		</attachments>
+		<attachments chance="0.40">	<!-- rail bag roll: one of 16 bag families or the Field Transceiver, families weighted equally, colours split a family -->
+			<item name="AliceBag_Black" chance="0.0196" />
+			<item name="AliceBag_Camo" chance="0.0196" />
+			<item name="AliceBag_Green" chance="0.0196" />
+			<item name="AssaultBag_Black" chance="0.0118" />
+			<item name="AssaultBag_Desert" chance="0.0118" />
+			<item name="AssaultBag_Green" chance="0.0118" />
+			<item name="AssaultBag_Ttsko" chance="0.0118" />
+			<item name="AssaultBag_Winter" chance="0.0118" />
+			<item name="CanvasBag_Medical" chance="0.0294" />
+			<item name="CanvasBag_Olive" chance="0.0294" />
+			<item name="ChildBag_Blue" chance="0.0196" />
+			<item name="ChildBag_Green" chance="0.0196" />
+			<item name="ChildBag_Red" chance="0.0196" />
+			<item name="CourierBag" chance="0.0588" />
+			<item name="CoyoteBag_Brown" chance="0.0147" />
+			<item name="CoyoteBag_Desert" chance="0.0147" />
+			<item name="CoyoteBag_Green" chance="0.0147" />
+			<item name="CoyoteBag_Winter" chance="0.0147" />
+			<item name="DryBag_Black" chance="0.0098" />
+			<item name="DryBag_Blue" chance="0.0098" />
+			<item name="DryBag_Green" chance="0.0098" />
+			<item name="DryBag_Orange" chance="0.0098" />
+			<item name="DryBag_Red" chance="0.0098" />
+			<item name="DryBag_Yellow" chance="0.0098" />
+			<item name="DrysackBag_Green" chance="0.0196" />
+			<item name="DrysackBag_Orange" chance="0.0196" />
+			<item name="DrysackBag_Yellow" chance="0.0196" />
+			<item name="DuffelBagSmall_Camo" chance="0.0196" />
+			<item name="DuffelBagSmall_Green" chance="0.0196" />
+			<item name="DuffelBagSmall_Medical" chance="0.0196" />
+			<item name="FurCourierBag" chance="0.0588" />
+			<item name="HuntingBag" chance="0.0588" />
+			<item name="MountainBag_Blue" chance="0.0147" />
+			<item name="MountainBag_Green" chance="0.0147" />
+			<item name="MountainBag_Orange" chance="0.0147" />
+			<item name="MountainBag_Red" chance="0.0147" />
+			<item name="SmershBag" chance="0.0588" />
+			<item name="TaloonBag_Blue" chance="0.0147" />
+			<item name="TaloonBag_Green" chance="0.0147" />
+			<item name="TaloonBag_Orange" chance="0.0147" />
+			<item name="TaloonBag_Violet" chance="0.0147" />
+			<item name="TortillaBag" chance="0.0196" />
+			<item name="TortillaBag_Desert" chance="0.0196" />
+			<item name="TortillaBag_Winter" chance="0.0196" />
+			<item name="ScientificBriefcase" chance="0.0588" />
+			<item name="BaseRadio" chance="0.0590" />
+		</attachments>
+		<attachments chance="0.25">	<!-- rail tent roll: one packed tent on NimbyDpvRailTent_L or _R, three families weighted equally -->
+			<item name="MediumTent" chance="0.1111" />
+			<item name="MediumTent_Green" chance="0.1111" />
+			<item name="MediumTent_Orange" chance="0.1111" />
+			<item name="LargeTent" chance="0.3333" />
+			<item name="PartyTent" chance="0.0833" />
+			<item name="PartyTent_Blue" chance="0.0833" />
+			<item name="PartyTent_Brown" chance="0.0833" />
+			<item name="PartyTent_Lunapark" chance="0.0835" />
+		</attachments>
+		<attachments chance="0.30">	<!-- roof roll: a teddy bear (NimbyDpvRoofBear) or one piece of large storage (NimbyDpvRoof); one group, so never both twins -->
+			<item name="Bear_Beige" chance="0.0625" />
+			<item name="Bear_Dark" chance="0.0625" />
+			<item name="Bear_Pink" chance="0.0625" />
+			<item name="Bear_White" chance="0.0625" />
+			<item name="WoodenCrate" chance="0.2500" />
+			<item name="CarTent" chance="0.2500" />
+			<item name="Attack2Bag_Black" chance="0.0625" />
+			<item name="Attack2Bag_Green" chance="0.0625" />
+			<item name="Attack2Bag_Ttsko" chance="0.0625" />
+			<item name="Attack2Bag_Yeger" chance="0.0625" />
+		</attachments>
+		<attachments chance="0.40">	<!-- cabin roll: NimbyDpvFirstAid -->
+			<item name="FirstAidKit" chance="1.00" />
+		</attachments>
 	</type>
 </spawnabletypes>
