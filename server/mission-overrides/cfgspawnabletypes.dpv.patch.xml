@@ -2,8 +2,8 @@
 <!--
   DPV (NimbyDpv_Car) parts and storage rolled at spawn. Jeff's rulings, November 8, 2026, 01:30 to 01:40 Central (/interview after the draft of 01:25); D-5 of docs/design/dpv-feasibility.md (November 5, 2026: nominal 4, max 6, military sites only, per-part chance).
   APPLIED November 8, 2026, 13:17 Central (release 2 restart; Deploy-MissionPatches.ps1 -Upload, run deploy-20261108-131721, readback hash-identical; server started 13:22); was DRAFT - not applied to the live server. The <type> below is ADDED to
-  mpmissions/dayzOffline.nasdara/cfgspawnabletypes.xml (none exists there today). Everything not listed
-  here is unchanged. Each <attachments> group rolls once at its chance and places at most one of its items,
+  mpmissions/dayzOffline.nasdara/cfgspawnabletypes.xml (none existed there before the apply). Everything not listed
+  here was unchanged. Each <attachments> group rolls once at its chance and places at most one of its items,
   in the first free slot that item's inventorySlot[] shares with the car's attachments[] (NimbyDpv/config.cpp);
   item chances inside a group are weights that sum to 1.0, the vanilla convention (MP5K, VSS groups).
 

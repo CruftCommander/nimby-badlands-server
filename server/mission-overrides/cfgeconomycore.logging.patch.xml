@@ -3,8 +3,8 @@
   Central Economy logging for vehicles and dynamic events (Jeff and Jay, November 8, 2026, 12:17: "ensure
   adequate logging so we can tell whether the DPV and the Humvees are spawning").
   APPLIED November 8, 2026, 13:17 Central (release 2 restart; Deploy-MissionPatches.ps1 -Upload, run deploy-20261108-131721, readback hash-identical; server started 13:22); was DRAFT - not applied to the live server. Each <default> below REPLACES the entry of the same name under
-  <defaults> in mpmissions/dayzOffline.nasdara/cfgeconomycore.xml (live: both "false", as mirrored in
-  server/live/cfgeconomycore.xml on November 8, 2026). Everything not listed here is unchanged. Applies at
+  <defaults> in mpmissions/dayzOffline.nasdara/cfgeconomycore.xml (live before the apply: both "false", as mirrored in
+  server/live/cfgeconomycore.xml on November 8, 2026, 10:57). Everything not listed here was unchanged. Applied at
   the release 2 restart with the other patches; the CE writes its vehicle and event lifecycle lines into
   the server RPT, which scripts/Get-ServerLogs.ps1 pulls. Set log_ce_dynamicevent back to false at a later
   restart if it proves noisy; log_ce_vehicle is the one that answers the question.
