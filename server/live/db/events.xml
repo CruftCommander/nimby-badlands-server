@@ -871,8 +871,8 @@
         <limit>child</limit>
         <active>1</active>
         <children>
-            <child lootmax="15" lootmin="10" max="6" min="2" type="StaticObj_Wreck_Mi24_TK_DE"/>
-            <child lootmax="15" lootmin="10" max="6" min="2" type="Wreck_Mi8_Crashed"/>
+            <child lootmax="8" lootmin="5" max="2" min="1" type="StaticObj_Wreck_Mi24_TK_DE"/>
+            <child lootmax="8" lootmin="5" max="2" min="1" type="Wreck_Mi8_Crashed"/>
         </children>
     </event>
     <event name="StaticHeliCrashBig">
@@ -890,7 +890,7 @@
         <limit>child</limit>
         <active>1</active>
         <children>
-            <child lootmax="15" lootmin="10" max="6" min="6" type="StaticObj_Wreck_Chinook_DE"/>
+            <child lootmax="15" lootmin="10" max="4" min="4" type="StaticObj_Wreck_Chinook_DE"/>
         </children>
     </event>
     <event name="StaticMilitaryConvoy">
