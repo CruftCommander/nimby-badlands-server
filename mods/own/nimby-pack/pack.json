@@ -17,6 +17,9 @@
         "*.edds",
         "*.paa",
         "*.txt",
+        "*.cfg",
+        "*.p3d",
+        "*.rvmat",
         "LICENSE",
         "NOTICE"
     ],
@@ -75,6 +78,12 @@
             "prefix": "NimbyAdminServer",
             "logPrefix": "AdminServer",
             "serverOnly": true
+        },
+        {
+            "folder": "NimbyDpv",
+            "pboName": "NimbyDpv",
+            "prefix": "NimbyDpv",
+            "logPrefix": "Dpv"
         }
     ],
     "dev": {

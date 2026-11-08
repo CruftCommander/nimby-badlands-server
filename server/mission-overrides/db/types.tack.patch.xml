@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
   Tack lifetime rows (plan T5, Claude default; Jeff rules at Phase 2).
-  DRAFT - not applied to the live server. Applies at Tack Phase 2, at a scheduled restart, with
+  APPLIED October 26, 2026, 23:47 (release 1 restart, LOOT-CHANGELOG release 1 batch); was DRAFT - not applied to the live server. Header corrected November 8, 2026. Applies at Tack Phase 2, at a scheduled restart, with
   the live types.xml backed up first (shared rules 9.2 step 3), after Scrawl's types.scrawl.patch.xml
   because the pinned classes inherit from Paper. Each <type> below is ADDED to
   mpmissions/dayzOffline.nasdara/db/types.xml (none exists there today). Everything not listed

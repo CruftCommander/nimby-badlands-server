@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "forceShow": false,
   "defaultLanguage": "english",
   "openDelaySeconds": 1,
@@ -22,7 +22,7 @@
             "",
             "Restarts every 12 hours at 12 AM and 12 PM Central (US). Server location: Chicago, IL (US Central).",
             "",
-            "This window opens each time you join. Tick **Don't show this again** before you close it and it stays closed; if the rules change in a way everyone must see, it comes back once. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**."
+            "This window opens each time you join. Tick **Don't show this again** before you close it and it stays closed; when something changes that everyone should see (rules, a new release, a loot change), it comes back once. You can reopen it any time with the Greet key (default **Insert**) or from the pause menu under **Server welcome**."
           ]
         },
         {
@@ -108,7 +108,7 @@
             "- **No hit direction indicator.** The red hit flash stays; find the shooter by sound.",
             "- **More base building spots.** Placement angle and collision checks are relaxed.",
             "",
-            "Loot is stock Nasdara for now. Tuning comes once we see how the map plays."
+            "Loot is tuned release by release; see **What's changed**."
           ]
         },
         {
@@ -117,18 +117,34 @@
           "body": [
             "# Mods",
             "",
-            "One Workshop item, **@NIMBY**. Every key below is rebindable in Options, Controls, NIMBY tab.",
+            "One Workshop item, **@NIMBY**. Keys rebind in Options, Controls, NIMBY.",
             "",
             "| Mod | What it does |",
             "| --- | --- |",
-            "| Legs | Autorun. Double-tap Left Shift; any move, fire, or raise input stops it |",
-            "| Ears | Earplugs. N lowers effect volume, N again restores. Voice chat unaffected |",
-            "| Scrawl | Notes. Pen in hands, drop a sheet on it, hold the action key to write; hold left mouse to read. Paper stacks to 5; notes last 30 days |",
-            "| Greet | This window. Insert reopens it; so does Server welcome in the pause menu |",
-            "| Hands | Hold an item, press O to offer it; they take it from your hands. Empty hands and O asks for theirs. Bind Hands: open or close pockets to accept items in your pockets |",
-            "| Tack | Pin a sheet to a wall: hammer in hands with a nail in inventory, or tape, epoxy, or a knife in hands; look at the wall, hold the action key. Take down returns the sheet worn; the third ruins it |",
+            "| Legs | Autorun. Double-tap Left Shift; any move, fire or raise stops it |",
+            "| Ears | Earplugs. N lowers effect volume, N again restores. Voice unaffected |",
+            "| Scrawl | Notes. Pen in hands, drop a sheet on it, hold the action key to write; hold left mouse to read. Notes last 30 days |",
+            "| Greet | This window. Insert reopens it, or Server welcome in the pause menu |",
+            "| Hands | Hold an item, press O to offer it; they take it from your hands. Empty hands and O asks for theirs. Bind open or close pockets to accept into pockets |",
+            "| Tack | Pin a sheet: hammer in hands and a nail in inventory, or tape, epoxy or a knife in hands; look at the wall, hold the action key. Take down twice returns it; the third ruins it |",
+            "| DPV | Patrol buggy at military sites. Bring battery, spark plug, bulbs, fuel. Rails take cans, packs, tents; roof a crate, car tent or bear; cabin a first aid kit |"
+          ]
+        },
+        {
+          "id": "whats-changed",
+          "heading": "What's changed",
+          "body": [
+            "# What's changed",
             "",
-            "Coming later: the admin tool; see the Discord mod-roadmap channel."
+            "**November 2026, release 2**",
+            "",
+            "- **DPV.** A desert patrol buggy at military sites, four to six on the map, each on its wheels; find a battery, spark plug, bulbs and fuel. Rails carry cans, packs and tents, the roof a crate, car tent or teddy bear, the cabin a first aid kit. Near 140 km/h (87 mph) flat out.",
+            "- **Loot.** The Oasis tents no longer rain golden guns: golden AK and mags, golden Deagle and Magnum are a handful per map, counted wherever they are, slow to return; FAL and wooden VSD one at a time; plate carriers and the Akinaka rarer; night vision only from the active bunker crate. The 1911 family and binoculars half as common.",
+            "- **Hands.** Handing an item to another player works again.",
+            "",
+            "**October 2026, release 1**",
+            "",
+            "- Legs, Ears, Scrawl, Greet, Hands and Tack shipped as @NIMBY. Paper and pens spawn; whetstones up; barrels, 10-round CMAGs and the Luger down; crash sites fewer and lighter."
           ]
         },
         {

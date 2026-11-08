@@ -71,6 +71,16 @@ Describe 'Exclusion lists' {
     }
 }
 
+Describe 'Live reference files' {
+    It 'mirrors every mission file a release patch has edited, including cfgeventspawns.xml and mapgroupproto.xml' {
+        $files = Get-ScriptAssignmentValue -Path $syncScript -Name 'LiveReferenceFiles'
+        foreach ($name in @('db\types.xml', 'db\events.xml', 'cfgspawnabletypes.xml', 'cfgeventspawns.xml', 'mapgroupproto.xml')) {
+            $files | Should -Contain $name
+        }
+        $files.Count | Should -Be 11
+    }
+}
+
 Describe 'Robocopy runs in TestDrive' {
     BeforeAll {
         $logDir = Join-Path $TestDrive 'logs'

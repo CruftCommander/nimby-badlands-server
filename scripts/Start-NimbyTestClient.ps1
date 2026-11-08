@@ -32,6 +32,10 @@
 .PARAMETER DayZPath
     DayZ client install folder. Found through Steam when omitted.
 
+.PARAMETER Windowed
+    Start the game in a window (DayZ -window) instead of full screen, so the game and the
+    shells stay visible together during a test.
+
 .EXAMPLE
     pwsh -NoProfile -ExecutionPolicy Bypass -File D:\GitHub\nimby-badlands-server\scripts\Start-NimbyTestClient.ps1 -BuildPath D:\GitHub\nimby-badlands-server\build\@NIMBY-20261017-235142 -Connect 127.0.0.1 -Password <join password>
 #>
@@ -42,7 +46,8 @@ param(
     [ValidateRange(1, 65535)][int]$Port = 2302,
     [string]$Password,
     [string]$DayZPath,
-    [string]$RepoRoot
+    [string]$RepoRoot,
+    [switch]$Windowed
 )
 
 Set-StrictMode -Version Latest
@@ -60,6 +65,10 @@ $log = Join-Path $logDir ("testclient-{0}.log" -f $stamp)
 
 if (-not (Test-Path -LiteralPath $BuildPath -PathType Container)) { throw "Build folder not found: $BuildPath" }
 if (-not (Test-Path -LiteralPath (Join-Path $BuildPath 'addons') -PathType Container)) { throw "No addons folder under $BuildPath; pass a build\@NIMBY-<stamp> folder." }
+# The game resolves -mod= against its own install folder, not this shell's (NIMBY-T-017 for the
+# server; the client the same way on November 8, 2026: a relative .\build\... loaded no mod and the
+# server kicked the client with "Client is missing a mod which is on the server (NIMBY)").
+$BuildPath = (Resolve-Path -LiteralPath $BuildPath).ProviderPath
 
 if (-not $DayZPath) {
     $libraries = Get-SteamLibraryPath -SteamRoot (Get-SteamRootPath)
@@ -70,6 +79,7 @@ $exe = Join-Path $DayZPath 'DayZ_BE.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "DayZ_BE.exe not found under $DayZPath" }
 
 $arguments = @("-mod=$BuildPath")
+if ($Windowed) { $arguments += "-window" }
 if ($Connect) {
     $arguments += "-connect=$Connect"
     $arguments += "-port=$Port"

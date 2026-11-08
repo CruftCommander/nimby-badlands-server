@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  DPV (NimbyDpv) economy rows. Jeff's rulings, November 8, 2026, 01:30 to 01:40 Central (/interview after the draft of 01:25); D-5 of docs/design/dpv-feasibility.md (November 5, 2026: nominal 4, max 6, military sites only, per-part chance).
+  DRAFT - not applied to the live server. Applies at the release 2 restart, after the @NIMBY Workshop
+  update that carries the NimbyDpv addon (without the addon loaded the CE logs "Type NimbyDpv_Car will
+  be ignored" and drops the rows). Each <type> below is ADDED to mpmissions/dayzOffline.nasdara/db/types.xml
+  (none exists there today; the deploy step refuses if one does). Everything not listed here is unchanged.
+  Companion files: ../cfgspawnabletypes.dpv.patch.xml (parts and storage a spawned DPV rolls),
+  events.dpv.patch.xml (the VehicleNimbyDpv event), ../cfgeventspawns.dpv.patch.xml (its positions).
+
+  NimbyDpv_Car: the vanilla car pattern (OffroadHatchback, Hatchback_02 as mirrored in server/live/db/types.xml,
+  October 26, 2026): nominal 0, lifetime 3, restock 1800. The event owns the count; this row only registers
+  the class with the CE so it is counted and persists.
+  NimbyDpv_Wheel: the only source of spare DPV wheels (the wheel fits no other car). Mirrors Offroad_02_Wheel
+  (live 26/20, Military and Industrial, Tier2 and Tier3, lootdispatch) at 12/9: about three per DPV at
+  nominal 4 (Jeff: "12 / 9", 01:36).
+  NimbyDpv_Wheel_Ruined: mirrors HatchbackWheel_Ruined exactly (nominal 0, lifetime 7200, crafted="1",
+  lootdispatch) so a ruined wheel is tracked and cleaned up like a vanilla one.
+-->
+<types>
+    <!-- NimbyDpv_Car: ADDED; event-spawned, the row registers the class (vanilla car pattern) -->
+    <type name="NimbyDpv_Car">
+        <nominal>0</nominal>
+        <lifetime>3</lifetime>
+        <restock>1800</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+    </type>
+    <!-- NimbyDpv_Wheel: ADDED; 12/9 (Jeff, November 8, 2026); pattern Offroad_02_Wheel 26/20 -->
+    <type name="NimbyDpv_Wheel">
+        <nominal>12</nominal>
+        <lifetime>28800</lifetime>
+        <restock>0</restock>
+        <min>9</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
+        <category name="lootdispatch"/>
+        <usage name="Military"/>
+        <usage name="Industrial"/>
+        <value name="Tier2"/>
+        <value name="Tier3"/>
+    </type>
+    <!-- NimbyDpv_Wheel_Ruined: ADDED; pattern HatchbackWheel_Ruined -->
+    <type name="NimbyDpv_Wheel_Ruined">
+        <nominal>0</nominal>
+        <lifetime>7200</lifetime>
+        <restock>0</restock>
+        <min>0</min>
+        <quantmin>-1</quantmin>
+        <quantmax>-1</quantmax>
+        <cost>100</cost>
+        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="1" deloot="0"/>
+        <category name="lootdispatch"/>
+    </type>
+</types>

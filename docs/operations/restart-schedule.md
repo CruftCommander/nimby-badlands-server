@@ -49,3 +49,14 @@ Pull logs with `scripts/Get-ServerLogs.ps1`, then check:
 - **Chrome autofills the field with the panel login** (32 characters). Clear it and type the
   RCON password before saving, or the task fails at run time.
 - Save once. A double save created a duplicate task on 2026-10-14.
+
+## Unscheduled restart (release restart, panel restart outside the chain)
+
+Jeff's rule, November 8, 2026: players get an in-game warning at least five minutes before any forced restart, the way the scheduled chain warns them.
+
+1. T-5 min: `.\scripts\Send-NimbyLiveAnnouncement.ps1 -Minutes 5 -Lock` from the repository folder (type the RCON password at the prompt; `rconPort` and `sftpHost` in `scripts\testserver.local.json`). This sends `say -1 Server restart in 5 minutes for an update...` and `#lock`.
+2. T-1 min: `.\scripts\Send-NimbyLiveAnnouncement.ps1 -Message "Server restart in 1 minute. Log out now."`
+3. T-0: stop the server in the HostHavoc panel (or RCON `#shutdown` from the panel task); the panel backup, the file changes and the start follow the release gate record.
+4. The announcement log is `logs\announce-<stamp>.log`; `server_console.log` shows the RCON login at each send.
+
+The script sends only `say` and `#lock`; the stop itself stays in the panel.
