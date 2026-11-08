@@ -71,16 +71,44 @@ class NimbyDpvSelfTest
         failures += Case(results, "railbag-proxy-registered", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailBag_1") && ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailBag_4"));
         failures += Case(results, "railbag-ui-group", ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Rail attachmentSlots", "NimbyDpvRailBag_2"));
         failures += Case(results, "rail-bag-not-on-rail-slot", !ConfigArrayHas("CfgVehicles HuntingBag inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles HuntingBag inventorySlot", "NimbyDpvRailBag_1"));
-        // build 55: per-side tent slots and the four tent classes
+        // build 55: per-side tent slots and the tent classes (four until build 58 took the CarTent to the roof)
         failures += Case(results, "railtent-l-slot", GetGame().ConfigIsExisting("CfgSlots Slot_NimbyDpvRailTent_L"));
         failures += Case(results, "railtent-r-slot", GetGame().ConfigIsExisting("CfgSlots Slot_NimbyDpvRailTent_R"));
         failures += Case(results, "railtent-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRailTent_L") && ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRailTent_R"));
         failures += Case(results, "railtent-proxy-registered", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailTent_L") && ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRailTent_R"));
-        failures += Case(results, "railtent-tents-patched", ConfigArrayHas("CfgVehicles MediumTent inventorySlot", "NimbyDpvRailTent_L") && ConfigArrayHas("CfgVehicles LargeTent inventorySlot", "NimbyDpvRailTent_R") && ConfigArrayHas("CfgVehicles CarTent inventorySlot", "NimbyDpvRailTent_L") && ConfigArrayHas("CfgVehicles PartyTent inventorySlot", "NimbyDpvRailTent_R"));
+        // build 58: CarTent left the side slots for the roof (see roof-cartent-longhaul-patched)
+        failures += Case(results, "railtent-tents-patched", ConfigArrayHas("CfgVehicles MediumTent inventorySlot", "NimbyDpvRailTent_L") && ConfigArrayHas("CfgVehicles LargeTent inventorySlot", "NimbyDpvRailTent_R") && ConfigArrayHas("CfgVehicles PartyTent inventorySlot", "NimbyDpvRailTent_R"));
         failures += Case(results, "railtent-variant-inherits", ConfigArrayHas("CfgVehicles MediumTent_Green inventorySlot", "NimbyDpvRailTent_L"));
         failures += Case(results, "railtent-not-on-rail-slot", !ConfigArrayHas("CfgVehicles MediumTent inventorySlot", "NimbyDpvRail_1") && !ConfigArrayHas("CfgVehicles HuntingBag inventorySlot", "NimbyDpvRailTent_L"));
         // build 55: small storage
-        failures += Case(results, "rail-small-storage-patched", ConfigArrayHas("CfgVehicles FirstAidKit inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles SmallProtectorCase inventorySlot", "NimbyDpvRail_4") && ConfigArrayHas("CfgVehicles ScientificBriefcase inventorySlot", "NimbyDpvRailBag_1"));
+        failures += Case(results, "rail-small-storage-patched", ConfigArrayHas("CfgVehicles SmallProtectorCase inventorySlot", "NimbyDpvRail_4") && ConfigArrayHas("CfgVehicles ScientificBriefcase inventorySlot", "NimbyDpvRailBag_1"));
+        // build 57: the Field Transceiver on the bag set (the crate's side-slot cases went with it to the roof in 58)
+        failures += Case(results, "rail-transceiver-patched-keeps-back", ConfigArrayHas("CfgVehicles BaseRadio inventorySlot", "NimbyDpvRailBag_1") && ConfigArrayHas("CfgVehicles BaseRadio inventorySlot", "NimbyDpvRailBag_4") && ConfigArrayHas("CfgVehicles BaseRadio inventorySlot", "Back"));
+        // build 58: the roof twins; crate, CarTent and Long Haul are roof-only; bear on its own twin
+        failures += Case(results, "roof-slot", GetGame().ConfigIsExisting("CfgSlots Slot_NimbyDpvRoof"));
+        failures += Case(results, "roofbear-slot", GetGame().ConfigIsExisting("CfgSlots Slot_NimbyDpvRoofBear"));
+        GetGame().ConfigGetText("CfgSlots Slot_NimbyDpvRoof name", text);
+        failures += Case(results, "roof-slot-name=" + text, text == "NimbyDpvRoof");
+        GetGame().ConfigGetText("CfgSlots Slot_NimbyDpvRoof selection", text);
+        failures += Case(results, "roof-slot-selection=" + text, text == "roof");
+        GetGame().ConfigGetText("CfgSlots Slot_NimbyDpvRoofBear name", text);
+        failures += Case(results, "roofbear-slot-name=" + text, text == "NimbyDpvRoofBear");
+        GetGame().ConfigGetText("CfgSlots Slot_NimbyDpvRoofBear selection", text);
+        failures += Case(results, "roofbear-slot-selection=" + text, text == "roofbear");
+        failures += Case(results, "roof-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRoof") && ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRoofBear"));
+        failures += Case(results, "roof-proxy-registered", ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRoof") && ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvRoofBear"));
+        failures += Case(results, "roof-ui-group", ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Roof attachmentSlots", "NimbyDpvRoofBear") && ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Roof attachmentSlots", "NimbyDpvRoof"));
+        failures += Case(results, "roof-crate-patched-keeps-truck", ConfigArrayHas("CfgVehicles WoodenCrate inventorySlot", "NimbyDpvRoof") && ConfigArrayHas("CfgVehicles WoodenCrate inventorySlot", "Truck_01_WoodenCrate4") && !ConfigArrayHas("CfgVehicles WoodenCrate inventorySlot", "NimbyDpvRailTent_L"));
+        failures += Case(results, "roof-cartent-longhaul-patched", ConfigArrayHas("CfgVehicles CarTent inventorySlot", "NimbyDpvRoof") && !ConfigArrayHas("CfgVehicles CarTent inventorySlot", "NimbyDpvRailTent_L") && ConfigArrayHas("CfgVehicles Attack2Bag_ColorBase inventorySlot", "NimbyDpvRoof") && ConfigArrayHas("CfgVehicles Attack2Bag_ColorBase inventorySlot", "Back") && !ConfigArrayHas("CfgVehicles Attack2Bag_ColorBase inventorySlot", "NimbyDpvRailBag_1"));
+        failures += Case(results, "roof-bear-patched", ConfigArrayHas("CfgVehicles Bear_ColorBase inventorySlot", "NimbyDpvRoofBear") && ConfigArrayHas("CfgVehicles Bear_Pink inventorySlot", "NimbyDpvRoofBear") && !ConfigArrayHas("CfgVehicles Bear_ColorBase inventorySlot", "NimbyDpvRoof"));
+        failures += Case(results, "rail-dropped-pouch-and-leather", !ConfigArrayHas("CfgVehicles ArmyPouch_ColorBase inventorySlot", "NimbyDpvRailBag_1") && !ConfigArrayHas("CfgVehicles LeatherSack_ColorBase inventorySlot", "NimbyDpvRailBag_1") && ConfigArrayHas("CfgVehicles ArmyPouch_ColorBase inventorySlot", "Back"));
+        failures += Case(results, "rail-protector-case-fore-only", ConfigArrayHas("CfgVehicles SmallProtectorCase inventorySlot", "NimbyDpvRail_3") && ConfigArrayHas("CfgVehicles SmallProtectorCase inventorySlot", "NimbyDpvRail_4") && !ConfigArrayHas("CfgVehicles SmallProtectorCase inventorySlot", "NimbyDpvRail_2"));
+        // build 60: the first aid kit in the cabin, off the rails
+        failures += Case(results, "firstaid-slot", GetGame().ConfigIsExisting("CfgSlots Slot_NimbyDpvFirstAid"));
+        GetGame().ConfigGetText("CfgSlots Slot_NimbyDpvFirstAid selection", text);
+        failures += Case(results, "firstaid-slot-selection=" + text, text == "firstaid");
+        failures += Case(results, "firstaid-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvFirstAid") && ConfigArrayHas("CfgNonAIVehicles ProxyDpvRail inventorySlot", "NimbyDpvFirstAid") && ConfigArrayHas(CAR_PATH + " GUIInventoryAttachmentsProps Cabin attachmentSlots", "NimbyDpvFirstAid"));
+        failures += Case(results, "firstaid-kit-cabin-only", ConfigArrayHas("CfgVehicles FirstAidKit inventorySlot", "NimbyDpvFirstAid") && !ConfigArrayHas("CfgVehicles FirstAidKit inventorySlot", "NimbyDpvRail_3") && !ConfigArrayHas("CfgVehicles FirstAidKit inventorySlot", "NimbyDpvRail_1"));
         failures += Case(results, "rail-box-not-on-bag-slot", !ConfigArrayHas("CfgVehicles AmmoBox inventorySlot", "NimbyDpvRailBag_1") && !ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRailBag_1"));
         failures += Case(results, "rail-car-attachments", ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRail_1") && ConfigArrayHas(CAR_PATH + " attachments", "NimbyDpvRail_4"));
         failures += Case(results, "rail-canister-patched", ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRail_1") && ConfigArrayHas("CfgVehicles CanisterGasoline inventorySlot", "NimbyDpvRail_4"));

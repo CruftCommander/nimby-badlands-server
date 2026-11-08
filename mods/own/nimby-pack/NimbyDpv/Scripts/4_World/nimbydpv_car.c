@@ -470,6 +470,11 @@ class NimbyDpv_Car extends CarScript
         string slotName = InventorySlots.GetSlotName(slotId);
         string n = "";
         string twin = "";
+        // build 58: the roof twins, a teddy bear OR one piece of large storage (Jeff, 23:02)
+        if (slotName == "NimbyDpvRoof")
+            return NimbyDpvRailSlotFilled("NimbyDpvRoofBear");
+        if (slotName == "NimbyDpvRoofBear")
+            return NimbyDpvRailSlotFilled("NimbyDpvRoof");
         if (slotName.IndexOf("NimbyDpvRailBag_") == 0)
         {
             n = slotName.Substring(16, slotName.Length() - 16);

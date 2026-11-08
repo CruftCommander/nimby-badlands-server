@@ -20,8 +20,10 @@ class CfgPatches
     class NimbyDpv
     {
         // DZ_Vehicles_Parts and DZ_Gear_Containers: the rail-storage patch below appends to
-        // CanisterGasoline and AmmoBox, so this addon must load after them (build 37)
-        requiredAddons[] = { "DZ_Data", "DZ_Scripts", "DZ_Vehicles_Wheeled", "DZ_Sounds_Effects", "DZ_Vehicles_Parts", "DZ_Gear_Containers", "DZ_Characters_Backpacks" };
+        // CanisterGasoline and AmmoBox, so this addon must load after them (build 37). Build 58
+        // adds the patched tents and crate (DZ_Gear_Camping, CfgPatches name read from
+        // DZ/gear/camping/config.cpp:3) and the Field Transceiver (DZ_Radio, DZ/gear/radio/config.cpp:3).
+        requiredAddons[] = { "DZ_Data", "DZ_Scripts", "DZ_Vehicles_Wheeled", "DZ_Sounds_Effects", "DZ_Vehicles_Parts", "DZ_Gear_Containers", "DZ_Characters_Backpacks", "DZ_Gear_Camping", "DZ_Radio" };
         units[] = { "NimbyDpv_Car", "NimbyDpv_Wheel", "NimbyDpv_TestCar" };
         weapons[] = {};
     };
@@ -152,6 +154,30 @@ class CfgSlots
         name = "NimbyDpvRailTent_R";
         selection = "railtent_r";
     };
+    // Build 58 (Jeff, November 7, 23:02): roof storage over the front seats. One position, two
+    // twin slots on the rail pattern: Roof takes one piece of large storage (WoodenCrate, CarTent,
+    // Attack2Bag), RoofBear a teddy bear (Bear_ColorBase) facing the bow; NimbyDpv_Car hides and
+    // refuses each while the other is filled, so it is a bear OR the storage, never both.
+    class Slot_NimbyDpvRoof : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvRoof";
+        displayName = "Roof";
+        selection = "roof";
+    };
+    class Slot_NimbyDpvRoofBear : Slot_NimbyDpvRoof
+    {
+        name = "NimbyDpvRoofBear";
+        displayName = "Roof (teddy bear)";
+        selection = "roofbear";
+    };
+    // Build 60 (Jeff, November 7, 23:46): the first aid kit inside the cabin, on the panel behind the
+    // front seat backs at the third seat's feet, cross to the bow. Off the rails.
+    class Slot_NimbyDpvFirstAid : Slot_NimbyDpvRail_1
+    {
+        name = "NimbyDpvFirstAid";
+        displayName = "First aid";
+        selection = "firstaid";
+    };
 };
 
 // The wheel proxy: the model placed at every proxy:\NimbyDpv\data\dpvwheel.NNN triangle,
@@ -205,7 +231,7 @@ class CfgNonAIVehicles
     {
         scope = 2;
         model = "\NimbyDpv\data\dpvrail.p3d";
-        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4", "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4", "NimbyDpvRailTent_L", "NimbyDpvRailTent_R", "NimbyDpvRoof", "NimbyDpvRoofBear", "NimbyDpvFirstAid" };
     };
 };
 
@@ -215,6 +241,7 @@ class CfgVehicles
     class Bottle_Base;
     class Container_Base;
     class TentBase;
+    class Transmitter_Base;
     class Clothing;
     class OffroadHatchback;
     // NimbyDpv_Car inherits CarScript directly and writes Crew, SimulationModule and
@@ -346,7 +373,10 @@ class CfgVehicles
             "NimbyDpvRailBag_3",
             "NimbyDpvRailBag_4",
             "NimbyDpvRailTent_L",
-            "NimbyDpvRailTent_R"
+            "NimbyDpvRailTent_R",
+            "NimbyDpvRoof",
+            "NimbyDpvRoofBear",
+            "NimbyDpvFirstAid"
         };
         hiddenSelections[] =
         {
@@ -400,12 +430,29 @@ class CfgVehicles
                 // eight icons empty and four full
                 attachmentSlots[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4", "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
             };
+            // build 58: the roof twins, one group so the panel shows two icons empty and one full
+            class Roof
+            {
+                name = "Roof";
+                description = "";
+                icon = "set:dayz_inventory image:cat_vehicle_body";
+                attachmentSlots[] = { "NimbyDpvRoof", "NimbyDpvRoofBear" };
+            };
+            // build 60: the cabin first aid kit
+            class Cabin
+            {
+                name = "Cabin";
+                description = "";
+                icon = "set:dayz_inventory image:cat_vehicle_body";
+                attachmentSlots[] = { "NimbyDpvFirstAid" };
+            };
         };
         // Engine, tyre, skid, rain, damper and wind sound sets. Vanilla cars do not get these from
         // wheeled.config.cpp: the DZ_Sounds_Effects pbo binds them per vehicle class in
-        // D:\DayZProjects\DZ\sounds\hpp\config.cpp (CfgVehicles.OffroadHatchback.Sounds :519352).
-        // Without this block the car is silent (build 18, November 6, 2026). The ADA's Offroad
-        // sets for now; Phase 2 may give the flat four its own voice.
+        // D:\DayZProjects\DZ\sounds\hpp\config.cpp. Without this block the car is silent (build 18,
+        // November 6, 2026). Builds 18 to 59 carried the ADA's Offroad sets (OffroadHatchback.Sounds
+        // :519352); build 60 (Jeff, November 7, 23:58) swaps in the Hatchback_02 sets (Gunter 2,
+        // :519454, copied value for value): the closest vanilla voice to a small, revving flat four.
         class Sounds
         {
             thrust = 0.6;
@@ -415,44 +462,43 @@ class CfgVehicles
             camposSmoothCoef = 0.03;
             soundSetsFilter[] =
             {
-                "offroad_Engine_Offload_Ext_Rpm1_SoundSet",
-                "offroad_Engine_Offload_Ext_Rpm2_SoundSet",
-                "offroad_Engine_Offload_Ext_Rpm3_SoundSet",
-                "offroad_Engine_Offload_Ext_Rpm4_SoundSet",
-                "offroad_Engine_Offload_Ext_Rpm5_SoundSet",
-                "offroad_Engine_Ext_Rpm0_SoundSet",
-                "offroad_Engine_Ext_Rpm1_SoundSet",
-                "offroad_Engine_Ext_Rpm2_SoundSet",
-                "offroad_Engine_Ext_Rpm3_SoundSet",
-                "offroad_Engine_Ext_Rpm4_SoundSet",
-                "offroad_Engine_Ext_Rpm5_SoundSet",
-                "offroad_Engine_Ext_Broken_SoundSet",
-                "offroad_Tires_ice_slow_Ext_SoundSet",
-                "offroad_Tires_ice_fast_Ext_SoundSet",
-                "offroad_Tires_snow_slow_Ext_SoundSet",
-                "offroad_Tires_snow_fast_Ext_SoundSet",
-                "offroad_Tires_rock_slow_Ext_SoundSet",
-                "offroad_Tires_rock_fast_Ext_SoundSet",
-                "offroad_Tires_grass_slow_Ext_SoundSet",
-                "offroad_Tires_grass_fast_Ext_SoundSet",
-                "offroad_Tires_gravel_slow_Ext_SoundSet",
-                "offroad_Tires_gravel_fast_Ext_SoundSet",
-                "offroad_Tires_gravel_dust_fast_Ext_SoundSet",
-                "offroad_Tires_asphalt_slow_Ext_SoundSet",
-                "offroad_Tires_asphalt_fast_Ext_SoundSet",
-                "offroad_Tires_water_slow_Ext_SoundSet",
-                "offroad_Tires_water_fast_Ext_SoundSet",
-                "Offroad_skid_dirt_SoundSet",
-                "offroad_dirt_turn_SoundSet",
-                "offroad_Rain_Ext_SoundSet",
-                "offroad_damper_left_SoundSet",
-                "offroad_damper_right_SoundSet"
+                "Hatchback_02_Engine_Offload_Ext_Rpm1_SoundSet",
+                "Hatchback_02_Engine_Offload_Ext_Rpm2_SoundSet",
+                "Hatchback_02_Engine_Offload_Ext_Rpm3_SoundSet",
+                "Hatchback_02_Engine_Offload_Ext_Rpm4_SoundSet",
+                "Hatchback_02_Engine_Offload_Ext_Rpm5_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm0_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm1_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm2_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm3_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm4_SoundSet",
+                "Hatchback_02_Engine_Ext_Rpm5_SoundSet",
+                "Hatchback_02_Engine_Ext_Broken_SoundSet",
+                "Hatchback_02_Tires_ice_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_ice_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_snow_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_snow_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_rock_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_rock_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_grass_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_grass_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_gravel_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_gravel_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_gravel_dust_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_asphalt_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_asphalt_fast_Ext_SoundSet",
+                "Hatchback_02_Tires_water_slow_Ext_SoundSet",
+                "Hatchback_02_Tires_water_fast_Ext_SoundSet",
+                "Hatchback_02_skid_dirt_SoundSet",
+                "Hatchback_02_dirt_turn_SoundSet",
+                "Hatchback_02_Rain_Ext_SoundSet",
+                "Hatchback_02_damper_left_SoundSet",
+                "Hatchback_02_damper_right_SoundSet"
             };
-            // an open buggy has no cabin: the ADA's interior tyre and wind sets are the nearest fit
             soundSetsInt[] =
             {
-                "Offroad_Tires_Asphalt_Fast_General_Int_SoundSet",
-                "Offroad_Wind_SoundSet"
+                "Hatchback_02_Tires_Asphalt_Fast_General_Int_SoundSet",
+                "Hatchback_02_Wind_SoundSet"
             };
         };
         class Crew
@@ -780,7 +826,8 @@ class CfgVehicles
     // saved changes; the first NIMBY addon to modify vanilla item classes (Jeff, November 6,
     // 23:08; shared-rules registry line owed). Ghillie items and the packed tent also carry the
     // Back slot but are not backpacks and stay out.
-    // Build 55: packed tents on the per-side tent slots (Jeff: all four tent classes). The colour
+    // Build 55: packed tents on the per-side tent slots (Jeff: all four tent classes; build 58 moved
+    // the CarTent to the roof, see below, so three remain here). The colour
     // variants (MediumTent_Green, PartyTent_Blue, ...) inherit these lists. Tents have no vanilla
     // inventorySlot[] (DZ/gear/camping/config.cpp), so the list is the two rail names alone.
     class MediumTent : TentBase
@@ -791,9 +838,11 @@ class CfgVehicles
     {
         inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
     };
+    // Build 58: the CarTent's long axis runs along its model forward, so on the side frame it lay
+    // across the shelf (build 57 drive); it is roof-only now, with the crate and the long haul pack.
     class CarTent : TentBase
     {
-        inventorySlot[] = { "NimbyDpvRailTent_L", "NimbyDpvRailTent_R" };
+        inventorySlot[] = { "NimbyDpvRoof" };
     };
     class PartyTent : TentBase
     {
@@ -804,17 +853,45 @@ class CfgVehicles
     // they take the can/box set; ScientificCase.p3d is base-origin and upright like a bag, so it
     // takes the bag set. Drysacks (DryBag, DrysackBag) were already in the bag list. Vanilla
     // gives none of the three an inventorySlot[] (DZ/gear/containers/config.cpp:454, :541, :2306).
+    // Build 58: the protector case on the fore rails only (3 and 4, the ammo-can frame at z 0.625,
+    // where its 0.118 centre origin floats under 1 cm; on an aft rail, z 0.685, 7 cm).
+    // Build 60 (Jeff, 23:46): the first aid kit leaves the rails for the cabin slot (floated 10 cm on
+    // an aft rail in build 57, "5 inches too high"; 4 cm on a fore rail).
     class FirstAidKit : Container_Base
     {
-        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+        inventorySlot[] = { "NimbyDpvFirstAid" };
     };
     class SmallProtectorCase : Container_Base
     {
-        inventorySlot[] = { "NimbyDpvRail_1", "NimbyDpvRail_2", "NimbyDpvRail_3", "NimbyDpvRail_4" };
+        inventorySlot[] = { "NimbyDpvRail_3", "NimbyDpvRail_4" };
     };
     class ScientificBriefcase : Container_Base
     {
         inventorySlot[] = { "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    // Build 57 (Jeff, November 7, 21:30): the Field Transceiver and the Wooden Crate ride too.
+    // BaseRadio is the Field Transceiver (stringtable str_cfgvehicles_baseradio0), worn on the
+    // Back like a backpack (DZ/gear/radio/config.cpp:164, inventorySlot {"Back"}, 5x5, 10 kg), so it
+    // takes the bag set; its CarBattery attachment and the transmitter actions are untouched.
+    // WoodenCrate (DZ/gear/camping/config.cpp:10167, wooden_case.p3d, base-origin, 10x5, 10 kg)
+    // already rides a vehicle in vanilla: the M3S truck's four Truck_01_WoodenCrate slots, kept
+    // here in full. Build 57 put it on the per-side slots, where it lay across the shelf; since
+    // build 58 it is roof-only (NimbyDpvRoof, below), one crate per car.
+    class BaseRadio : Transmitter_Base
+    {
+        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+    };
+    // Build 58: roof only (Jeff, build 57 drive: across the shelf on the side slots, "large storage
+    // goes on the roof or in the back"); the four M3S truck slots kept in full.
+    class WoodenCrate : Container_Base
+    {
+        inventorySlot[] = { "Truck_01_WoodenCrate1", "Truck_01_WoodenCrate2", "Truck_01_WoodenCrate3", "Truck_01_WoodenCrate4", "NimbyDpvRoof" };
+    };
+    // Build 58: the teddy bear (DZ/gear/containers/config.cpp:1155, teddybear.p3d, 2x3; colour
+    // variants Bear_Beige, _Dark, _Pink, _White inherit). Vanilla gives it no inventorySlot[].
+    class Bear_ColorBase : Container_Base
+    {
+        inventorySlot[] = { "NimbyDpvRoofBear" };
     };
     class CanisterGasoline : Bottle_Base
     {
@@ -879,17 +956,17 @@ class CfgVehicles
     {
         inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
     };
-    class LeatherSack_ColorBase : Clothing
-    {
-        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
-    };
+    // LeatherSack_ColorBase: off the rails since build 58 (Jeff, build 57 drive: sat 3 inches too far
+    // inboard on the shared bag frame); vanilla {"Back"} unchanged, rides in cargo.
     class AssaultBag_ColorBase : Clothing
     {
         inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
     };
+    // Build 58: the Long Haul pack is large storage and goes on the roof, standing, back to the bow
+    // (Jeff, build 57 drive: slumped over the starboard side on the bag frame).
     class Attack2Bag_ColorBase : Clothing
     {
-        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
+        inventorySlot[] = { "Back", "NimbyDpvRoof" };
     };
     class CoyoteBag_ColorBase : Clothing
     {
@@ -903,10 +980,8 @@ class CfgVehicles
     {
         inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
     };
-    class ArmyPouch_ColorBase : Clothing
-    {
-        inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };
-    };
+    // ArmyPouch_ColorBase: off the rails since build 58 (Jeff, build 57 drive: lay flat on the bag
+    // frame, "rotate, stand up or eliminate"); vanilla {"Back"} unchanged, rides in cargo.
     class DuffelBagSmall_ColorBase : Clothing
     {
         inventorySlot[] = { "Back", "NimbyDpvRailBag_1", "NimbyDpvRailBag_2", "NimbyDpvRailBag_3", "NimbyDpvRailBag_4" };

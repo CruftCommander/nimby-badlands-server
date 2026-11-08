@@ -46,6 +46,13 @@ modded class Backpack_Base
 
 // Build 55: packed tents on the per-side tent slots. TentBase.SetActions (TentBase.c:852) has the
 // pack, unpack and deploy actions and neither of these; same reasoning as the box and the bags.
+// Build 62 (November 8, 2026, 00:26): a packed tent on a rail offered no "Take to hands" by looking
+// (MediumTent and CarTent, builds 57 to 61). MiscGameplayFunctions.IsObjectObstructedEx
+// (:1630-1640) treats a target as obstructed when the aim ray hits the target's OWN proxy
+// geometry and CanProxyObstructSelf() is true; TentBase alone returns true (TentBase.c:78-81), so
+// a pitched tent cannot be taken through its camo-net and light proxies. Packed, those proxies
+// still answer the ray, so the detach was refused. A packed tent has nothing deployed to obstruct
+// itself with; pitched behaviour is unchanged. GetState() and PACKED: TentBase.c:484-494.
 modded class TentBase
 {
 	override void SetActions()
@@ -53,6 +60,13 @@ modded class TentBase
 		super.SetActions();
 		AddAction(ActionAttachOnSelection);
 		AddAction(ActionDetach);
+	}
+
+	override bool CanProxyObstructSelf()
+	{
+		if (GetState() == PACKED)
+			return false;
+		return super.CanProxyObstructSelf();
 	}
 }
 
@@ -80,6 +94,41 @@ modded class SmallProtectorCase
 }
 
 modded class ScientificBriefcase
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}
+
+// Build 57: the Field Transceiver (BaseRadio) and the Wooden Crate. TransmitterBase.SetActions
+// (TransmitterBase.c:159) has only the on, off and tune actions, so the radio gets both.
+// WoodenCrate.SetActions (Gear/Camping/camping.c:29) already adds ActionAttachOnSelection for
+// the M3S truck's crate slots and never had ActionDetach, so the crate gets that one alone.
+modded class BaseRadio
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionAttachOnSelection);
+		AddAction(ActionDetach);
+	}
+}
+
+modded class WoodenCrate
+{
+	override void SetActions()
+	{
+		super.SetActions();
+		AddAction(ActionDetach);
+	}
+}
+
+// Build 58: the teddy bear on the roof (Bear_ColorBase, Container_Base/EN5C_Bear_ColorBase.c:1; the
+// colour variants inherit). No vanilla attach or detach action, same as the other containers.
+modded class Bear_ColorBase
 {
 	override void SetActions()
 	{

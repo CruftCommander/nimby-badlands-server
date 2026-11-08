@@ -19,6 +19,13 @@
 //           point is logged. Without the line the player's own position is used, as before.
 //           Build 53: a line "+ <class>" adds one item of that class to the DPV's cargo after
 //           the fill (any number of lines; the rail test rotates bag classes this way).
+//           Build 57: a line "= <slot> <class>" attaches one item of that class to that rail slot
+//           before the fill, replacing the built-in three (MediumTent, HuntingBag, AmmoBox) for
+//           the car the line belongs to: a "=" line belongs to the most recent class line above
+//           it, or to the first car when none precedes it. The slot may be written in full or
+//           without the NimbyDpv prefix ("= RailBag_2 TaloonBag_Blue", "= Roof WoodenCrate").
+//           With several class lines, each car gets its own "=" lines, so one boot shows several
+//           loads side by side (the look test of November 7, 2026).
 // Hook    : MissionServer.InvokeOnConnect (5_Mission/DayZ/mission/missionServer.c:435),
 //           which both the new-character path (:336, ClientNewEventTypeID) and the
 //           ready path (:357, ClientReadyEventTypeID) call; OnClientReadyEvent (:599)
@@ -40,6 +47,8 @@ modded class MissionServer extends MissionBase
     protected bool m_NimbyDpvTestCarFlagLogged;
     // build 53: extra cargo items from the flag file ("+ <class>" lines), see the header
     protected ref array<string> m_NimbyDpvTestExtras = new array<string>();
+    // build 57: "= <slot> <class>" lines per car index, each entry "slot class"
+    protected ref array<ref array<string>> m_NimbyDpvTestRailLoads = new array<ref array<string>>();
 
     override void InvokeOnConnect(PlayerBase player, PlayerIdentity identity)
     {
@@ -76,6 +85,20 @@ modded class MissionServer extends MissionBase
                         if (parts[0] == "+" && parts.Count() >= 2)
                         {
                             m_NimbyDpvTestExtras.Insert(parts[1]);
+                            continue;
+                        }
+                        if (parts[0] == "=" && parts.Count() >= 3)
+                        {
+                            int carIndex = classNames.Count() - 1;
+                            if (carIndex < 0)
+                                carIndex = 0;
+                            while (m_NimbyDpvTestRailLoads.Count() <= carIndex)
+                                m_NimbyDpvTestRailLoads.Insert(new array<string>());
+                            string slotFull = parts[1];
+                            if (slotFull.IndexOf("NimbyDpv") != 0)
+                                slotFull = "NimbyDpv" + slotFull;
+                            array<string> loadList = m_NimbyDpvTestRailLoads[carIndex];
+                            loadList.Insert(slotFull + " " + parts[2]);
                             continue;
                         }
                         if (parts[0] == "@" && parts.Count() >= 3)
@@ -148,11 +171,11 @@ modded class MissionServer extends MissionBase
             Print("[NIMBY][Dpv] test-car spawned class=" + className + " tag=" + diagTag + " at=" + car.GetPosition().ToString() + " debugSpawnDelayMs=" + delay.ToString() + " player=" + identity.GetId() + "/" + identity.GetPlainId());
             if (delay > 0)
             {
-                GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.NimbyDpvDebugSpawnLater, delay, false, car, diagTag);
+                GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.NimbyDpvDebugSpawnLater, delay, false, car, diagTag, i);
             }
             else
             {
-                NimbyDpvDebugSpawnLater(car, diagTag);
+                NimbyDpvDebugSpawnLater(car, diagTag, i);
             }
         }
     }
@@ -172,7 +195,7 @@ modded class MissionServer extends MissionBase
 
     // the debug-spawn fill, now or after the flag line's delay, followed by one diag snapshot
     // so the wheel state right after the attach can be compared with the 5 s timer lines
-    protected void NimbyDpvDebugSpawnLater(EntityAI car, string diagTag)
+    protected void NimbyDpvDebugSpawnLater(EntityAI car, string diagTag, int carIndex)
     {
         if (!car)
         {
@@ -192,9 +215,26 @@ modded class MissionServer extends MissionBase
             // build 55: a packed MediumTent takes the left side; the right side keeps the bag (now
             // on RailBag_2) and the box (Rail_4); the fill's jerry cans find every rail blocked and
             // land in the cargo with the other tents
-            NimbyDpvAttachToRail(car, "MediumTent", "NimbyDpvRailTent_L");
-            NimbyDpvAttachToRail(car, "HuntingBag", "NimbyDpvRailBag_2");
-            NimbyDpvAttachToRail(car, "AmmoBox", "NimbyDpvRail_4");
+            // build 57: "= <slot> <class>" lines for this car replace the three built-in items
+            array<string> loads = null;
+            if (carIndex >= 0 && carIndex < m_NimbyDpvTestRailLoads.Count())
+                loads = m_NimbyDpvTestRailLoads[carIndex];
+            if (loads && loads.Count() > 0)
+            {
+                foreach (string load : loads)
+                {
+                    array<string> loadParts = new array<string>();
+                    load.Split(" ", loadParts);
+                    if (loadParts.Count() >= 2)
+                        NimbyDpvAttachToRail(car, loadParts[1], loadParts[0]);
+                }
+            }
+            else
+            {
+                NimbyDpvAttachToRail(car, "MediumTent", "NimbyDpvRailTent_L");
+                NimbyDpvAttachToRail(car, "HuntingBag", "NimbyDpvRailBag_2");
+                NimbyDpvAttachToRail(car, "AmmoBox", "NimbyDpvRail_4");
+            }
         }
         car.OnDebugSpawn();
         Print("[NIMBY][Dpv] test-car debug-spawn done tag=" + diagTag + " class=" + car.GetType());

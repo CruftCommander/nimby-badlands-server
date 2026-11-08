@@ -81,6 +81,17 @@ RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in RAILBAG_SLOTS})
 # proxies 9 and 10, centred on the shelf (see railtent_pos).
 RAILTENT_SLOTS = ("nimbydpvrailtent_l", "nimbydpvrailtent_r")
 RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in RAILTENT_SLOTS})
+# Build 58 (Jeff, November 7, 23:02): roof storage above the front seats, one position, two twin
+# slots (config Slot_NimbyDpvRoof / Slot_NimbyDpvRoofBear, bones roof / roofbear, proxies 11 and
+# 12): a teddy bear OR one piece of large storage (wooden crate, car tent, long haul pack), never
+# both (NimbyDpv_Car twin rule). See roof_pos below.
+ROOF_SLOTS = ("nimbydpvroof", "nimbydpvroofbear")
+RAIL_PROXY.update({slot: RAIL_PROXY_MODEL for slot in ROOF_SLOTS})
+# Build 60 (Jeff, November 7, 23:46): the first aid kit moves off the rails to the cabin, on the
+# bow-facing panel behind the front seat backs (config Slot_NimbyDpvFirstAid, bone firstaid,
+# proxy 13), cross toward the bow. See firstaid_pos below.
+FIRSTAID_SLOT = "nimbydpvfirstaid"
+RAIL_PROXY[FIRSTAID_SLOT] = RAIL_PROXY_MODEL
 CREW_DRIVER_PROXY = r"\dz\vehicles\wheeled\proxies\crew_driver"
 CREW_CARGO_PROXY = r"\dz\vehicles\wheeled\proxies\crew_cargo"
 PART_PROXIES = {                                      # vanilla part proxies the ADA uses
@@ -718,6 +729,36 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # ODOL header cannot say); the build 55 drive calibrates this frame.
     railtent_pos = {"nimbydpvrailtent_l": (-0.865, 0.19, 0.55), "nimbydpvrailtent_r": (0.865, 0.19, 0.55)}
     railtent_up = {"nimbydpvrailtent_l": (-1, 0, 0), "nimbydpvrailtent_r": (1, 0, 0)}
+    # Build 58 roof slots. The roof mesh over the front seats, measured from the source OBJ
+    # (upward faces, November 7, 2026, 23:05): x -0.58 to 0.58, y -0.64 to 0.31, z 1.50 at the
+    # front edge rising to 1.56 at the rear (0.06 over 0.95, slope 0.063, 3.6 degrees), so at the
+    # centre (y -0.17) it is z 1.530 and its normal leans toward the bow by 0.063. Both slots sit
+    # at that centre.
+    # nimbydpvroof: base-origin frame (wooden_case.p3d bboxMin y -0.005; CarTent and the bags
+    # are base-origin too), 5 mm above the mesh; item up along the roof normal; item forward to
+    # the bow, which lays a crate's and a tent's long axis (their model forward, build 57 drive)
+    # along the car and turns a standing pack's back to the bow.
+    # nimbydpvroofbear: teddybear.p3d (Bear_ColorBase) has its origin 0.104 above its base and
+    # its legs along its model forward, so the origin goes 0.104 up the normal and item forward to
+    # the bow makes the bear face the bow (Jeff, 23:02). Height and yaw are first guesses until
+    # the build 58 look test.
+    roof_normal = v_norm((0.0, 0.063, 1.0))
+    roof_centre = (0.0, -0.17, 1.530)
+    roof_pos = {"nimbydpvroof": v_add(roof_centre, v_scale(roof_normal, 0.005)),
+                "nimbydpvroofbear": v_add(roof_centre, v_scale(roof_normal, 0.104))}
+    roof_fwd = {slot: roof_normal for slot in ROOF_SLOTS}      # add_proxy "forward": where the item's UP axis points
+    roof_up = {slot: v_norm((0.0, 1.0, -0.063)) for slot in ROOF_SLOTS}   # add_proxy "up": where the item's FORWARD axis points (the bow, in the roof plane)
+    # Build 60 first aid kit. The panel at the third seat's feet, measured from the source OBJ
+    # (faces with normal +y, November 7, 2026, 23:50): y -0.72, x -0.25 to 0.25, z 0.96 to 1.22,
+    # behind the front seat backs (they end at y -0.44) and in front of the rear cushion (from
+    # y -0.71, z 1.11). FirstAidKit.p3d is centre-origin, 0.081 above its base (ODOL). Build 60 put
+    # the origin at z 1.05 with item forward to the stern, reading the cross as the face away from
+    # item forward; in game the cross faced the stern and the kit rode about 5 inches too high
+    # (Jeff, November 8, 00:19), so the cross is on the item's FORWARD face and build 61 turns the
+    # frame to the bow and drops the origin 0.127. Origin 6 cm off the panel face.
+    firstaid_pos = (0.0, -0.66, 0.923)
+    firstaid_fwd = (0, 0, 1)        # add_proxy "forward": where the item's UP axis points
+    firstaid_up = (0, 1, 0)         # add_proxy "up": where the item's FORWARD axis points (the bow)
     # Build 50: front pair back 0.05 (Jeff: the front can "needs to come back about two inches").
     # Build 45 rendered (the rail_N bones in model.cfg were the missing piece): cans pass; the
     # ammo cans sat about 3 inches low with their labels forward. Build 46: boxes up 0.075,
@@ -739,7 +780,7 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # railbag slots, whose frame is outboard (railbag_up).
     rail_up = {"nimbydpvrail_1": (1, 0, 0), "nimbydpvrail_2": (-1, 0, 0),
                "nimbydpvrail_3": (1, 0, 0), "nimbydpvrail_4": (-1, 0, 0)}
-    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z, "rail": rail_pos, "railbag": railbag_pos, "railtent": railtent_pos,
+    report = {"half_width": half_w, "front_y": front_y, "rear_y": rear_y, "top_z": top_z, "rail": rail_pos, "railbag": railbag_pos, "railtent": railtent_pos, "roof": roof_pos, "firstaid": firstaid_pos,
               "crew_driver": crew_origin(seat_d), "crew_codriver": crew_origin(seat_c),
               "crew_cargo1": crew_origin(seat_r), "spare": spare, "engine": engine}
 
@@ -790,6 +831,9 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
                 lod.add_proxy(RAIL_PROXY[slot], 4 + i, railbag_pos[slot], forward=(0, 0, 1), up=railbag_up[slot], sel=("railbag_%d" % i,))
             for i, slot in enumerate(RAILTENT_SLOTS, 1):
                 lod.add_proxy(RAIL_PROXY[slot], 8 + i, railtent_pos[slot], forward=(0, 0, 1), up=railtent_up[slot], sel=("railtent_%s" % "lr"[i - 1],))
+            for i, slot in enumerate(ROOF_SLOTS, 1):
+                lod.add_proxy(RAIL_PROXY[slot], 10 + i, roof_pos[slot], forward=roof_fwd[slot], up=roof_up[slot], sel=(("roof", "roofbear")[i - 1],))
+            lod.add_proxy(RAIL_PROXY[FIRSTAID_SLOT], 13, firstaid_pos, forward=firstaid_fwd, up=firstaid_up, sel=("firstaid",))
     add_vehicle_proxies(lod0)
     lod0.properties.append(("lodnoshadow", "1"))
     lods.append(lod0)
@@ -845,7 +889,14 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
     # whole tub plus a cage box from 1.0: with build 20's cushion-sized seat selections the
     # front cushions were inside the tub box and the rear cushion inside the cage box.
     vg.add_box((-0.80, rear_y + 0.15, 0.30), (0.80, front_y - 0.25, 0.62), sel=("component01",))
-    vg.add_box((-0.55, -0.60, 1.50), (0.55, 0.80, min(top_z, 2.10)), sel=("component02",))
+    # Build 58: the cage box leaves the roof mesh's footprint (y -0.64 to 0.31) to the roof pad below,
+    # so an aim ray from a standing player reaches the pad and not a cage face above it (build 50
+    # lesson: a pad enclosed by, or shadowed from above by, another View Geometry box only ever
+    # prompts "Push car"; self-review of build 58 caught the box at z 1.60 still covering the pad's
+    # top from most standing angles). What remains of the cage box is the windscreen hoop strip in
+    # front of the roof; the rear hoop at z 2.15 is outside both boxes.
+    assert min(top_z, 2.10) > 1.60, "cage box inverted: top_z %.2f" % top_z
+    vg.add_box((-0.55, 0.31, 1.50), (0.55, 0.80, min(top_z, 2.10)), sel=("component02",))
     # The vanilla ADA's View Geometry carries every attachment proxy plus a selection named after
     # each inventory SLOT (nivawheel_1_1 .. nivawheel_spare_1, carbattery, sparkplug,
     # reflector_1_1, reflector_2_1; read from offroadhatchback.p3d on 2026-11-05); its Memory LOD
@@ -889,6 +940,15 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
         xin = sx * max(abs(pos[0]) - 0.06, 0.805)
         xout = sx * (abs(pos[0]) + 0.06)
         vg.add_box((min(xin, xout), pos[1] - 0.10, 0.470), (max(xin, xout), pos[1] + 0.10, 0.520), sel=(slot, bagslot, tentslot, "component%02d" % vk)); vk += 1
+    # Build 58: the roof pad, the whole roof mesh (x -0.58 to 0.58, y -0.64 to 0.31), carrying both
+    # roof slot names so a bear or a crate held in hand attaches by looking at the roof. Build 60: the
+    # slab is the mesh's own thickness, z 1.50 to 1.535, the storage frame's base height, so an item
+    # on the roof stands wholly above it; build 59's 10 cm slab swallowed the lower 6.5 cm of every
+    # roof item and made "Take to hands" on the bear and the crate hard to aim (Jeff, 23:58).
+    vg.add_box((-0.58, -0.64, 1.50), (0.58, 0.31, 1.535), sel=(ROOF_SLOTS[0], ROOF_SLOTS[1], "component%02d" % vk)); vk += 1
+    # Build 60: the first aid pad, a 3 cm slab on the bow face of the panel behind the front seats,
+    # below the rear cushion box (z 1.11 up from y -0.71) so neither hides the other.
+    vg.add_box((-0.25, -0.74, 0.88), (0.25, -0.715, 1.10), sel=(FIRSTAID_SLOT, "component%02d" % vk)); vk += 1
     vg.add_box((-0.80, 0.80, 0.62), (0.80, front_y - 0.25, 0.95), sel=("component%02d" % vk,)); vk += 1       # hood deck
     vg.add_box((-0.80, rear_y + 0.15, 0.62), (0.80, -1.45, 1.00), sel=("component%02d" % vk,)); vk += 1      # rear engine box
     lods.append(vg)
@@ -980,6 +1040,9 @@ def build_vehicle(verts, uvs, faces, parts, roles, facts, use_blender):
         mp(slot, railbag_pos[slot])
     for slot in RAILTENT_SLOTS:
         mp(slot, railtent_pos[slot])
+    for slot in ROOF_SLOTS:
+        mp(slot, roof_pos[slot])
+    mp(FIRSTAID_SLOT, firstaid_pos)
     lods.append(mem)
     # No LandContact LOD: neither the vanilla ADA (ODOL resolution table read 2026-11-05) nor the
     # working Arma2Quad 1.30 port carries one; a car's placement comes from the wheel simulation.
