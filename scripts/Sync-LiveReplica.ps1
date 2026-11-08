@@ -22,7 +22,9 @@
         -ResetFreshWorld after a zip).
       - <RepoRoot>\server\live\: the mission's loot and gameplay files (types.xml, globals.xml,
         economy.xml, events.xml, messages.xml, cfgspawnabletypes.xml, cfggameplay.json,
-        cfgeconomycore.xml, cfglimitsdefinition.xml) and SOURCE.txt (when and where they were copied).
+        cfgeconomycore.xml, cfglimitsdefinition.xml, cfgeventspawns.xml, mapgroupproto.xml; the last two
+        since November 8, 2026, for the release 2 DPV positions and the release 1 cistern groups) and
+        SOURCE.txt (when and where they were copied).
       - <RepoRoot>\logs\replica-<stamp>\: a manifest and one robocopy log per step. -WhatIf still writes
         the manifest and runs every robocopy step with /L (list only); nothing else is written.
 
@@ -96,7 +98,7 @@ $script:BinaryExcludeDirs = @('mpmissions', 'HostHavocDayZServer', 'profiles', '
 $script:BinaryExcludeFiles = @('serverDZ*.cfg', '*.cfg.bak', 'ban.txt', 'bans.txt', 'whitelist.txt', 'BEServer*.cfg', 'beserver*.cfg', '*.log', '*.RPT', '*.mdmp', '*.ADM')
 
 # Mission files copied into the repo for the plans' Phase 0 sections. Relative to the mission folder.
-$script:LiveReferenceFiles = @('db\types.xml', 'db\globals.xml', 'db\economy.xml', 'db\events.xml', 'db\messages.xml', 'cfgspawnabletypes.xml', 'cfggameplay.json', 'cfgeconomycore.xml', 'cfglimitsdefinition.xml')
+$script:LiveReferenceFiles = @('db\types.xml', 'db\globals.xml', 'db\economy.xml', 'db\events.xml', 'db\messages.xml', 'cfgspawnabletypes.xml', 'cfggameplay.json', 'cfgeconomycore.xml', 'cfglimitsdefinition.xml', 'cfgeventspawns.xml', 'mapgroupproto.xml')
 
 function Get-MissionTemplate {
     <#

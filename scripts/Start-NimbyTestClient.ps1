@@ -65,6 +65,10 @@ $log = Join-Path $logDir ("testclient-{0}.log" -f $stamp)
 
 if (-not (Test-Path -LiteralPath $BuildPath -PathType Container)) { throw "Build folder not found: $BuildPath" }
 if (-not (Test-Path -LiteralPath (Join-Path $BuildPath 'addons') -PathType Container)) { throw "No addons folder under $BuildPath; pass a build\@NIMBY-<stamp> folder." }
+# The game resolves -mod= against its own install folder, not this shell's (NIMBY-T-017 for the
+# server; the client the same way on November 8, 2026: a relative .\build\... loaded no mod and the
+# server kicked the client with "Client is missing a mod which is on the server (NIMBY)").
+$BuildPath = (Resolve-Path -LiteralPath $BuildPath).ProviderPath
 
 if (-not $DayZPath) {
     $libraries = Get-SteamLibraryPath -SteamRoot (Get-SteamRootPath)
