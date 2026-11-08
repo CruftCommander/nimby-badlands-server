@@ -56,25 +56,43 @@ BeforeAll {
 }
 
 Describe 'Get-PatchDescriptor' {
-    It 'maps <PatchFile> to <Relative>' -ForEach @(
-        @{ PatchFile = 'db\types.dpv.patch.xml'; Relative = 'db\types.xml'; Entry = 'type' }
-        @{ PatchFile = 'db\types.release2-loot.patch.xml'; Relative = 'db\types.xml'; Entry = 'type' }
-        @{ PatchFile = 'db\events.dpv.patch.xml'; Relative = 'db\events.xml'; Entry = 'event' }
-        @{ PatchFile = 'cfgspawnabletypes.dpv.patch.xml'; Relative = 'cfgspawnabletypes.xml'; Entry = 'type' }
-        @{ PatchFile = 'cfgeventspawns.dpv.patch.xml'; Relative = 'cfgeventspawns.xml'; Entry = 'event' }
-        @{ PatchFile = 'cfgeconomycore.logging.patch.xml'; Relative = 'cfgeconomycore.xml'; Entry = 'default' }
+    It 'maps a <Root> patch to <Relative>' -ForEach @(
+        @{ Root = 'types'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
+        @{ Root = 'events'; Relative = 'db\events.xml'; Entry = 'event'; Container = '' }
+        @{ Root = 'spawnabletypes'; Relative = 'cfgspawnabletypes.xml'; Entry = 'type'; Container = '' }
+        @{ Root = 'eventposdef'; Relative = 'cfgeventspawns.xml'; Entry = 'event'; Container = '' }
+        @{ Root = 'prototype'; Relative = 'mapgroupproto.xml'; Entry = 'group'; Container = '' }
+        @{ Root = 'economycore'; Relative = 'cfgeconomycore.xml'; Entry = 'default'; Container = 'defaults' }
     ) {
-        $descriptor = Get-PatchDescriptor -PatchPath (Join-Path $overrides $PatchFile)
+        # A DRAFT fixture per root element, so this test does not depend on which repository patch files
+        # are still DRAFT (every release moves its patches to APPLIED, which this function refuses).
+        $content = "<?xml version=`"1.0`" encoding=`"UTF-8`" standalone=`"yes`"?>`r`n<!-- DRAFT - not applied to the live server. -->`r`n<$Root></$Root>"
+        $path = Write-Fixture -Path (Join-Path $TestDrive ('map\' + $Root + '.patch.xml')) -Content $content
+        $descriptor = Get-PatchDescriptor -PatchPath $path
+        $descriptor.Root | Should -Be $Root
         $descriptor.Relative | Should -Be $Relative
         $descriptor.Entry | Should -Be $Entry
+        $descriptor.Container | Should -Be $Container
     }
 
     It 'refuses an applied patch (header says APPLIED): <PatchFile>' -ForEach @(
         @{ PatchFile = 'db\events.helicrash.patch.xml' }
         @{ PatchFile = 'db\types.release1-loot.patch.xml' }
         @{ PatchFile = 'mapgroupproto.cisterns.patch.xml' }
+        @{ PatchFile = 'db\types.dpv.patch.xml' }
+        @{ PatchFile = 'db\types.release2-loot.patch.xml' }
+        @{ PatchFile = 'db\types.oasis-military.patch.xml' }
+        @{ PatchFile = 'db\events.dpv.patch.xml' }
+        @{ PatchFile = 'cfgspawnabletypes.dpv.patch.xml' }
+        @{ PatchFile = 'cfgeventspawns.dpv.patch.xml' }
+        @{ PatchFile = 'cfgeconomycore.logging.patch.xml' }
     ) {
         { Get-PatchDescriptor -PatchPath (Join-Path $overrides $PatchFile) } | Should -Throw '*APPLIED*'
+    }
+
+    It 'accepts a DRAFT header, whose text says "not applied" in lower case' {
+        $path = Write-Fixture -Path (Join-Path $TestDrive 'map\draft.xml') -Content '<?xml version="1.0"?><!-- DRAFT - not applied to the live server. --><types/>'
+        (Get-PatchDescriptor -PatchPath $path).Relative | Should -Be 'db\types.xml'
     }
 
     It 'refuses a root element it does not know' {
@@ -193,55 +211,66 @@ Describe 'Get-FileNewLine and Save-XmlFile -NewLine' {
 }
 
 Describe 'The repository patch files against server\live' {
-    It '<PatchFile> plans with no FAIL row and applies to a copy of the live file' -ForEach @(
-        @{ PatchFile = 'db\types.dpv.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Expect = 'ADD' }
-        @{ PatchFile = 'db\types.release2-loot.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Expect = 'REPLACE' }
-        @{ PatchFile = 'db\events.dpv.patch.xml'; Relative = 'db\events.xml'; Entry = 'event'; Expect = 'ADD' }
-        @{ PatchFile = 'cfgspawnabletypes.dpv.patch.xml'; Relative = 'cfgspawnabletypes.xml'; Entry = 'type'; Expect = 'ADD' }
+    # Every APPLIED patch must be reflected in server\live: planning it against the mirrored live file
+    # (live as its own reference) gives ALREADY on every row. A DRAFT row here means Sync-LiveReplica.ps1
+    # has not run since the apply, or the mirror was never refreshed; a FAIL row means live has moved on
+    # top of the applied values. Get-PatchDescriptor refuses APPLIED headers, so the documents are read
+    # directly. The release 2 set was applied November 8, 2026 (logs\deploy-20261108-131721).
+    It '<PatchFile> (APPLIED) is already in server\live: every row ALREADY' -ForEach @(
+        @{ PatchFile = 'db\types.dpv.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
+        @{ PatchFile = 'db\types.release2-loot.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
+        @{ PatchFile = 'db\types.oasis-military.patch.xml'; Relative = 'db\types.xml'; Entry = 'type'; Container = '' }
+        @{ PatchFile = 'db\events.dpv.patch.xml'; Relative = 'db\events.xml'; Entry = 'event'; Container = '' }
+        @{ PatchFile = 'cfgspawnabletypes.dpv.patch.xml'; Relative = 'cfgspawnabletypes.xml'; Entry = 'type'; Container = '' }
+        @{ PatchFile = 'cfgeventspawns.dpv.patch.xml'; Relative = 'cfgeventspawns.xml'; Entry = 'event'; Container = '' }
+        @{ PatchFile = 'cfgeconomycore.logging.patch.xml'; Relative = 'cfgeconomycore.xml'; Entry = 'default'; Container = 'defaults' }
     ) {
         $livePath = Join-Path $liveDir $Relative
-        $patch = Get-PatchDescriptor -PatchPath (Join-Path $overrides $PatchFile)
         $live = Read-XmlFile -Path $livePath
-        $reference = Read-XmlFile -Path $livePath
-        $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument $live -ReferenceDocument $reference -Entry $Entry)
+        $patch = Read-XmlFile -Path (Join-Path $overrides $PatchFile)
+        $plan = @(Get-PatchPlan -PatchDocument $patch -LiveDocument $live -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry $Entry -Container $Container)
         $plan.Count | Should -BeGreaterThan 0
-        @($plan | Where-Object Mode -eq 'FAIL') | Should -BeNullOrEmpty
-        @($plan | Where-Object Mode -ne $Expect) | Should -BeNullOrEmpty
-        $before = Get-EntryCount -Document $live -Entry $Entry
-        $result = Merge-PatchIntoDocument -LiveDocument $live -Plan $plan -Entry $Entry
-        $out = Join-Path $TestDrive ('real\' + $Relative)
-        Save-XmlFile -Document $live -Path $out
-        Get-EntryCount -Document (Read-XmlFile -Path $out) -Entry $Entry | Should -Be ($before + $result.Added)
+        @($plan | Where-Object Mode -ne 'ALREADY' | ForEach-Object { '{0}={1}' -f $_.Name, $_.Mode }) | Should -BeNullOrEmpty
     }
 
-    It 'cfgeventspawns.dpv.patch.xml plans against the mirrored live file once Sync-LiveReplica.ps1 has copied it' {
-        $livePath = Join-Path $liveDir 'cfgeventspawns.xml'
-        if (-not (Test-Path -LiteralPath $livePath)) { Set-ItResult -Skipped -Because 'server\live\cfgeventspawns.xml is not mirrored yet (run Sync-LiveReplica.ps1)'; return }
-        $patch = Get-PatchDescriptor -PatchPath (Join-Path $overrides 'cfgeventspawns.dpv.patch.xml')
-        $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument (Read-XmlFile -Path $livePath) -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry 'event')
-        ($plan | Where-Object Name -eq 'VehicleNimbyDpv').Mode | Should -Be 'ADD'
-        ($plan | Where-Object Name -eq 'VehicleOffroad02').Mode | Should -Be 'REPLACE'
+    It 'the release 2 row counts match the deploy manifest (3 + 4 + 16 type rows, 1 event, 1 spawnable type, 2 positions, 2 defaults)' {
+        $count = {
+            param($PatchFile, $Entry, $Container)
+            $doc = Read-XmlFile -Path (Join-Path $overrides $PatchFile)
+            @((Get-EntryParent -Document $doc -Container $Container).ChildNodes | Where-Object { $_.NodeType -eq 'Element' -and $_.LocalName -eq $Entry }).Count
+        }
+        (& $count 'db\types.dpv.patch.xml' 'type' '') | Should -Be 3
+        (& $count 'db\types.release2-loot.patch.xml' 'type' '') | Should -Be 4
+        (& $count 'db\types.oasis-military.patch.xml' 'type' '') | Should -Be 16
+        (& $count 'db\events.dpv.patch.xml' 'event' '') | Should -Be 1
+        (& $count 'cfgspawnabletypes.dpv.patch.xml' 'type' '') | Should -Be 1
+        (& $count 'cfgeventspawns.dpv.patch.xml' 'event' '') | Should -Be 2
+        (& $count 'cfgeconomycore.logging.patch.xml' 'default' 'defaults') | Should -Be 2
     }
 }
 
 Describe 'Nested container (cfgeconomycore defaults)' {
-    It 'plans the logging patch as REPLACE under the defaults container and applies it to a copy of server\live' {
+    It 'plans a defaults patch as REPLACE under the defaults container and applies it to a copy of server\live' {
+        # A fixture rather than the repository's logging patch, which is APPLIED and already in server\live.
         $livePath = Join-Path $liveDir 'cfgeconomycore.xml'
-        $patch = Get-PatchDescriptor -PatchPath (Join-Path $overrides 'cfgeconomycore.logging.patch.xml')
-        $patch.Container | Should -Be 'defaults'
         $live = Read-XmlFile -Path $livePath
+        $current = (Get-NamedEntry -Document $live -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value')
+        $flipped = if ($current -eq 'true') { 'false' } else { 'true' }
+        $patchPath = Write-Fixture -Path (Join-Path $TestDrive 'eco\patch.xml') -Content ("<?xml version=`"1.0`" encoding=`"UTF-8`" standalone=`"yes`"?>`r`n<!-- DRAFT - not applied to the live server. -->`r`n<economycore>`r`n  <defaults>`r`n    <default name=`"log_ce_loop`" value=`"{0}`"/>`r`n  </defaults>`r`n</economycore>" -f $flipped)
+        $patch = Get-PatchDescriptor -PatchPath $patchPath
+        $patch.Container | Should -Be 'defaults'
         $plan = @(Get-PatchPlan -PatchDocument $patch.Document -LiveDocument $live -ReferenceDocument (Read-XmlFile -Path $livePath) -Entry 'default' -Container 'defaults')
-        $plan.Count | Should -Be 2
-        @($plan | Where-Object Mode -ne 'REPLACE') | Should -BeNullOrEmpty
+        $plan.Count | Should -Be 1
+        $plan[0].Mode | Should -Be 'REPLACE'
         $before = Get-EntryCount -Document $live -Entry 'default' -Container 'defaults'
         $result = Merge-PatchIntoDocument -LiveDocument $live -Plan $plan -Entry 'default' -Container 'defaults'
-        $result.Replaced | Should -Be 2
+        $result.Replaced | Should -Be 1
         $out = Join-Path $TestDrive 'eco\cfgeconomycore.xml'
         Save-XmlFile -Document $live -Path $out
         $check = Read-XmlFile -Path $out
         Get-EntryCount -Document $check -Entry 'default' -Container 'defaults' | Should -Be $before
+        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value') | Should -Be $flipped
         (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_vehicle' -Container 'defaults')[0].GetAttribute('value') | Should -Be 'true'
-        (Get-NamedEntry -Document $check -Entry 'default' -Name 'log_ce_loop' -Container 'defaults')[0].GetAttribute('value') | Should -Be 'false'
         @($check.DocumentElement.SelectNodes('./classes/rootclass')).Count | Should -Be 10
     }
 
