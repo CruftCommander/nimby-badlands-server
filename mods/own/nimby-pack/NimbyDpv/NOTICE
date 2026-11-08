@@ -1,18 +1,64 @@
-NimbyDpv (DPV, working name) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp.
+NimbyDpv (display name DPV) - original work by Jeff Fabish for NIMBY | HARDCORE | BADLANDS | 1pp:
+config, scripts, model build pipeline, proxies, textures as derived, and the vehicle class NimbyDpv_Car.
 
-Phase 0 (November 5, 2026): a config-only vehicle class, NimbyDpv_TestCar, that inherits the
-vanilla DayZ 1.30 OffroadHatchback (Bohemia Interactive) and reuses its model, parts, sounds,
-and physics unchanged, so the pack can prove on the local test server that a NIMBY vehicle
-class spawns, is entered, drives, and persists on 1.30 before a model is bought. No vanilla
-asset is copied into the pack; the class points at the vanilla model path through inheritance.
+Third-party model
+-----------------
+The vehicle mesh in data\dpv.p3d, data\dpvwheel.p3d and the texture set (data\dpv_*_co.paa, _nohq, _smdi
+and their rvmats) are derived from "Desert Patrol Vehicle Low-poly 3D model" by carbuni, CGTrader
+model 1875658 (https://www.cgtrader.com/3d-models/military/military-vehicle/desert-patrol-vehicle),
+bought by Jeff Fabish on November 5, 2026 under CGTrader's Royalty Free License, "No AI" variant.
+The purchase record is D:\DayZProjects\NimbyDpv\vendor-carbuni\LICENSE-NOTE.txt (not in the repository).
 
-Planned model (not yet acquired, not in this addon): "Desert Patrol Vehicle Low-poly" by carbuni,
-CGTrader model 1875658, Royalty Free License. When it lands, this NOTICE records the vendor,
-license, purchase date, and the shared rules 9.3 exception for the model source
-(docs/design/dpv-feasibility.md, D-2).
+License read, November 8, 2026 (CGTrader General Terms and Conditions, Royalty Free License,
+help.cgtrader.com article 360015124437):
+- The license is limited to "Incorporated Product". A game counts when the model is contained inside
+  a proprietary format and displayed during play; the buyer must take all reasonable measures to
+  prevent the end user from gaining access to the product (the article names a proprietary product
+  format, a protected resource file and encryption as examples). The model may not be sold, given
+  or redistributed in the form it was downloaded, digital or printed.
+- How this addon complies: the purchased OBJ, MAX, FLT, MB, MTL and PSD sources never enter a
+  repository or a PBO (shared rules 9.3 exception, docs/design/dpv-feasibility.md D-2). What ships
+  is a rebuilt, re-topologised game model (new LOD set, selections, memory points, proxies, skeleton,
+  the NIMBY rail frame) binarized to Bohemia's ODOL format inside a signed PBO, with textures
+  converted to PAA. An MLOD (editable) .p3d never ships in a release build; the MLOD files the
+  builder writes are the local working copies only. Ruled November 5, 2026 (ship ODOL) and confirmed
+  against the license November 8, 2026.
+- Attribution is not required by the license; carbuni is credited here and in the Workshop text.
+- "No AI": the model, its textures and anything derived from them are not to be used for machine
+  learning training. The repository and the pack carry no such use.
+
+Vanilla references
+------------------
+NimbyDpv_Car points at vanilla DayZ 1.30 (Bohemia Interactive) part, sound and material classes by
+inheritance and name: the hatchback part set (CarBattery, SparkPlug, HeadlightH7, CarRadiator not
+used), the Hatchback_02 engine sound set (config values copied from DZ/sounds/hpp/config.cpp, the
+sound shaders themselves stay in the game data), vanilla rvmat conventions, and the model.cfg
+animation sources. No vanilla model, texture or sound file is copied into the pack. The addon also
+patches the inventorySlot[] lists of vanilla item classes (jerry can, ammo box, protector case,
+scientific briefcase, first aid kit, Field Transceiver, wooden crate, teddy bear, three tents, the
+Attack2Bag and eighteen backpack classes) so they can ride the DPV's rail, roof and cabin slots;
+config only, nothing saved changes (Jeff, November 6, 2026, 23:08).
+
+NimbyDpv_TestCar (Phase 0, November 5, 2026) is a config-only child of the vanilla OffroadHatchback
+kept for the test harness; it reuses the vanilla model and parts through inheritance and copies
+nothing.
 
 Changes, newest first:
 
+- November 8, 2026, release prerequisites: this NOTICE rewritten for the acquired model and the
+  license read; CE rows drafted (server/mission-overrides/*.dpv.patch.xml); release build to ship
+  binarized ODOL models.
+- November 7 to 8, 2026, builds 56 to 64: roof twin slots (teddy bear or large storage), cabin first
+  aid slot, Field Transceiver on the bag set, Hatchback_02 engine sound, packed tents detach by
+  looking, rail admission rulings, headlight glow (dpv_lights_on.rvmat, emissive on the lamp lens
+  faces); pre-publish tests (save-and-reload, hill, night) passed.
+- November 7, 2026, builds 37 to 55: rail storage (four side positions, can and bag slot sets, per-side
+  packed-tent slots, small storage), the vanilla item inventorySlot[] patches, traction control.
+- November 6, 2026, builds 13 to 36: engine, gearbox and handling tune (release tune is build 32 plus
+  traction control), wheels and first drive, diagnostics gated on the spawn flag.
+- November 5, 2026, Phase 1: the carbuni model rebuilt for DayZ by scripts/dpv/build_nimbydpv_model.py
+  (LODs, selections, memory points, crew and wheel proxies, skeleton) and textured by
+  build_nimbydpv_textures.py; model.cfg; first boot on the local test server.
 - November 5, 2026, Phase 0: stub addon with the test class, the self-test (four
   config cases) so the Build-NimbyPack boot gate has lines to count, and the
   flag-gated test spawn ($profile:NimbyDpv\spawn-testcar) that answers NIMBY-T-003

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  VehicleNimbyDpv spawn positions, and the VehicleOffroad02 (Humvee) list they are taken from.
+  Jeff's rulings, November 8, 2026, 01:30 to 01:40 Central (/interview after the draft of 01:25); D-5 of docs/design/dpv-feasibility.md (November 5, 2026: nominal 4, max 6, military sites only, per-part chance).
+  DRAFT - not applied to the live server. In mpmissions/dayzOffline.nasdara/cfgeventspawns.xml the
+  VehicleNimbyDpv <event> below is ADDED and the VehicleOffroad02 <event> below REPLACES the live one.
+  Everything not listed here is unchanged.
+
+  Why these: D-5 says military sites only. The 21 VehicleOffroad02 positions are the only vanilla vehicle
+  spots on Nasdara that all sit at military sites (nearest Military-usage building 10 to 55 m; measured
+  against mapgrouppos.xml and mapgroupproto.xml on November 8, 2026). Jeff, 01:31: split them, no sharing,
+  so two events never target one spot: 10 go to the DPV, one per site across the map; 11 stay with the
+  Humvee, whose event keeps nominal 5, min 2, max 3 (child max 5) in events.xml.
+
+  Source: the stock 1.30 cfgeventspawns.xml of the October 15, 2026 server install (D:\DayZServer); the live
+  file is not mirrored by Sync-LiveReplica.ps1 until the November 8 change lands. The deploy step pulls the
+  live file and refuses unless the live VehicleOffroad02 event holds exactly these 21 positions.
+-->
+<eventposdef>
+		<event name="VehicleNimbyDpv">
+				<pos x="2941.090820" z="9114.868164" />	<!-- was Humvee #2: 029 091 rocket base, missile storage -->
+				<pos x="3969.150391" z="5219.088379" />	<!-- was Humvee #4: 039 052 guardhouse compound -->
+				<pos x="4338.213379" z="12924.756836" />	<!-- was Humvee #6: 043 129 container watchtower -->
+				<pos x="4739.098145" z="7360.973633" />	<!-- was Humvee #7: 047 073 armory habitat -->
+				<pos x="6110.073730" z="9141.924805" />	<!-- was Humvee #10: 061 091 barracks cluster -->
+				<pos x="7261.114746" z="9651.167969" />	<!-- was Humvee #14: 072 096 tent camp -->
+				<pos x="7820.769531" z="11827.809570" />	<!-- was Humvee #16: 078 118 guard shed post -->
+				<pos x="8281.083008" z="5709.787109" />	<!-- was Humvee #17: 082 057 big base -->
+				<pos x="11875.126953" z="10621.890625" />	<!-- was Humvee #19: 118 106 barracks 3 -->
+				<pos x="12818.170898" z="6755.492676" />	<!-- was Humvee #21: 128 067 HBarrier tower -->
+		</event>
+		<event name="VehicleOffroad02">
+				<pos x="2899.410156" z="15694.490234" />	<!-- Humvee #1, grid 028 156 -->
+				<pos x="3170.618896" z="10258.147461" />	<!-- Humvee #3, grid 031 102 -->
+				<pos x="3972.141357" z="5178.365234" />	<!-- Humvee #5, grid 039 051 -->
+				<pos x="5292.183594" z="5494.978516" />	<!-- Humvee #8, grid 052 054 -->
+				<pos x="6008.345215" z="9186.136719" />	<!-- Humvee #9, grid 060 091 -->
+				<pos x="6178.302246" z="9184.882813" />	<!-- Humvee #11, grid 061 091 -->
+				<pos x="6271.133301" z="9959.868164" />	<!-- Humvee #12, grid 062 099 -->
+				<pos x="6342.273438" z="12759.570313" />	<!-- Humvee #13, grid 063 127 -->
+				<pos x="7404.297852" z="7516.634766" />	<!-- Humvee #15, grid 074 075 -->
+				<pos x="10191.754883" z="8168.475586" />	<!-- Humvee #18, grid 101 081 -->
+				<pos x="12038.592773" z="10902.563477" />	<!-- Humvee #20, grid 120 109 -->
+		</event>
+</eventposdef>

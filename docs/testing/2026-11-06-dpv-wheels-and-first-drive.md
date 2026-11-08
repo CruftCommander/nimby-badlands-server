@@ -175,3 +175,30 @@ Builds 55 `181754` (gate FAIL: `nimbydpv_car.c,489: Unknown type '||'`, a contin
 ### Builds 55 to 64
 
 55 `181754` tents on `RailTent_L/R`, FirstAidKit, SmallProtectorCase, ScientificBriefcase, gate FAIL on the `||` continuation; 56 `212916` the fix, first PASS; 57 `220704` BaseRadio on the bag set, WoodenCrate on the side slots, `= <slot> <class>` spawn lines, `-ThirdPerson`; 58 `231407` roof twins and the bear, crate/CarTent/Long Haul roof-only, ArmyPouch and LeatherSack off the rails, small cases fore-only, cage View Geometry from z 1.60 with the roof pad below it; 59 `234808` self-review fixes (cage box off the roof footprint, requiredAddons DZ_Gear_Camping and DZ_Radio, roof self-test cases, slope 0.063); 60 `001105` cabin first aid slot, roof pad thinned, Hatchback_02 sound; 61 `002044` first aid frame to the bow and down 0.127; 62 `002949` packed tents no longer obstruct themselves (detach by looking); 63 `dpv_lights_on.rvmat` as frontReflectorMatOn, `-ServerTime` on the test server; 64 lens faces as the light selections, night test PASS.
+
+## November 8, 2026 - release build on binarized ODOL models (build 65), session "DPV release prerequisites (11/8/2026)"
+
+Build 65 is `@NIMBY-20261108-111218`: the build 64 models binarized with DayZ Tools `binarize.exe` (ODOL v56) in place of the builder's MLOD files, ruled by the CGTrader licence read and the November 5 ruling (`NimbyDpv/NOTICE`). Full gate PASS (SIGN 9 of 9, SELFTEST Dpv 94 of 94, BOOT PASS). In-game look on a fresh `storage_998`, third person, server time 01:00, one DPV spawned with a white bear, first aid kit, protector case (rail 4), hunting bag (rail bag 1) and packed medium tent (left tent slot). Eight numbered checks, all PASS (Jeff, 11:40).
+
+### Results
+
+| Check | Build | Result | Notes |
+| --- | --- | --- | --- |
+| 1. Spawn and stance | 65 | PASS | On its four wheels at ride height |
+| 2. Attached items where build 64 put them | 65 | PASS | Bear on the roof, kit on the cabin panel, case fore rail, bag, tent |
+| 3. "Take to hands" prompts on the bear, kit and tent | 65 | PASS | Nothing hidden behind the body |
+| 4. Enter and start, engine holds idle | 65 | PASS | Skeleton and animations baked from `model.cfg` (see T-105) |
+| 5. Drive, wheels and steering wheel turn | 65 | PASS | **Top stable speed about 140 km/h (87 mph)**, Jeff; build 31 read 138 km/h in fourth |
+| 6. Headlights on and off at 01:00 | 65 | PASS | Lens glow as on build 64 |
+| 7. Spare off the hood and back | 65 | PASS | |
+| 8. Save and reload across a graceful restart | 65 | PASS | Car and all five items back |
+
+### Findings
+
+- **NIMBY-T-104 (fixed, tooling).** `Start-NimbyTestClient.ps1` passed a relative `-BuildPath` straight into `-mod=`; the game resolves `-mod=` against its own install folder (`C:\Program Files (x86)\Steam\steamapps\common\DayZ`), so the client loaded no mod and the server kicked it with "Client is missing a mod which is on the server (NIMBY) (Missing PBO.)". The launcher now resolves `-BuildPath` to an absolute path, as the server script has since NIMBY-T-017.
+- **NIMBY-T-105 (procedural, binarize).** Two traps in one afternoon: `binarize.exe` returns before its files land (a listing right after the call shows nothing; wait or re-list), and it bakes the skeleton only from a `model.cfg` inside the source folder it is given (`P:\NimbyDpv\data\`). The first run of the day wrote nothing while `P:` was unmapped and the old `binout\` (November 6) masked it; the copy step then put the November 6 model over build 64 and the gate still passed (`@NIMBY-20261108-110446`, void). A second run without `model.cfg` produced ODOL files with no `dpv_skeleton`. Guard for next time: binarize into a fresh dated folder, keep `data\model.cfg` identical to the addon's, and check the three outputs read `ODOL`, are dated today, and that `dpv.p3d` contains `dpv_skeleton` and 13 `dpvrail` proxies before copying.
+- **Binarize sizes for reference:** `dpv.p3d` 442,955 bytes, `dpvrail.p3d` 865, `dpvwheel.p3d` 13,717 (MLOD 3,288,652 / 468 / 55,059). The MLOD set is kept at `D:\DayZProjects\NimbyDpv\data-prev-20261108-mlod64\`.
+
+### Build 65
+
+65 `111218` build 64 content on ODOL models; release candidate for release 2.

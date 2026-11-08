@@ -49,6 +49,24 @@ Before (live) was confirmed against the live `events.xml` pulled at 13:29 Centra
 
 APPLIED October 28, 2026, 13:38 Central (panel Restart), by Jeff (upload) and Claude (restart), from backup panel `manual-backup-2026-10-28_11-01.zip`. After the restart the panel query and the DZSA launcher API both answered: map `nasdara`, 0/80, version 1.30.164200, @NIMBY 3828109139 offered. The `server/live/` copy of `events.xml` moves forward at the next `Sync-LiveReplica.ps1` run.
 
+## Release 2: the DPV enters the economy, the 1911 and binoculars halved (ruled November 8, 2026; DRAFT)
+
+Ruled by: Jeff Fabish, November 8, 2026, 01:30 to 01:40 Central (/interview after the 01:25 draft), on D-5 of `docs/design/dpv-feasibility.md` (November 5, 2026: nominal 4, max 6, military sites only, per-part chance). Drafted by: Claude (this session), from `server/live/` as mirrored October 26, 2026, 21:33 (`types.xml`, `events.xml`, `cfgspawnabletypes.xml`) and the stock October 15, 2026 `cfgeventspawns.xml` at `D:\DayZServer` (not mirrored until the November 8 `Sync-LiveReplica.ps1` change). Status: **DRAFT, not on live.** Target: the release 2 restart, in the same restart as the @NIMBY Workshop update that carries NimbyDpv (the rows are meaningless to the CE without the addon loaded) and the Oasis rows (`types.oasis-military.patch.xml`, PR #22), applied with `scripts/Deploy-MissionPatches.ps1`, which pulls each live file first and refuses on any Before mismatch. Backup names go here at apply time. First-12-hours check: the CE log shows no `Type NimbyDpv_Car will be ignored`; at least four DPVs stand at the ten positions; a DPV survives a restart with its rail, roof and cabin items.
+
+| File | Entry | Before (live) | After | Why |
+| --- | --- | --- | --- | --- |
+| `types.dpv.patch.xml` | `NimbyDpv_Car` | no row | nominal 0, lifetime 3, restock 1800, min 0, vanilla car flags | Registers the class with the CE so it is counted and persists; the event owns the count (OffroadHatchback and Hatchback_02 pattern) |
+| `types.dpv.patch.xml` | `NimbyDpv_Wheel` | no row | nominal 12, min 9, lifetime 28800, lootdispatch, Military and Industrial, Tier2 and Tier3 | The only source of spare DPV wheels, about three per DPV at nominal 4; pattern `Offroad_02_Wheel` 26/20 (Jeff: 12 / 9) |
+| `types.dpv.patch.xml` | `NimbyDpv_Wheel_Ruined` | no row | nominal 0, lifetime 7200, crafted="1", lootdispatch | A ruined wheel is tracked and cleaned up like `HatchbackWheel_Ruined` |
+| `cfgspawnabletypes.dpv.patch.xml` | `NimbyDpv_Car` block | no block | wheels 1.00 x4, spare 0.40, battery 0.60, spark plug 0.60, bulbs 0.40 x2; storage rolls rail can 0.30, rail bag 0.40, rail tent 0.25, roof 0.30 (bear or large storage, one group), first aid 0.40 | D-5 per-part chance: every DPV stands on its wheels (Jeff), the rest at hatchback values; storage at the harsher odds, one roll per area, about 1.6 pieces per DPV (Jeff) |
+| `events.dpv.patch.xml` | `VehicleNimbyDpv` | no event | nominal 4, min 4, max 6, lifetime 300, radii 500/500/200, remove_damaged="1", position fixed, limit mixed, child min 4 max 6, no secondary | D-5 counts; min 4 so the CE tops the DPVs back up at every pass (Jeff); no `InfectedArmy` around a DPV (Jeff) |
+| `cfgeventspawns.dpv.patch.xml` | `VehicleNimbyDpv` positions | no event | 10 positions: 029 091, 039 052, 043 129, 047 073, 061 091, 072 096, 078 118, 082 057, 118 106, 128 067 | Military sites only (D-5); the ten are known-good vanilla vehicle spots taken from the Humvee list, one per site (Jeff: split, no sharing) |
+| `cfgeventspawns.dpv.patch.xml` | `VehicleOffroad02` positions | 21 positions | 11 positions (#1, 3, 5, 8, 9, 11, 12, 13, 15, 18, 20 of the stock list) | The ten moved to the DPV; the Humvee event (nominal 5, max 3, child max 5) keeps two spots per car |
+| `types.release2-loot.patch.xml` | `Colt1911` | nominal 65, min 55 | nominal 33, min 28 | Colt 1911 halved (ruled October 21, 2026, held during vanilla testing; confirmed November 8, 2026: the whole 1911 family) |
+| `types.release2-loot.patch.xml` | `Engraved1911` | nominal 10, min 7 | nominal 5, min 4 | As above |
+| `types.release2-loot.patch.xml` | `Mag_1911_7Rnd` | nominal 70, min 60 | nominal 35, min 30 | As above; magazines keep the pistol ratio |
+| `types.release2-loot.patch.xml` | `Binoculars` | nominal 45, min 40 | nominal 22, min 20 | Too many binoculars at the SW military checkpoint (carried in the hub since October 30, 2026; Jeff, November 8: half); usage flags unchanged |
+
 ## Earlier changes
 
 Changes made in the HostHavoc panel before this log existed (the October 15, 2026 wipe and map switch, CF removal, `lightingConfig`, the hardcore profile) are recorded in `docs/operations/` and the Notion hub, not here.
