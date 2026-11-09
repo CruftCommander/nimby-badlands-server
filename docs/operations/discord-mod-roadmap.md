@@ -2,7 +2,7 @@
 
 Source of the pinned roadmap post in the NIMBY Discord #mod-roadmap channel. Jeff posts it by hand; edit here first, then paste. Keep it under 4,000 characters (the Nitro message limit; 2,000 without Nitro).
 
-Revision of October 27, 2026 (Jeff's rulings, 22:36 Central): Patching stage added (Hands); priorities set by Jeff (High: Hands fix, Central Scrutinizer; Medium: smoke shop, Shoulder, Bikes, Tweaker, Cassettes; Low: Splash, Payload, Face paint, Eyes until Central Scrutinizer ships, small ideas; Very low: Beards); Menu dropped; Shoulder (was Slings), Bikes, Cassettes, Face paint, well rope and waterboarding added; water barrel removed (vanilla already does it). Character count of the post below: 3993 (channel mentions counted as typed). Revision of October 27, 22:55 Central: the channel is announcements only (members can react, not post), so the footer points to #server-suggestions, #faq-and-help and #report-server-issues by channel id.
+Revision of October 27, 2026 (Jeff's rulings, 22:36 Central): Patching stage added (Hands); priorities set by Jeff (High: Hands fix, Central Scrutinizer; Medium: smoke shop, Shoulder, Bikes, Tweaker, Cassettes; Low: Splash, Payload, Face paint, Eyes until Central Scrutinizer ships, small ideas; Very low: Beards); Menu dropped; Shoulder (was Slings), Bikes, Cassettes, Face paint, well rope and waterboarding added; water barrel removed (vanilla already does it). Character count of the post below: 3995 (channel mentions counted as typed). Revision of November 8, 2026, 17:40 Central (after the live Hands test with Jay): the Hands line says open pockets take deposits and that viewing and taking comes later (NIMBY-T-062, ruled October 27, not built); the bench idea joins Small ideas; the "Why" paragraph shortened to stay under 4,000. Revision of October 27, 22:55 Central: the channel is announcements only (members can react, not post), so the footer points to #server-suggestions, #faq-and-help and #report-server-issues by channel id.
 
 Revision of November 8, 2026 (Jeff's rulings, 15:40 to 15:55 Central, /interview and /decide after release 2 went live at 13:22): release 2 added to the Live block (Hands moved from Patching to Live with "Fixed in release 2"; DPV added; Greet gains the "What's changed" tab); the Patching section is gone (nothing is patching); "Next in line" is now an ordered block: Music (was Cassettes; Feasibility, High, with the beatbox and DPV detail), Puff and Buzz (Planned, Medium), Central Scrutinizer (Building, High), Sprout (Planned, Medium, moved below Central Scrutinizer); Fang added to Studied as one line without the bite numbers; Beards removed (ruled not feasible November 7); Helicopters and Regional clothing added as separate ideas; Eyes kept as before; the stage footnote no longer defines Patching. Character count of the post below: 4115 (channel mentions counted as typed).
 
@@ -12,18 +12,18 @@ Revision of November 8, 2026 (Jeff's rulings, 15:40 to 15:55 Central, /interview
 
 **Two releases are live.** `@NIMBY` is required to join: <https://steamcommunity.com/sharedfiles/filedetails/?id=3828109139>. Subscribe once; the launcher keeps it current. Every NIMBY keybinding can be rebound under the **NIMBY** tab in Controls. New mods go live only after testing on a private copy of the server. Source: <https://github.com/CruftCommander/nimby-badlands-server>
 
-**Why build our own?** When Badlands dropped, the usual Workshop mods had no 1.30 builds. In-house, we fix things ourselves, everything fits the hardcore "vanilla-plus, never easier" style, and you subscribe to one item.
+**Why build our own?** When Badlands dropped, the usual Workshop mods had no 1.30 builds. In-house we fix things ourselves, it all fits "vanilla-plus, never easier", and you subscribe to one item.
 
 **Stages:** Planning → Feasibility → Planned → Building → Built → Testing → Tested → Live
--# Feasibility is a short study against the 1.30 engine before building; some ideas stop there. **Priority** (High, Medium, Low) is what gets worked on first; the list below is in planned release order.
+-# Feasibility is a short study against the 1.30 engine; some ideas stop there. **Priority** (High, Medium, Low) is what gets worked on first; the list is in planned release order.
 
 ## :white_check_mark: Live (release 1, Oct 27, and release 2, Nov 8, 2026)
 **:leg: Legs**: Autorun. Double-tap Left Shift to auto-run/auto-swim; any movement input takes control back.
 **:ear: Ears**: Earplugs on one key (N). Voice chat isn't affected.
-**:writing_hand: Scrawl**: Notes with pen and paper. Paper stacks to 5, notes hold 512 characters, untouched notes disappear after 30 days.
+**:writing_hand: Scrawl**: Notes with pen and paper. Paper stacks to 5; untouched notes vanish after 30 days.
 **:pushpin: Tack**: Pin a note to a wall with a hammer and nail, duct tape, epoxy putty, or a knife into wood. Ripping one down damages the sheet.
 **:wave: Greet**: The welcome window with rules, how-tos, restart times and a "What's changed" tab. Insert reopens it.
-**:handshake: Hands**: Hand what you're holding to another player (O to offer), ask for theirs, or open your pockets. Fixed in release 2.
+**:handshake: Hands**: Hand what you're holding to another player (O to offer), ask for theirs, or open your pockets so they can put things in. Fixed in release 2; looking in and taking comes later.
 **:race_car: DPV**: A desert patrol buggy at military sites, four to six on the map. Bring a battery, spark plug, bulbs and fuel. Rails, roof and cabin carry gear.
 `▰▰▰▰▰▰▰▰` Live
 
@@ -52,7 +52,7 @@ Revision of November 8, 2026 (Jeff's rulings, 15:40 to 15:55 Central, /interview
 **Helicopters**: More of them, from an existing mod if the licence allows. Low
 **Regional clothing**: Clothes that fit the region, same condition. Low
 **Eyes**: Behind-the-scenes tooling for the admin team. Low
-**Small ideas**: Cut the rope on a dug well; waterboarding a restrained player. Low
+**Small ideas**: Cut a well's rope; waterboard a restrained player; a bench to free a stuck car. Low
 `▰▱▱▱▱▱▱▱` Planning
 
 -# Announcements only; reactions welcome. Ideas go in <#1561758532301492274>, questions in <#933890402078031962>, bugs in <#1562081423870009345>. Order can change.

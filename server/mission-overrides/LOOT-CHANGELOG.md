@@ -98,6 +98,18 @@ Ruled by: Jeff Fabish, November 8, 2026, 01:30 to 01:40 Central (/interview afte
 
 APPLIED November 8, 2026, 13:17 Central (release 2 restart; server stopped 13:11 with 0 players, started 13:22), by Jeff (`scripts/Deploy-MissionPatches.ps1 -Upload`, run `logs/deploy-20261108-131721`, five files, every readback hash-identical to the staged copy) and Claude (panel stop, backup, Workshop install, `greet.json` v2 upload, start), from backup panel `manual-backup-2026-11-08_11-12.zip` (panel clock; 13:12 Central). First RPT (`DayZServer_x64_2026-11-08_11-22-07.RPT`, panel clock): 0 `SCRIPT (E)`, 0 `Scripted variables corrupted`, 0 VME, every `[CE][Storage]` block `valid:yes`, 0 failed items; the 27 `Type ... will be ignored` lines are the same set as the previous boot (none on a patched class); `Loaded 40 dynamic events 201 total types` (39/200 before); `[CE][DE] [VehicleNimbyDpv] Spawning` four times, `NimbyDpv_Car` at 4739/7361, 6110/9142, 11875/10622, 12818/6755 (all in the ten-position list); `[NIMBY][Greet] greet.json loaded ... version=2 truncations=0`; `[NIMBY][Hands] loaded`. Live server build `1.30.164289` (the gate ran on `1.30.164078.38`). The `server/live/` copies move forward at the next `Sync-LiveReplica.ps1` run.
 
+## Helicopter crashes, third cut (ruled November 8, 2026; DRAFT)
+
+Ruled by: Jeff Fabish, November 8, 2026, 17:30 Central (/decide, after the live Hands test with Jay: still too many crash sites, the Chinook sites in particular; options offered 2 Chinooks, 3 Chinooks, or 2 Chinooks plus the small sites to one each; Jeff chose the last). Drafted by: Claude (this session), from `server/live/db/events.xml` as mirrored November 8, 2026, 13:52 (after the release 2 restart). Status: **DRAFT**, not on live. Patch file: `db/events.helicrash-cut3.patch.xml` (two whole events, REPLACE). Target: the next restart window, by `scripts/Deploy-MissionPatches.ps1`; a Workshop update is not needed (mission file only).
+
+| File | Entry | Before (live) | After | Why |
+| --- | --- | --- | --- | --- |
+| `events.helicrash-cut3.patch.xml` | `StaticHeliCrash child StaticObj_Wreck_Mi24_TK_DE` | min 1, max 2, lootmin 5, lootmax 8 | min 1, max 1, lootmin 5, lootmax 8 | Small sites to one each (Jeff, November 8, 2026) |
+| `events.helicrash-cut3.patch.xml` | `StaticHeliCrash child Wreck_Mi8_Crashed` | min 1, max 2, lootmin 5, lootmax 8 | min 1, max 1, lootmin 5, lootmax 8 | As above |
+| `events.helicrash-cut3.patch.xml` | `StaticHeliCrashBig child StaticObj_Wreck_Chinook_DE` | min 4, max 4, lootmin 10, lootmax 15 | min 2, max 2, lootmin 10, lootmax 15 | Chinook sites halved (Jeff, November 8, 2026); loot per site unchanged |
+
+Result: at most 4 crash sites map-wide (2 small, 2 Chinook) instead of 8. Nominal, lifetime, radii, flags and the InfectedArmy secondary are unchanged. When applied, add the line `APPLIED <date and restart>, by <name>, from backup <panel backup name or zip>` here, mark the patch header APPLIED, and run `Sync-LiveReplica.ps1`.
+
 ## Earlier changes
 
 Changes made in the HostHavoc panel before this log existed (the October 15, 2026 wipe and map switch, CF removal, `lightingConfig`, the hardcore profile) are recorded in `docs/operations/` and the Notion hub, not here.
