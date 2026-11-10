@@ -20,6 +20,7 @@
         "*.cfg",
         "*.p3d",
         "*.rvmat",
+        "*.ogg",
         "LICENSE",
         "NOTICE"
     ],
@@ -84,6 +85,12 @@
             "pboName": "NimbyDpv",
             "prefix": "NimbyDpv",
             "logPrefix": "Dpv"
+        },
+        {
+            "folder": "NimbyTapes",
+            "pboName": "NimbyTapes",
+            "prefix": "NimbyTapes",
+            "logPrefix": "Tapes"
         }
     ],
     "dev": {
