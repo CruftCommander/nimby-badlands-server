@@ -17,5 +17,11 @@ sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 10, 2026 (Plan 13 Phase 0 step 2, fixtures): tools\New-TimingTrack.ps1 generates the
+  two timing tracks with ffmpeg (240 s and 60 s, Ogg Vorbis, mono, 44,100 Hz; a beep every 5 s and
+  a counted pip mark every 30 s) into sound\, which stays git-ignored; tools\Test-TapesAssets.ps1
+  checks the audio against config.cpp before a build; tools\probe_co.png is the source of
+  data\probe_co.paa, the flat magenta probe texture for the cassette label selection. Own work.
+  Nothing in tools\ matches a pack.json include pattern, so none of it is packed.
 - November 10, 2026: stub on main (config.cpp, rules constants, self-test hook) so the pack
   builds with the pack.json row; the body lands from feat/nimby-music.
