@@ -2,7 +2,7 @@
 
 Phase 0 step 1 record for [Plan 13](2026-11-09-music-plan.md) (v0.3), November 10, 2026. Seat: the orchestrator session (Claude, Cowork), on Jeff's go, writing into worktree `D:\GitHub\nimby-badlands-server-wt\nimby-music`, branch `feat/nimby-music` at `6f00542` (pull requests #28 and #29 merged, stub present). Read-only recon: no addon code changed, and the plan file is untouched.
 
-Every `file:line` is relative to `vendor/dayz-1.30-scripts/` (build `1.30.164200`) unless it starts with `ZenMusic:` (`vendor/ZenMusic` at commit `3de1452`) or `mods/`. A native declaration (`proto`) is evidence that an API exists, not of how it behaves. Each answer is marked supported, contradicted, or unresolved, and an unresolved answer names the test row that settles it.
+Every `file:line` is relative to the shared script reference, `vendor/dayz-1.30-scripts/`, unless it starts with `ZenMusic:` (`vendor/ZenMusic` at commit `3de1452`) or `mods/`. A native declaration (`proto`) is evidence that an API exists, not of how it behaves. Each answer is marked supported, contradicted, or unresolved, and an unresolved answer names the test row that settles it. The lines were read from the build `1.30.164200` extract. They hold on build `1.30.164289`, the build the live server runs: the re-check is in the PR7 section.
 
 ## Prerequisites at the start of step 1
 
@@ -14,21 +14,32 @@ Every `file:line` is relative to `vendor/dayz-1.30-scripts/` (build `1.30.164200
 | PR4 | Zen reference clones | Done | Unchanged since November 9, 2026 |
 | PR5 | `feat/nimby-music` holds `main` | Done | Fast-forward to `6f00542`, working tree clean |
 | PR6 | Second client | Not re-checked | As the plan states |
-| PR7 | Script reference is current | Partly done: the replica matches; the live mirror and the Steam install are not hashed | The next section |
+| PR7 | Script reference is current | Failed on the first full reading, then closed: the reference was one build behind the live server, it is re-extracted, and no cited line changed | The next section |
 | PR8 | `ImageToPAA` | Not re-checked | As the plan states |
 
-The plan's own prerequisites table still shows PR1, PR2, PR3, and PR5 as open. It is corrected when the plan goes to v0.4. PR7 stays open until the two hashes below are read.
+The plan's own prerequisites table still shows PR1, PR2, PR3, and PR5 as open. It is corrected when the plan goes to v0.4. PR7 is closed by the re-extract in the next section.
 
 ## Script reference check (PR7)
 
+The script reference was one build behind the live server. It is re-extracted, and every citation in this record holds on the new build.
+
 | Item | Value |
 | --- | --- |
-| File hashed | `D:\DayZServer\dta\scripts.pbo`, 14,366,572 bytes, written October 21, 2026, 22:40 Central |
-| SHA-256 | `FF0AD7EE5297C75DA74364569A830BC0223315C0131579A0C11A7875D64CB2E2` |
-| Baseline | `docs/baselines/2026-10-31-dayz-1.30-164200-scripts-reference.md`, same value |
-| Result | Match. No re-extract is needed |
+| First reading (this session) | `D:\DayZServer\dta\scripts.pbo`, the replica: 14,366,572 bytes, written October 21, 2026, 22:40 Central, SHA-256 `FF0AD7EE5297C75DA74364569A830BC0223315C0131579A0C11A7875D64CB2E2`. That is the value in `docs/baselines/2026-10-31-dayz-1.30-164200-scripts-reference.md` |
+| Why that reading proved nothing | The rule asks for the hash of the server the replica mirrors. The replica itself lags the live server until `Sync-LiveReplica.ps1` runs |
+| Second reading (Jeff, November 10, 2026) | The Steam server install (`F:\SteamLibrary\steamapps\common\DayZServer\dta\scripts.pbo`) and the WinSCP mirror of the live server (`D:\HostHavoc\...`): both `09012CDAE8C4AE2D478CA90F3E2E3F01E435F0F6945A63B7CAE290E3CCDEA28A` |
+| Build | Steam install: `DayZServer_x64.exe` ProductVersion `1.30.164289.70`, exe and `scripts.pbo` written November 3, 2026, 10:16 Central, `scripts.pbo` 14,401,120 bytes. The reference and the replica: `1.30.164200` |
+| Re-extract | `vendor/dayz-1.30-164289-scripts/`, from the Steam install with `D:\GitHub\DayZExtract`: 3,745 files, 148,852,001 bytes (`logs\extract-164289.log` in the main checkout) |
+| Difference | `diff -rq` of the two extracts: 27 files differ, none added, none removed (`logs\extract-164289\diff-164289.txt`). Going by path and file name, most are base building, code locks, the diag menu, the heat modifiers, and the warhead bunker; the rest are `Game.c`, `EnDebug.c`, `DustEffectsManager.c`, `ActionCraftBolts.c`, and `MiscGameplayFunctions.c` |
+| Cited files that changed | One: `scripts/3_Game/DayZ/Global/Game.c`. Its two changes are at lines 1346 and 1365 (a `CollisionFlags` parameter on `IsBoxCollidingGeometry`). Finding R6 cites lines 910-914, which are above both and unchanged |
+| Result | Every `file:line` in this record, in `NimbyTapes/config.cpp`, and in the addon's `NOTICE` holds on build `1.30.164289`. Plan v0.3 and the feasibility study cite `Game.c` once each (`914` and `1076-1085`, both above the changes) and no other changed file |
 
-Not checked, so PR7 is not closed. The plan asks for the hash of the server the replica mirrors, and the WinSCP mirror of the live server (`D:\HostHavoc\...`) is not a folder this session can read. The Steam server install was not hashed either, and it is the install the boot checks ran on (`F:\SteamLibrary\steamapps\common\DayZServer`, the `BOOT START` line of each `build.log`). The baseline record states that the replica's file was byte-identical to the Steam install's on October 31, 2026. Two `Get-FileHash` readings on Jeff's desktop close the row.
+The addon was compiled on the current build throughout: the boot checks of November 10, 2026 start the Steam install, and each RPT reports `Version 1.30.164289.70`.
+
+Still open, outside this record:
+
+- The baseline record for build `1.30.164289` and the matching sentence in shared rules section 7 are orchestrator-owned and go in their own `docs/*` pull request, with the folder rename that makes the new extract `vendor/dayz-1.30-scripts/`.
+- The replica (`D:\DayZServer`) is still build `1.30.164200`. Run `Sync-LiveReplica.ps1` before the first in-game row of step 6, so the test server and the clients are on one build.
 
 ## Answers in short
 
@@ -168,7 +179,9 @@ None of these needs a ruling.
 | Phase 0 step 6 | Run the two-play `SetStartOffset` unit probe before T0-04 |
 | Recon question 1 | Closed for Phase 0: the refusal stands. Hiding the prompt is possible through a `GetActions` filter or own action classes; a later phase can choose it |
 | Risks K11 | Reword: `OnWorkStart` fires during the load as soon as the deck is switched on and powered; T0-20's debug fields record the order |
-| Prerequisites | Mark PR1, PR2, PR3, and PR5 done. PR7 is done for the replica only until the live mirror and the Steam install are hashed |
+| Prerequisites | Mark PR1, PR2, PR3, PR5, and PR7 done. PR7 names the build `1.30.164289` baseline record and says to hash the live mirror or the Steam install, never the replica alone |
+| Phase 0 step 6 (first line) | Run `Sync-LiveReplica.ps1` before the first in-game row: the replica was one build behind on November 10, 2026 |
+| Self-test hook | The plan's hook row says server. The self-test runs on the client and the server, the shape Tack ships (`Scripts/4_World/nimbytapes_selftest.c`) |
 
 ## Addendum, November 10, 2026: steps 2 to 4 (rules)
 
@@ -185,7 +198,8 @@ Recorded here so the plan's v0.4 picks them up. Each is on `feat/nimby-music`; n
 | A7 | Fixture hashes (ffmpeg 9.0.2, the same under Windows PowerShell 5.1 and PowerShell 7.6.9) | `logs\tapes-timingtrack-20261110-104554.log`, `-104557.log` in the worktree | `timing_a.ogg` `7203747DDC69751404A70573A8B2417B8416F7F56743DEC654E2DDFAC78A1496`; `timing_b.ogg` `95AD781637FE4BFA7A009F70F5E370208E0157985754C3DB52C6E988BEE03FCC` |
 | A9 | Self-review fixes, same day | `tools\Test-TapesAssets.ps1`, `tools\New-TimingTrack.ps1`, `Scripts/3_Game/nimbytapes_rules.c` | The asset check probes every track file the config names (it skipped any outside `sound\`), walks `sound\` at any depth, follows config inheritance, and requires one sample per shader. Both tools take a relative `-AddonPath`. The generator renames a finished track into place. `PreviousTrack` takes the elapsed time unrounded, so 3.5 seconds restarts the track (T-6). This review also corrected Questions 1, 3, 6, and 8 and the PR7 row above |
 | A8 | T0-02, self-test half | `logs\build-20261110-114255\build.log` in the worktree, artifact `@NIMBY-20261110-114255` | `SELFTEST Tapes ran=yes cases=18 pass=18 fail=0`; the 18 cases print by name |
+| A10 | Tests for the two tools (Jeff's decision, November 10, 2026: in the Phase 0 pull request) | `scripts/tests/NimbyTapesTools.Tests.ps1` | 47 Pester tests: the config reader, the verdict functions, and end-to-end runs of both scripts with stand-in `ffprobe` and `ffmpeg`. 47 of 47 pass under Windows PowerShell 5.1 with Pester 5.9.1 (Jeff, November 10, 2026). Nine fail against the tools as they were at `3d13f76`, before the self-review fixes |
 
 ## Status
 
-Step 1 is complete. Steps 2 and 3 are complete, and the rules part of step 4 is in (commits `3d13f76`, `ca6c438`, `49fbd44`). The rest of step 4 (deck, tape memory, actions, hand pose, test kit, debug lines) is not started. No question for Jeff came out of the recon.
+Step 1 is complete, with PR7 closed by the re-extract of November 10, 2026. Steps 2 and 3 are complete, and the rules part of step 4 is in (commits `3d13f76`, `ca6c438`, `49fbd44`, `09261c9`). The rest of step 4 (deck, tape memory, actions, hand pose, test kit, debug lines) is not started. Three decisions came from Jeff on November 10, 2026: re-extract from the Steam install now, tool tests in the Phase 0 pull request, and the deck code in a fresh session.
