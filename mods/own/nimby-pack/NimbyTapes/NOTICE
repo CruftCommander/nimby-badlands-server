@@ -7,16 +7,21 @@ Credit: the playback sync method (the server publishes the elapsed time of the t
 client starts its own sound at that offset) follows Zens Music by Zenarchist,
 https://github.com/ZenarchistCode/ZenMusic, read at commit 3de1452
 (ZenMusicBase/scripts/4_World/ZenMusicBase/Entities/ZenMusic/Devices/Zen_MusicDeviceBase.c:226-227,329-344).
-His pack wiki states MPL 2.0 for all his mods; the ZenMusic repository carries no licence file,
-and its readme permits repacking. The stub below holds none of his code. When the Phase 0 body
-lands, this file lists every method or file taken, with its source file, commit, and licence,
-as the Hands and Legs forks do.
+His pack wiki states MPL 2.0 for all his mods (read for the feasibility study, November 9, 2026);
+the ZenMusic repository carries no licence file, and its readme permits repacking. Nothing in
+this addon is his code so far. When the deck's playback code lands, this file lists every method
+or file taken, with its source file, commit, and licence, as the Hands and Legs forks do.
 
 No audio ships in this addon on main: the Phase 0 timing tracks are generated locally into
 sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 10, 2026 (self-review fixes): tools\Test-TapesAssets.ps1 probes every track file the
+  config names, walks sound\ at any depth, follows config inheritance, and requires one sample
+  per shader; both tools accept a relative -AddonPath; tools\New-TimingTrack.ps1 renames a
+  finished track into place; NimbyTapesRules.PreviousTrack takes the elapsed time unrounded, so
+  3.5 seconds in restarts the track (T-6).
 - November 10, 2026 (Plan 13 Phase 0 step 4, rules): Scripts\3_Game\nimbytapes_rules.c holds
   the packed play state (T-10), the start fraction, the skip rules (T-6), the tape config
   check, and the remembered-track rule (T-5) as engine-free functions, and the self-test

@@ -21,8 +21,9 @@
     Test-TapesAssets.ps1 compares the two.
 
     Reads   : ffmpeg on PATH (or -FfmpegPath), scripts\modules\NimbyCommon.psm1.
-    Writes  : <addon>\sound\timing_a.ogg, <addon>\sound\timing_b.ogg, and
-              <repo>\logs\tapes-timingtrack-<stamp>.log.
+    Writes  : <addon>\sound\timing_a.ogg, <addon>\sound\timing_b.ogg,
+              <repo>\logs\tapes-timingtrack-<stamp>.log, and while encoding
+              <addon>\sound\<name>.tmp.ogg, which stays behind only when ffmpeg fails.
     Never   : touches any other file, contacts a remote, or replaces an existing track
               without -Force.
 
@@ -57,7 +58,12 @@ Set-StrictMode -Version Latest
 # Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
 # script is started with -File, so the defaults are resolved here.
 if (-not $AddonPath) { $AddonPath = Split-Path -Parent $PSScriptRoot }
+# Full paths from here on. A relative -AddonPath would otherwise break the RepoRoot default, and
+# .NET file calls resolve a relative path against the process directory, which is not always the
+# PowerShell location.
+$AddonPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($AddonPath)
 if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $AddonPath))) }
+$RepoRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($RepoRoot)
 $ErrorActionPreference = 'Stop'
 
 $FfmpegInstallHint = 'Install it with: winget install --id Gyan.FFmpeg -e   (the full build, which has libvorbis), then open a new shell.'
@@ -175,9 +181,10 @@ try {
             continue
         }
 
-        # Encode beside the target and move it into place, so a failed run never leaves a
-        # half-written track under the real name.
-        $tempFile = $outFile + '.tmp'
+        # Encode beside the target and rename it into place, so a failed run never leaves a
+        # half-written track under the real name. The temporary name ends in .ogg, so a
+        # leftover is git-ignored and Test-TapesAssets.ps1 reports it as unused.
+        $tempFile = Join-Path $soundDir ("{0}.tmp.ogg" -f $track.Name)
         $result = Invoke-NativeTool -FilePath $ffmpeg -ArgumentList (Get-TimingTrackArgument -Track $track -OutFile $tempFile)
         $tempOk = (Test-Path -LiteralPath $tempFile -PathType Leaf) -and ((Get-Item -LiteralPath $tempFile).Length -gt 0)
         if ($result.ExitCode -ne 0 -or -not $tempOk) {
@@ -186,8 +193,10 @@ try {
             $failed++
             continue
         }
-        Copy-Item -LiteralPath $tempFile -Destination $outFile -Force
-        Remove-Item -LiteralPath $tempFile -Force
+        # Paths are full here, so the .NET calls see the same files PowerShell does. The old
+        # track goes only now, after the new one encoded; the rename is one step on one volume.
+        if (Test-Path -LiteralPath $outFile -PathType Leaf) { [System.IO.File]::Delete($outFile) }
+        [System.IO.File]::Move($tempFile, $outFile)
         $written = Get-Item -LiteralPath $outFile
         $hash = (Get-FileHash -LiteralPath $outFile -Algorithm SHA256).Hash
         Write-RunLine -Line ("OK {0} seconds={1} beepHz={2} pipHz={3} bytes={4} sha256={5}" -f $outFile, $track.Seconds, $track.BeepHz, $track.PipHz, $written.Length, $hash)

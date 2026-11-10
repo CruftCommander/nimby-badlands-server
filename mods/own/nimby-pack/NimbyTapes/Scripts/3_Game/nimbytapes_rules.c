@@ -156,8 +156,9 @@ class NimbyTapesRules
 
     // The track Previous moves to; it always starts from its beginning. More than
     // PREVIOUS_RESTART_SECONDS in: the same track. Otherwise one back, and track 0 stays track 0.
-    // A stopped deck stays stopped.
-    static int PreviousTrack(int track, int elapsedSeconds)
+    // A stopped deck stays stopped. The elapsed time is taken unrounded: 3.5 seconds in is more
+    // than 3 (T-6), which a whole-second value would miss.
+    static int PreviousTrack(int track, float elapsedSeconds)
     {
         if (track == TRACK_STOPPED)
         {
@@ -367,8 +368,33 @@ class NimbyTapesSelfTest
 
         failures += Case(results, "next-middle", NimbyTapesRules.NextTrack(0, 2) == 1);
         failures += Case(results, "next-last", NimbyTapesRules.NextTrack(1, 2) == NimbyTapesRules.TRACK_STOPPED);
-        failures += Case(results, "previous-late", NimbyTapesRules.PreviousTrack(1, 10) == 1);
-        failures += Case(results, "previous-early", NimbyTapesRules.PreviousTrack(1, 2) == 0);
+        bool lateRestarts = true;
+        if (NimbyTapesRules.PreviousTrack(1, 10) != 1)
+        {
+            lateRestarts = false;
+        }
+        // Just past the limit, whole and fractional: still the same track.
+        if (NimbyTapesRules.PreviousTrack(1, 4) != 1)
+        {
+            lateRestarts = false;
+        }
+        if (NimbyTapesRules.PreviousTrack(1, 3.5) != 1)
+        {
+            lateRestarts = false;
+        }
+        failures += Case(results, "previous-late", lateRestarts);
+
+        bool earlyGoesBack = true;
+        if (NimbyTapesRules.PreviousTrack(1, 2) != 0)
+        {
+            earlyGoesBack = false;
+        }
+        // Exactly at the limit is not more than it: one track back.
+        if (NimbyTapesRules.PreviousTrack(1, 3) != 0)
+        {
+            earlyGoesBack = false;
+        }
+        failures += Case(results, "previous-early", earlyGoesBack);
         failures += Case(results, "previous-first", NimbyTapesRules.PreviousTrack(0, 2) == 0);
 
         bool offUnchanged = true;

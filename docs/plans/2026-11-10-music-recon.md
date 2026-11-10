@@ -14,10 +14,10 @@ Every `file:line` is relative to `vendor/dayz-1.30-scripts/` (build `1.30.164200
 | PR4 | Zen reference clones | Done | Unchanged since November 9, 2026 |
 | PR5 | `feat/nimby-music` holds `main` | Done | Fast-forward to `6f00542`, working tree clean |
 | PR6 | Second client | Not re-checked | As the plan states |
-| PR7 | Script reference is current | Done for the replica | The next section |
+| PR7 | Script reference is current | Partly done: the replica matches; the live mirror and the Steam install are not hashed | The next section |
 | PR8 | `ImageToPAA` | Not re-checked | As the plan states |
 
-The plan's own prerequisites table still shows PR1, PR2, PR3, PR5, and PR7 as open. It is corrected when the plan goes to v0.4.
+The plan's own prerequisites table still shows PR1, PR2, PR3, and PR5 as open. It is corrected when the plan goes to v0.4. PR7 stays open until the two hashes below are read.
 
 ## Script reference check (PR7)
 
@@ -28,23 +28,23 @@ The plan's own prerequisites table still shows PR1, PR2, PR3, PR5, and PR7 as op
 | Baseline | `docs/baselines/2026-10-31-dayz-1.30-164200-scripts-reference.md`, same value |
 | Result | Match. No re-extract is needed |
 
-Not checked: the WinSCP mirror of the live server (`D:\HostHavoc\...`) is not a folder this session can read. The baseline record states that the replica's file is byte-identical to the Steam server install.
+Not checked, so PR7 is not closed. The plan asks for the hash of the server the replica mirrors, and the WinSCP mirror of the live server (`D:\HostHavoc\...`) is not a folder this session can read. The Steam server install was not hashed either, and it is the install the boot checks ran on (`F:\SteamLibrary\steamapps\common\DayZServer`, the `BOOT START` line of each `build.log`). The baseline record states that the replica's file was byte-identical to the Steam install's on October 31, 2026. Two `Get-FileHash` readings on Jeff's desktop close the row.
 
 ## Answers in short
 
 | # | Question | Answer | Status | Settled by |
 | --- | --- | --- | --- | --- |
 | 1a | Do the vanilla switch actions show for an own class once `SetActions()` adds them? | Yes. The actions are attached per class by `AddAction`, and Zen's own device class does exactly this | Supported | T0-04 to T0-06 |
-| 1b | Can the switch-on prompt be hidden for a deck with no tape? | Not with the vanilla actions. Their conditions ask only the energy manager, which consults no entity callback | Contradicted | T0-03 keeps the server-side refusal |
+| 1b | Can the switch-on prompt be hidden for a deck with no tape? | Yes, but not through the energy manager. The vanilla actions' conditions ask only the manager. The deck can filter its own action list in a `GetActions` override, or use own action classes | Supported; not adopted for Phase 0 | T0-03 keeps the server-side refusal |
 | 2 | Wave kind, and does the sound scene's `SetSoundVolume` scale it? | The kind is `WAVEEFFECTEX` by default. Whether the scene's sound volume scales that kind is native | Unresolved | T0-18 |
 | 3 | Does a streamed sample honor `SetStartOffset`, and what if the header is not loaded? | The wave object exists as soon as `Play3D` returns, header or not. The offset's unit and its behavior before the header loads are native | Unresolved | T0-14, T0-15 |
 | 4 | Which `sound3DProcessingType` and `volumeCurve`? | Start from the `ChristmasMusic_SoundSet` values without `loop`. Nothing in source says how a 4-minute sample behaves | Unresolved | T0-16 |
 | 5a | Does `EEItemLocationChanged` fire on the client for the deck's own moves? | Vanilla runs client-only code in the callbacks this event drives | Supported by inference | T0-12 |
 | 5b | Is a callback raised on a descendant when an ancestor moves? | Only when the ancestor enters or leaves a player's inventory: `OnInventoryEnter` and `OnInventoryExit`. No callback for any other ancestor move | Supported | T0-12, T0-13; the 0.5-second root check stays |
-| 6a | Is a net-synced `int` delivered whole? | One variable, registered without a range, is not quantized | Supported | T0-14 |
+| 6a | Is a net-synced `int` delivered whole? | One variable, registered without a range, is not quantized, by the declaration's comment | Supported by a declaration only | T0-14 |
 | 6b | In what order do the variable, the tape attachment, and the energy state reach a new client? | The energy state travels as variables of the deck itself. The order against the attachment is native | Unresolved | T0-15 |
 | 7 | What happens to an attached vanilla battery when the parent class no longer resolves? | Nothing in script decides it, and no earlier test record in this repository covers an attachment of a removed class | Unresolved | T0-21 |
-| 8 | Load order, and does `OnWorkStart` fire before the tape exists? | `SwitchOn` runs inside the deck's `OnStoreLoad`, before any child. `OnWorkStart` cannot fire there, because the deck has no power yet. It fires from inside the battery's attach event, and the tape may or may not be attached at that moment | Supported in part | T0-20 |
+| 8 | Load order, and does `OnWorkStart` fire before the tape exists? | `SwitchOn` runs inside the deck's `OnStoreLoad`. `OnWorkStart` fires at the first moment the deck is both switched on and powered: inside the battery's attach event when the battery attaches after `OnStoreLoad`, or inside `OnStoreLoad` when it attaches before. Script does not show which, nor whether the tape is attached by then | Supported in part | T0-20 |
 
 ## Question 1 - switch actions
 
@@ -55,7 +55,7 @@ The in-hands condition is `item.HasEnergyManager() && item.GetCompEM().CanSwitch
 - `CanSwitchOn()` returns true whenever the switch is off (`scripts/3_Game/DayZ/tools/Component/ComponentEnergyManager.c:752-760`).
 - `CanWork()` tests ruin, wetness, and available energy (`ComponentEnergyManager.c:768-851`).
 
-Neither asks the entity anything, so an own class has no method to override that hides the prompt. The two ways to hide it are an own action class with a tape test in its `ActionCondition` (two more small classes, as in fallback (c)) or a `modded class ComponentEnergyManager` (a fifth vanilla class, not proposed). The plan's default stands: the prompt shows, and the server refuses in `OnWorkStart`. Zen uses the same refusal (`ZenMusic:...Zen_MusicDeviceBase.c:355-363`).
+Neither condition asks the deck about its tape, so the energy manager offers no override that hides the prompt. Two other routes do. The item's action list comes from an overridable method (`ItemBase.GetActions`, `scripts/4_World/DayZ/Entities/ItemBase.c:235-244`, called from `scripts/4_World/DayZ/Classes/UserActionsComponent/ActionInput.c:317` and `:602`), so the deck can return a filtered copy that leaves out the switch-on action while it holds no tape. It has to be a copy: the map behind the list is shared by every item of the type (`ItemBase.c:228-231`). Or own action classes carry a tape test in `ActionCondition` (two more small classes, as in fallback (c)). Neither is adopted for Phase 0. The plan's default stands: the prompt shows, and the server refuses in `OnWorkStart`, which is what T0-03 tests. Zen's `OnWorkStart` likewise switches the device off when its play call fails (`ZenMusic:...Zen_MusicDeviceBase.c:355-363`).
 
 Two consequences for step 4:
 
@@ -84,7 +84,7 @@ What source shows:
 
 One more declaration is worth using. `GetCurrPosition()` returns the wave's position as a share of its total length (`Sound.c:186-187`; the debug plugin multiplies it by 100 to print a percentage, `scripts/4_World/DayZ/Plugins/PluginBase/PluginSoundDebug.c:142`). The client can log it:
 
-- **Unit probe, first thing in step 6.** Start the 240-second track with `SetStartOffset(0.5)` and log `GetCurrPosition()` one second later. About 0.5 means the unit is a fraction. About 0.002 means seconds, and fallback (a) starts from `Skip`.
+- **Unit probe, first thing in step 6, in up to two plays of the 240-second track.** Play 1: `SetStartOffset(0.5)`, then log `GetCurrPosition()` one second later. About 0.50 means the unit is a fraction, and the probe ends. A value near zero does not say why: seconds would read about 0.006 and an ignored offset about 0.004. Play 2 separates them: `SetStartOffset(120)` and the same reading. About 0.50 means seconds; about 0.004 means the offset is ignored, and fallback (a) starts from `Skip`.
 - **Skew without a stopwatch.** `GetCurrPosition() * trackSeconds` against the published elapsed time is the client's own skew figure. It adds to the T0-14 and T0-15 recordings and does not replace them; T-7 asks for one recording that holds both clients.
 
 ## Question 4 - sound set values
@@ -115,7 +115,7 @@ Proposed for step 4: re-parent on `EEItemLocationChanged`, on `OnInventoryEnter`
 
 ## Question 6 - what reaches a client
 
-- **One variable, no range.** `RegisterNetSyncVariableInt(name, minValue, maxValue)` quantizes only when the two bounds differ (`EntityAI.c:2843-2850`). The packed state must be registered with the name alone, so all 30 bits travel.
+- **One variable, no range.** `RegisterNetSyncVariableInt(name, minValue, maxValue)` quantizes only when the two bounds differ (`EntityAI.c:2843-2850`). The packed state must be registered with the name alone, so all 30 bits travel. This rests on the declaration's comment, not on observed behavior; a wrong track or generation in T0-14 would show it.
 - **Energy state is a set of the deck's own variables.** `m_EM.m_IsSwichedOn` and `m_EM.m_CanWork` are registered in the `EntityAI` constructor (`EntityAI.c:218-223`) and arrive through the deck's own `OnVariablesSynchronized`. On every sync the base method calls `DeviceUpdate()` and `StartUpdates()` on the client (`EntityAI.c:3069-3111`), which is where client-side `OnWorkStart` and `OnWorkStop` come from.
 - **The client keys on the packed integer only.** `OnWorkStart` on a client says the device has power, not which track plays. The plan's reconciliation table already works this way; the deck's override calls `super` first, as the plan says.
 - **Order against the attachment is native.** Whether the tape attachment exists on the client when the first sync lands is not visible in script. The hold-and-retry row covers it, and T0-15 measures it.
@@ -129,13 +129,13 @@ Nothing in script takes part in dropping an entity whose class does not resolve.
 
 The chain, in order:
 
-1. **`OnStoreLoad` on the deck.** After reading the saved switch state it calls `m_EM.SwitchOn()` when the state was on (`EntityAI.c:3047-3050`). This is before any child is loaded: `AfterStoreLoad` is documented as running "after all children loaded" (`EntityAI.c:1418-1421`).
-2. **`SwitchOn` with no power.** It sets the switch flag and calls `DeviceUpdate()` (`ComponentEnergyManager.c:371-392`). `DeviceUpdate` raises `OnWorkStart` only when `m_CanWork` is true and energy was consumed (`ComponentEnergyManager.c:1792`, `1819-1828`). The deck stores no energy of its own (the `Radio` block has no storage values, `DZ/gear/radio/config.cpp:275-282`), so `m_CanWork` is false and nothing is raised. The deck stays switched on.
-3. **The battery attaches.** The deck's `EEItemAttached` hands the battery to the energy manager (`EntityAI.c:1181-1182`), which plugs the deck into it (`ComponentEnergyManager.c:1453-1466`). `PlugInDevice` updates `m_CanWork` and wakes the plugged device (`ComponentEnergyManager.c:1652-1680`, `1557-1576`), which runs the deck's `DeviceUpdate` at once. A 9V is switched on from creation (`switchOnAtSpawn = 1`, `DZ/gear/consumables/config.cpp:588-598`), so with any charge `OnWorkStart` fires here, inside the battery's attach event.
+1. **`OnStoreLoad` on the deck.** After reading the saved switch state it calls `m_EM.SwitchOn()` when the state was on (`EntityAI.c:3047-3050`). Whether the deck's attachments already exist at this point is not shown in script. The only ordering script states is that `AfterStoreLoad` runs "after all children loaded" (`EntityAI.c:1418-1421`). The steps below take the usual reading, that children attach after the parent's `OnStoreLoad`, and say where the other order changes the result.
+2. **`SwitchOn` with no power.** It sets the switch flag and calls `DeviceUpdate()` (`ComponentEnergyManager.c:371-392`). `DeviceUpdate` raises `OnWorkStart` only when `m_CanWork` is true and energy was consumed (`ComponentEnergyManager.c:1792`, `1819-1828`). The deck stores no energy of its own (the `Radio` block has no storage values, `DZ/gear/radio/config.cpp:275-282`), so `m_CanWork` is false and nothing is raised. The deck stays switched on. If the battery were already attached and plugged, `m_CanWork` would be true and `OnWorkStart` would fire here, inside `OnStoreLoad`.
+3. **The battery attaches.** The deck's `EEItemAttached` hands the battery to the energy manager (`EntityAI.c:1181-1182`), which plugs the deck into it (`ComponentEnergyManager.c:1453-1466`). `PlugInDevice` updates `m_CanWork` and wakes the plugged device (`ComponentEnergyManager.c:1652-1680`, `1557-1576`), which runs the deck's `DeviceUpdate` at once. A 9V is switched on from creation (`switchOnAtSpawn = 1`, `DZ/gear/consumables/config.cpp:588-598`), so with any charge `OnWorkStart` fires here, inside the battery's attach event. One more unknown sits here: a battery is created holding its config charge (`ComponentEnergyManager.c:187-188`), and script does not show whether its saved charge is loaded before the attach event, so a battery saved flat may look charged at this moment.
 4. **The tape attaches.** Before or after step 3. The order of a parent's attachments during load is the engine's.
 5. **`AfterStoreLoad` on the deck.** After both.
 
-So the plan's concern holds in substance and is narrower than written: `OnWorkStart` does not fire from `OnStoreLoad`, and it can fire before the tape exists when the battery loads first. A deck built the way Zen's is would switch itself off at step 3 in that case and never resume.
+So the plan's concern holds: `OnWorkStart` fires during the load, at the first moment the deck is switched on and powered, and that can be before the tape exists. Whether the moment is the battery's attach event or `OnStoreLoad` itself depends on an order script does not show. A deck that validates its tape inside `OnWorkStart` and switches off on failure would do so at step 3 in that case and never resume. Zen's device is not evidence either way: with no valid cassette it falls back to its radio mode before it refuses (`ZenMusic:...Zen_MusicDeviceBase.c:240-247`).
 
 Proposed for step 4, replacing the wording of After load in the plan's Architecture table (no ruling changes; T-9 stands):
 
@@ -143,14 +143,14 @@ Proposed for step 4, replacing the wording of After load in the plan's Architect
 - **`AfterStoreLoad` starts the deck.** It calls `super` (`ItemBase.c:3222-3236`), then validates the tape and starts the remembered track from its beginning, or switches off.
 - **`DeferredInit` covers a fresh spawn.** A deck created with battery and tape in one frame (the test kit) never gets `AfterStoreLoad`. Its `DeferredInit` override (`EntityAI.c:277-280`) runs the same validate-and-start when work was recorded and nothing has started yet.
 
-Unresolved, for T0-20: whether the call queue runs between entity loads at server start (if it does, `IsInitialized()` can already be true at step 3), and the attachment order. The row's server debug line should carry `init=<0|1> tape=<0|1>` at every `OnWorkStart` so one restart answers both.
+Unresolved, for T0-20: whether attachments exist before the parent's `OnStoreLoad`; the order of the two attachments; whether a battery's saved charge is in place at its attach event; and whether the call queue runs between entity loads at server start. The proposed design is indifferent to the first three and depends on the fourth: if the queue runs during the load, `IsInitialized()` can already be true at step 3 and the deferral is skipped. The row's server debug line should carry `init=<0|1> tape=<0|1> battery=<0|1> phase=<storeload|attach|live>` at every `OnWorkStart`, so one restart answers all four.
 
 ## Other findings for step 3 and step 4
 
 | # | Finding | Evidence | Effect |
 | --- | --- | --- | --- |
-| R1 | The energy manager's own tick defaults to 15 seconds, and the `Radio` block sets no `updateInterval` | `ComponentEnergyManager.c:20`, `200`, `223-226` | Battery drain is taken in 15-second steps, and a flat battery is noticed at the next step. The measured run-down time in T0-10 carries that granularity. `updateInterval` is a config value (vanilla uses 5 to 50); changing it does not change the drain rate (`ComponentEnergyManager.c:726`). No change proposed for Phase 0 |
-| R2 | Removing the battery stops work in the same call, not at the next tick: the unplug runs `DeviceUpdate`, and the deck has no stored energy to draw on | `ComponentEnergyManager.c:1474-1484`, `447-473`, `1252-1278` | Supports the 1-second limit in T0-10. The deck's own `EEItemDetached` handler still publishes stopped |
+| R1 | The energy manager's own tick defaults to 15 seconds, and the `Radio` block sets no `updateInterval` | `ComponentEnergyManager.c:20`, `200`, `223-226` | Battery drain is taken in 15-second steps, and a flat battery is noticed at the next step. The measured run-down time in T0-10 carries that granularity. `updateInterval` is a config value (vanilla configs use values from 1 to 50); changing it does not change the drain rate (`ComponentEnergyManager.c:726`). No change proposed for Phase 0 |
+| R2 | Removing the battery stops work in the same call, not at the next tick: the unplug runs `DeviceUpdate`, and the deck has no stored energy to draw on | `ComponentEnergyManager.c:1474-1484`, `447-473`, `1717-1745`, `1252-1278` | Supports the 1-second limit in T0-10. The deck's own `EEItemDetached` handler still publishes stopped |
 | R3 | The manager keeps a reference to every effect it creates | `scripts/3_Game/DayZ/EffectManager.c:3`, `40-42`, `153-166` | Confirms the plan's single teardown path |
 | R4 | Each start sets the wave to the effect's maximum volume on its first frame | `EffectSound.c:469-486` | The Phase 1 volume steps (T-14) set `SetSoundMaxVolume` (`EffectSound.c:878-883`) before `SoundPlay`, not only `SetSoundVolume` |
 | R5 | The effect's frame update is driven from `MissionGameplay.OnUpdate` | `EffectSound.c:455-460` | Client only. Nothing to do on the server |
@@ -162,14 +162,30 @@ None of these needs a ruling.
 
 | Plan location | Change |
 | --- | --- |
-| Architecture, After load | Replace with the three bullets under Question 8. The trigger is the battery's attach event, not `OnStoreLoad` |
+| Architecture, After load | Replace with the three bullets under Question 8. During a load, `OnWorkStart` comes from whichever of `OnStoreLoad` and the battery's attach event first finds the deck switched on and powered |
 | Architecture, Following the carrier | Add `OnInventoryEnter` and `OnInventoryExit` as re-parent triggers |
-| Architecture, Debug lines | Client lines gain `pos=<GetCurrPosition>`; the server `start` line gains `init=` and `tape=` |
-| Phase 0 step 6 | Run the `SetStartOffset` unit probe before T0-04 |
-| Recon question 1 | Closed: the prompt cannot be hidden with the vanilla actions; the refusal stands |
-| Risks K11 | Narrow to "the battery loads before the tape" |
-| Prerequisites | Mark PR1, PR2, PR3, PR5, and PR7 done |
+| Architecture, Debug lines | Client lines gain `pos=<GetCurrPosition>`; the server `start` line gains `init=`, `tape=`, `battery=`, and `phase=` |
+| Phase 0 step 6 | Run the two-play `SetStartOffset` unit probe before T0-04 |
+| Recon question 1 | Closed for Phase 0: the refusal stands. Hiding the prompt is possible through a `GetActions` filter or own action classes; a later phase can choose it |
+| Risks K11 | Reword: `OnWorkStart` fires during the load as soon as the deck is switched on and powered; T0-20's debug fields record the order |
+| Prerequisites | Mark PR1, PR2, PR3, and PR5 done. PR7 is done for the replica only until the live mirror and the Steam install are hashed |
+
+## Addendum, November 10, 2026: steps 2 to 4 (rules)
+
+Recorded here so the plan's v0.4 picks them up. Each is on `feat/nimby-music`; none is a ruling.
+
+| # | Item | Where | Note |
+| --- | --- | --- | --- |
+| A1 | `requiredAddons` gains `DZ_Scripts` and `DZ_Sounds_Effects` beside the plan's four | `NimbyTapes/config.cpp` | `CfgSlots` is defined in `DZ_Scripts` (`scripts/config.cpp:11`); the processor and curve the sound sets name are in `DZ_Sounds_Effects`. The DPV config lists both |
+| A2 | `doppler = 0` on the sound sets | `NimbyTapes/config.cpp` | Not in the plan or in the Question 4 table. Chosen so a deck in a passing vehicle keeps its pitch in T0-13 |
+| A3 | The probe tape has no track | `NimbyTapes/config.cpp` | A deck holding it refuses to start (`config-empty`). It exists for T0-25 only |
+| A4 | The tape slot's icon is the vanilla placeholder | `NimbyTapes/config.cpp` | `set:dayz_inventory image:missing` (`scripts/config.cpp:159-163`). An own icon is Phase 1 work |
+| A5 | `ValidateTape` also refuses a track length of zero or less, or above 65,535 seconds | `Scripts/3_Game/nimbytapes_rules.c` | Reason `config-bad-length`. Not one of the 18 named cases |
+| A6 | The Wilga model has no proxy and no retexture selection | Strings read of `D:\DayZProjects\DZ\gear\radio\unitra_wilga.p3d` | An attached tape is not drawn on the deck. A second vanilla cassette model exists at `dz\gear\radio\cassette.p3d`. Informational, for T0-25 |
+| A7 | Fixture hashes (ffmpeg 9.0.2, the same under Windows PowerShell 5.1 and PowerShell 7.6.9) | `logs\tapes-timingtrack-20261110-104554.log`, `-104557.log` in the worktree | `timing_a.ogg` `7203747DDC69751404A70573A8B2417B8416F7F56743DEC654E2DDFAC78A1496`; `timing_b.ogg` `95AD781637FE4BFA7A009F70F5E370208E0157985754C3DB52C6E988BEE03FCC` |
+| A9 | Self-review fixes, same day | `tools\Test-TapesAssets.ps1`, `tools\New-TimingTrack.ps1`, `Scripts/3_Game/nimbytapes_rules.c` | The asset check probes every track file the config names (it skipped any outside `sound\`), walks `sound\` at any depth, follows config inheritance, and requires one sample per shader. Both tools take a relative `-AddonPath`. The generator renames a finished track into place. `PreviousTrack` takes the elapsed time unrounded, so 3.5 seconds restarts the track (T-6). This review also corrected Questions 1, 3, 6, and 8 and the PR7 row above |
+| A8 | T0-02, self-test half | `logs\build-20261110-114255\build.log` in the worktree, artifact `@NIMBY-20261110-114255` | `SELFTEST Tapes ran=yes cases=18 pass=18 fail=0`; the 18 cases print by name |
 
 ## Status
 
-Step 1 is complete. Nothing here blocks step 2 (fixtures). No question for Jeff came out of the recon.
+Step 1 is complete. Steps 2 and 3 are complete, and the rules part of step 4 is in (commits `3d13f76`, `ca6c438`, `49fbd44`). The rest of step 4 (deck, tape memory, actions, hand pose, test kit, debug lines) is not started. No question for Jeff came out of the recon.

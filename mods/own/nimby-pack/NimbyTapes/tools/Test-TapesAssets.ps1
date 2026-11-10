@@ -12,7 +12,8 @@
       1. config  : every tape class with a tracks[] list has a trackSeconds[] list of the same
                    length, and every track resolves sound set -> sound shader -> sample -> an
                    .ogg file inside the addon.
-      2. format  : ffprobe reports Vorbis, mono, 44,100 Hz for every .ogg under sound\.
+      2. format  : ffprobe reports Vorbis, mono, 44,100 Hz for every .ogg under sound\ (at any
+                   depth) and for every track file the config names, wherever it sits.
       3. length  : each track's length is within -ToleranceSeconds of its trackSeconds[] value.
       4. unused  : no .ogg under sound\ is left out of every tape (it would ship as dead weight).
     Before Phase 0 step 3 the config has no tape yet. -AllowMissingConfig then runs check 2
@@ -58,7 +59,12 @@ Set-StrictMode -Version Latest
 # Windows PowerShell 5.1 leaves $PSScriptRoot empty in a param() default when an advanced
 # script is started with -File, so the defaults are resolved here.
 if (-not $AddonPath) { $AddonPath = Split-Path -Parent $PSScriptRoot }
+# Full paths from here on. A relative -AddonPath would otherwise break the RepoRoot default, and
+# .NET file calls resolve a relative path against the process directory, which is not always the
+# PowerShell location.
+$AddonPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($AddonPath)
 if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $AddonPath))) }
+$RepoRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($RepoRoot)
 $ErrorActionPreference = 'Stop'
 
 $FfprobeInstallHint = 'ffprobe ships with ffmpeg. Install it with: winget install --id Gyan.FFmpeg -e   then open a new shell.'
@@ -173,10 +179,30 @@ function Get-ConfigArray {
     return , $values.ToArray()
 }
 
+function Get-ConfigInheritedArray {
+    # Get-ConfigArray for a class, falling back to its parents in turn, as config inheritance
+    # does. $null when no class in the chain defines the array.
+    param(
+        [Parameter(Mandatory)][hashtable]$ByName,
+        [Parameter(Mandatory)][string]$ClassName,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    $current = $ClassName
+    for ($depth = 0; $depth -lt 32; $depth++) {
+        if (-not $current -or -not $ByName.ContainsKey($current)) { return $null }
+        $values = Get-ConfigArray -Body $ByName[$current].Body -Name $Name
+        if ($null -ne $values) { return , $values }
+        $current = $ByName[$current].Parent
+    }
+    return $null
+}
+
 function Get-TapeTrackPlan {
     # What the config says about every tape track. Returns an object with Tracks (Tape, Index,
     # SoundSet, Shader, Sample, File, Seconds) and Problems (text lines). -AddonPrefix is the
-    # PBO prefix the sample paths start with, which is the addon folder's name.
+    # PBO prefix the sample paths start with, which is the addon folder's name. Arrays follow
+    # config inheritance: a tape that defines neither list itself has its parent's.
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$ConfigText,
         [Parameter(Mandatory)][string]$AddonPath,
@@ -190,9 +216,9 @@ function Get-TapeTrackPlan {
     $problems = New-Object 'System.Collections.Generic.List[string]'
 
     foreach ($class in $classes) {
-        $setNames = Get-ConfigArray -Body $class.Body -Name 'tracks'
+        $setNames = Get-ConfigInheritedArray -ByName $byName -ClassName $class.Name -Name 'tracks'
         if ($null -eq $setNames -or $setNames.Count -eq 0) { continue }
-        $seconds = Get-ConfigArray -Body $class.Body -Name 'trackSeconds'
+        $seconds = Get-ConfigInheritedArray -ByName $byName -ClassName $class.Name -Name 'trackSeconds'
         if ($null -eq $seconds) { $seconds = @() }
         if ($seconds.Count -ne $setNames.Count) {
             $problems.Add(("{0} has {1} tracks[] and {2} trackSeconds[]" -f $class.Name, $setNames.Count, $seconds.Count))
@@ -202,12 +228,13 @@ function Get-TapeTrackPlan {
             $where = "{0} track {1}" -f $class.Name, $index
             $setName = $setNames[$index]
             if (-not $byName.ContainsKey($setName)) { $problems.Add("$where sound set '$setName' is not defined in config.cpp"); continue }
-            $shaders = Get-ConfigArray -Body $byName[$setName].Body -Name 'soundShaders'
+            $shaders = Get-ConfigInheritedArray -ByName $byName -ClassName $setName -Name 'soundShaders'
             if ($null -eq $shaders -or $shaders.Count -ne 1) { $problems.Add("$where sound set '$setName' must name exactly one sound shader"); continue }
             $shaderName = $shaders[0]
             if (-not $byName.ContainsKey($shaderName)) { $problems.Add("$where sound shader '$shaderName' is not defined in config.cpp"); continue }
-            $samples = Get-ConfigArray -Body $byName[$shaderName].Body -Name 'samples'
-            if ($null -eq $samples -or $samples.Count -lt 1) { $problems.Add("$where sound shader '$shaderName' has no samples[]"); continue }
+            # One sample is one { "path", probability } pair, so two flattened values.
+            $samples = Get-ConfigInheritedArray -ByName $byName -ClassName $shaderName -Name 'samples'
+            if ($null -eq $samples -or $samples.Count -ne 2) { $problems.Add("$where sound shader '$shaderName' must have exactly one sample in samples[]"); continue }
             $sample = ($samples[0] -replace '/', '\').TrimStart('\')
             if (-not $sample.StartsWith($AddonPrefix + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
                 $problems.Add("$where sample '$($samples[0])' is outside the addon prefix '$AddonPrefix'")
@@ -352,7 +379,7 @@ try {
 
     $soundDir = Join-Path $AddonPath 'sound'
     $oggFiles = @()
-    if (Test-Path -LiteralPath $soundDir -PathType Container) { $oggFiles = @(Get-ChildItem -LiteralPath $soundDir -File -Filter '*.ogg' | Sort-Object Name) }
+    if (Test-Path -LiteralPath $soundDir -PathType Container) { $oggFiles = @(Get-ChildItem -LiteralPath $soundDir -File -Filter '*.ogg' -Recurse | Sort-Object FullName) }
 
     # 1. config
     $plan = Get-TapeTrackPlan -ConfigText ([System.IO.File]::ReadAllText($configPath)) -AddonPath $AddonPath -AddonPrefix (Split-Path -Leaf $AddonPath)
@@ -370,16 +397,30 @@ try {
     }
     if ($haveTapes -or -not $AllowMissingConfig) { Write-CheckResult -Check 'config' -Problem $configProblems }
 
-    # 2. format
+    # 2. format: every .ogg under sound\, and every track file the config names, wherever it
+    # sits. A track file outside sound\ is probed like the rest, never skipped.
     $facts = @{}
     $formatProblems = @()
     if ($oggFiles.Count -eq 0) { $formatProblems += "no .ogg file under $soundDir (run New-TimingTrack.ps1)" }
+    $probeFiles = New-Object 'System.Collections.Generic.List[string]'
+    $queued = @{}
     foreach ($file in $oggFiles) {
-        $fact = Get-AudioFact -Ffprobe $ffprobe -File $file.FullName
-        if ($null -eq $fact) { $formatProblems += "$($file.Name) could not be read by ffprobe"; continue }
-        $facts[$file.FullName] = $fact
-        Write-Manifest -LogPath $log -Line ("FILE {0} codec={1} channels={2} sampleRate={3} seconds={4:0.000} bytes={5}" -f $file.Name, $fact.Codec, $fact.Channels, $fact.SampleRate, $fact.Seconds, $file.Length)
-        foreach ($line in (Get-FormatProblem -Fact $fact)) { $formatProblems += "$($file.Name) $line" }
+        $key = [System.IO.Path]::GetFullPath($file.FullName)
+        if (-not $queued.ContainsKey($key)) { $queued[$key] = $true; $probeFiles.Add($key) }
+    }
+    foreach ($track in $plan.Tracks) {
+        $key = [System.IO.Path]::GetFullPath($track.File)
+        if ((Test-Path -LiteralPath $key -PathType Leaf) -and -not $queued.ContainsKey($key)) { $queued[$key] = $true; $probeFiles.Add($key) }
+    }
+    $addonFull = [System.IO.Path]::GetFullPath($AddonPath).TrimEnd('\', '/')
+    foreach ($path in $probeFiles) {
+        $shown = $path
+        if ($path.StartsWith($addonFull, [System.StringComparison]::OrdinalIgnoreCase)) { $shown = $path.Substring($addonFull.Length).TrimStart('\', '/') }
+        $fact = Get-AudioFact -Ffprobe $ffprobe -File $path
+        if ($null -eq $fact) { $formatProblems += "$shown could not be read by ffprobe"; continue }
+        $facts[$path] = $fact
+        Write-Manifest -LogPath $log -Line ("FILE {0} codec={1} channels={2} sampleRate={3} seconds={4:0.000} bytes={5}" -f $shown, $fact.Codec, $fact.Channels, $fact.SampleRate, $fact.Seconds, (Get-Item -LiteralPath $path).Length)
+        foreach ($line in (Get-FormatProblem -Fact $fact)) { $formatProblems += "$shown $line" }
     }
     Write-CheckResult -Check 'format' -Problem $formatProblems
 
