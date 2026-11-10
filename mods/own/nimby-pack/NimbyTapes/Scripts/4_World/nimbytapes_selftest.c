@@ -5,7 +5,8 @@
 //           hook (NimbyTack/Scripts/4_World/nimbytack_selftest.c).
 // Note    : Prints only when the flag file exists. The completion line's cases=N is what
 //           the boot check's self-test gate counts.
-// Stub    : Phase 0 step 4 adds the debug and spawn-testkit flag reads here (Plan 13,
+// Cases   : The 18 named Rules cases of Plan 13 (test row T0-02).
+// Next    : The debug and spawn-testkit flag reads land here with the deck (Plan 13,
 //           Architecture, Mission hook; T-11).
 // -----------------------------------------------------------------------------
 modded class MissionBaseWorld

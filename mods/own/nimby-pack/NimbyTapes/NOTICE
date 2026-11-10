@@ -17,6 +17,11 @@ sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 10, 2026 (Plan 13 Phase 0 step 4, rules): Scripts\3_Game\nimbytapes_rules.c holds
+  the packed play state (T-10), the start fraction, the skip rules (T-6), the tape config
+  check, and the remembered-track rule (T-5) as engine-free functions, and the self-test
+  prints the plan's 18 named cases in place of the three stub cases. Own work, written from
+  the plan; none of Zen's code.
 - November 10, 2026 (Plan 13 Phase 0 step 3, config): the NimbyTape slot; NimbyTapes_Deck
   ("Cassette Player") on the vanilla Unitra Wilga model with the vanilla Radio's size, damage,
   and energy values; NimbyTapes_Tape_Base on the vanilla cassette model; NimbyTapes_Tape_Test
