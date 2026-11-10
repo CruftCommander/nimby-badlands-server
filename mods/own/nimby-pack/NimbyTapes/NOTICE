@@ -17,6 +17,13 @@ sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 10, 2026 (Plan 13 Phase 0 step 3, config): the NimbyTape slot; NimbyTapes_Deck
+  ("Cassette Player") on the vanilla Unitra Wilga model with the vanilla Radio's size, damage,
+  and energy values; NimbyTapes_Tape_Base on the vanilla cassette model; NimbyTapes_Tape_Test
+  (the two timing tracks) and NimbyTapes_Tape_Probe (the probe texture on the zbytek
+  selection); one sound shader and one sound set per timing track. Config only: the models and
+  damage materials are Bohemia Interactive's and are referenced, not copied. The script side is
+  step 4.
 - November 10, 2026 (Plan 13 Phase 0 step 2, fixtures): tools\New-TimingTrack.ps1 generates the
   two timing tracks with ffmpeg (240 s and 60 s, Ogg Vorbis, mono, 44,100 Hz; a beep every 5 s and
   a counted pip mark every 30 s) into sound\, which stays git-ignored; tools\Test-TapesAssets.ps1
