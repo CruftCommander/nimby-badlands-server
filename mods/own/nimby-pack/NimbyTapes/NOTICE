@@ -8,15 +8,28 @@ client starts its own sound at that offset) follows Zens Music by Zenarchist,
 https://github.com/ZenarchistCode/ZenMusic, read at commit 3de1452
 (ZenMusicBase/scripts/4_World/ZenMusicBase/Entities/ZenMusic/Devices/Zen_MusicDeviceBase.c:226-227,329-344).
 His pack wiki states MPL 2.0 for all his mods (read for the feasibility study, November 9, 2026);
-the ZenMusic repository carries no licence file, and its readme permits repacking. Nothing in
-this addon is his code so far. When the deck's playback code lands, this file lists every method
-or file taken, with its source file, commit, and licence, as the Hands and Legs forks do.
+the ZenMusic repository carries no licence file, and its readme permits repacking. No file of
+his ships. The change entries below name each place where this addon follows his code, with
+the source file and commit, as the Hands and Legs forks do.
 
 No audio ships in this addon on main: the Phase 0 timing tracks are generated locally into
 sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 21, 2026 (Plan 13 Phase 0 step 4, deck): Scripts\4_World\nimbytapes_deck.c is the
+  deck: server play state taken from the clock, one packed net-synced int (T-10), the start
+  put off during a storage load (T-9), client reconciliation with one EffectSound per deck that
+  follows the deck's hierarchy root (T-2), and the four vanilla switch actions.
+  Scripts\4_World\nimbytapes_tape.c reads a tape's config lists and holds its remembered track,
+  in memory only until the store override lands. Scripts\3_Game\nimbytapes_log.c holds the log
+  lines and the debug flag, which the mission hook now reads. Own work, written from the plan
+  and the vanilla 1.30 scripts. Two places follow Zens Music (commit 3de1452; MPL 2.0 per his
+  pack wiki): Scripts\3_Game\nimbytapes_effectsound.c is the same one-line getter for
+  EffectSound's protected wave as ZenMusicBase/scripts/3_Game/ZenMusicBase/Effects/EffectSound.c:1-13,
+  under an own name, and the client start passes elapsed time over track length to
+  SetStartOffset as Zen_MusicDeviceBase.c:337-344 does. No line is copied beyond that getter's
+  body.
 - November 10, 2026 (self-review fixes): tools\Test-TapesAssets.ps1 probes every track file the
   config names, walks sound\ at any depth, follows config inheritance, and requires one sample
   per shader; both tools accept a relative -AddonPath; tools\New-TimingTrack.ps1 renames a
