@@ -10,7 +10,8 @@
 // pose; 5_Mission only the flag-gated test kit (T-11), which needs the server's connect
 // hook. No Inputs.xml: controls are action-menu entries only (T-3).
 // Content addon (shared rules 6.1 and 6.3): the deck and the tapes persist the vanilla way,
-// and the tape base saves one int of its own. No config class here patches a vanilla class.
+// and the tape base saves its remembered track (a version int, then one int). No config
+// class here patches a vanilla class.
 // File and line references are to vendor/dayz-1.30-scripts/ (build 1.30.164289; the
 // baseline record of November 10, 2026 found no cited line changed from 1.30.164200).
 // -----------------------------------------------------------------------------

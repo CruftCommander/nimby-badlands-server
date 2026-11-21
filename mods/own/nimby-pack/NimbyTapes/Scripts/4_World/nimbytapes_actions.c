@@ -14,7 +14,7 @@
 //           attaches them.
 // Shape   : The in-hands classes follow the vanilla ActionTurnOffWhileInHands
 //           (4_World/DayZ/Classes/UserActionsComponent/Actions/SingleUse/
-//           ActionTurnOffWhileInHands.c:1-20) and the on-ground classes the vanilla
+//           ActionTurnOffWhileInHands.c:1-22) and the on-ground classes the vanilla
 //           ActionTurnOffWhileOnGround (.../Actions/Interact/ActionTurnOffWhileOnGround.c:1-18),
 //           the ground test included.
 // API     : ActionConstructor.RegisterActions (.../UserActionsComponent/ActionConstructor.c:27),

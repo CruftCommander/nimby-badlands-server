@@ -25,9 +25,13 @@ Changes, newest first:
   tapes the vanilla Cassette profile. Scripts\5_Mission\nimbytapes_missionserver.c hands a
   connecting player the test kit while $profile:NimbyTapes\spawn-testkit exists on the server,
   once per player per boot; config.cpp gains the 5_Mission script module for it. Vanilla
-  classes modded, all by methods only: EffectSound, ActionConstructor, ModItemRegisterCallbacks,
-  MissionBaseWorld, MissionServer. Own work, written from the plan, the vanilla 1.30 scripts,
-  and this repository's Tack and DPV addons; none of Zen's code.
+  classes modded: EffectSound, ActionConstructor, ModItemRegisterCallbacks, MissionBaseWorld,
+  and MissionServer. None gains saved data. Four gain methods only; MissionServer also gains
+  one unsaved member, the list of players who have a kit. Own work, written from the plan, the
+  vanilla 1.30 scripts, and this repository's Tack and DPV addons; none of Zen's code.
+- November 21, 2026 (self-review fixes): the deck's DeferredInit path no longer switches off a
+  deck that has no power yet, since it can run before a loading deck's battery attaches (T-9);
+  two wrong line citations and three comments that overstated the code are corrected.
 - November 21, 2026 (Plan 13 Phase 0 step 4, deck): Scripts\4_World\nimbytapes_deck.c is the
   deck: server play state taken from the clock, one packed net-synced int (T-10), the start
   put off during a storage load (T-9), client reconciliation with one EffectSound per deck that

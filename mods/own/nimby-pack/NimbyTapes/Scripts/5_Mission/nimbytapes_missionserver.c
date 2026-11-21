@@ -3,7 +3,8 @@
 // Purpose : While $profile:NimbyTapes\spawn-testkit exists on the server, a connecting player
 //           gets the Phase 0 kit on the ground at their feet: a deck, the test tape, the probe
 //           tape, a full 9V battery, and a nearly flat 9V battery. Without the flag file this
-//           code does nothing and prints nothing. The flag never exists on the live server.
+//           code gives nothing and prints nothing; the one thing it always does is create the
+//           empty list below. The flag never exists on the live server.
 // Once    : One kit per player per server boot, so the relog rows (T0-15) do not pile up kits.
 // Flat 9V : Set to 1.2 energy units of the battery's 50. At the deck's 0.02 units a second
 //           that is about one minute of play, counted in the energy manager's 15-second steps

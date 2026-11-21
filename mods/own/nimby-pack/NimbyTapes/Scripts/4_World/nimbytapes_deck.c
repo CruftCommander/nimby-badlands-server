@@ -9,15 +9,20 @@
 // Load    : OnWorkStart can fire while the deck is still loading, before its tape exists
 //           (recon, Question 8). Before IsInitialized() it only records that work started.
 //           AfterStoreLoad starts the remembered track (T-9). DeferredInit covers a deck that
-//           was spawned already working; it starts only when the tape is there, so it cannot
-//           switch a loading deck off. The deck has no store override (shared rules 6.3).
+//           was spawned already working; it starts only when power and the tape are both
+//           there and never switches off, because it can run before a loading deck has its
+//           battery or its tape. Open until test row T0-20: when the deck is already
+//           initialized at its battery's attach event during a load and the tape is not
+//           attached yet, OnWorkStart takes the live path and refuses (self-review of
+//           November 21, 2026). The deck has no store override (shared rules 6.3).
 // Actions : The four vanilla switch actions, Next and Previous in an in-hands and an on-ground
 //           form (T-6), and the two test-kit actions, Ruin and Delete (T-11). The action
 //           classes are in nimbytapes_actions.c; they call NimbyTapesServerNext,
 //           NimbyTapesServerPrevious, and NimbyTapesIsPlaying here.
 // Debug   : [NIMBY][Tapes][Debug] lines only while $profile:NimbyTapes\debug exists. Server:
 //           start, advance, publish, stop, defer, wait. Client: create, delete, play, seek,
-//           sync, reparent, stop, ended, hold. No line names a player.
+//           sync, reparent, stop, replace (a new generation takes over), ended, hold. No line
+//           names a player.
 // Credit  : The sync method (the server publishes elapsed seconds, each client starts its own
 //           sound at that share of the track) follows Zens Music by Zenarchist
 //           (ZenMusic:ZenMusicBase/scripts/4_World/ZenMusicBase/Entities/ZenMusic/Devices/
@@ -39,7 +44,8 @@
 //             IsSwitchedOn :884.
 //           3_Game/DayZ/Entities/Object.c: GetNetworkIDString :821, IsRuined :1219.
 //           3_Game/DayZ/Global/Game.c: GetTickTime :914, IsServer :1120, IsDedicatedServer :1125.
-//           3_Game/DayZ/tools/tools.c: Timer :576, Run :595, Stop :617, IsRunning :693.
+//           3_Game/DayZ/tools/tools.c: Timer :576, Run :595, Stop :617; IsRunning :264 (on
+//             TimerBase, which Timer inherits).
 //           3_Game/DayZ/EffectManager.c: CreateSound :153, PlaySoundOnObject :256-263 (the
 //             create, parent, local position, play order used here), DestroyEffect :280.
 //           3_Game/DayZ/Effects/EffectSound.c: SoundPlay :199, SoundStop :217,
@@ -385,8 +391,8 @@ class NimbyTapes_Deck : Inventory_Base
     // ---- server: playback state ---------------------------------------------------------------
 
     // The work that OnWorkStart put off. hard is true from AfterStoreLoad, where every child
-    // has loaded and a missing tape is final; false from DeferredInit, which can run before a
-    // loading deck has its tape and so starts only when the tape is there.
+    // has loaded and missing power or a missing tape is final; false from DeferredInit, which
+    // can run before a loading deck has its battery or its tape, and so only starts or waits.
     protected void NimbyTapesServerResume(string reason, bool hard)
     {
         if (m_NimbyTapesPlaying)
@@ -405,6 +411,13 @@ class NimbyTapes_Deck : Inventory_Base
         }
         if (!GetCompEM().CanWork())
         {
+            if (!hard)
+            {
+                // CanWork() is false while no battery is plugged (ComponentEnergyManager.c:
+                // 768-851). The battery's attach raises OnWorkStart, or AfterStoreLoad decides.
+                NimbyTapesLog.Trace("wait deck=" + NimbyTapesId() + " reason=no-power-yet " + NimbyTapesWorkFields(reason));
+                return;
+            }
             // T-9: switched on with no power. Off, so it does not start by itself later.
             m_NimbyTapesWorkPending = false;
             NimbyTapesLog.Trace("stop " + NimbyTapesFields(m_NimbyTapesGeneration, NimbyTapesRules.TRACK_STOPPED, 0) + " reason=power " + NimbyTapesWorkFields(reason));
