@@ -3,9 +3,9 @@
 // Purpose : While $profile:NimbyTapes\spawn-testkit exists on the server, a connecting player
 //           gets the Phase 0 kit on the ground at their feet: a deck, the test tape, the probe
 //           tape, a full 9V battery, and a nearly flat 9V battery. Without the flag file this
-//           code gives nothing and prints nothing; the one thing it always does is create the
-//           empty list below. The flag never exists on the live server.
-// Once    : One kit per player per server boot, so the relog rows (T0-15) do not pile up kits.
+//           code does nothing and prints nothing. The flag never exists on the live server.
+// Every   : One kit on every connect, relogs included, as T-11 reads (Jeff's ruling,
+//           November 21, 2026). The relog rows of T0-15 each leave one more kit on the ground.
 // Flat 9V : Set to 1.2 energy units of the battery's 50. At the deck's 0.02 units a second
 //           that is about one minute of play, counted in the energy manager's 15-second steps
 //           (recon R1). Test row T0-10 records the real time.
@@ -25,8 +25,6 @@
 // -----------------------------------------------------------------------------
 modded class MissionServer
 {
-    protected ref array<string> m_NimbyTapesKitGiven = new array<string>;
-
     override void InvokeOnConnect(PlayerBase player, PlayerIdentity identity)
     {
         super.InvokeOnConnect(player, identity);
@@ -44,11 +42,6 @@ modded class MissionServer
             return;
         }
         string playerId = identity.GetId();
-        if (m_NimbyTapesKitGiven.Find(playerId) >= 0)
-        {
-            return;
-        }
-        m_NimbyTapesKitGiven.Insert(playerId);
         vector position = player.GetPosition();
         int made = 0;
         made = made + NimbyTapesSpawnKitItem(player, "NimbyTapes_Deck", position, -1);

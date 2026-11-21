@@ -17,6 +17,12 @@ sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 21, 2026 (two rulings by Jeff, same day): an OnWorkStart raised inside one of the
+  deck's own attach events is put off whether or not the deck is initialized, and an
+  initialized deck starts from the attach event once power and the tape are both there, so a
+  storage load cannot switch off a deck that was playing (T-9). The test kit is given on every
+  connect, as T-11 reads, in place of once per player per boot; the MissionServer hook no
+  longer adds a member, so all five modded vanilla classes gain methods only.
 - November 21, 2026 (Plan 13 Phase 0 step 4, rest): the tape saves its remembered track (T-5,
   T-12): one store override on NimbyTapes_Tape_Base, save version 1 then one int, read behind
   the version guard. Scripts\4_World\nimbytapes_actions.c adds Next track and Previous track

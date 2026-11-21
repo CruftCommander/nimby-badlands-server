@@ -11,10 +11,14 @@
 //           AfterStoreLoad starts the remembered track (T-9). DeferredInit covers a deck that
 //           was spawned already working; it starts only when power and the tape are both
 //           there and never switches off, because it can run before a loading deck has its
-//           battery or its tape. Open until test row T0-20: when the deck is already
-//           initialized at its battery's attach event during a load and the tape is not
-//           attached yet, OnWorkStart takes the live path and refuses (self-review of
-//           November 21, 2026). The deck has no store override (shared rules 6.3).
+//           battery or its tape. An OnWorkStart raised inside one of the deck's own attach
+//           events is put off too, initialized or not: a player cannot switch a deck on
+//           without power, and a deck that loses power switches itself off
+//           (ComponentEnergyManager.c:1781-1876), so work that starts at an attach is a load
+//           or a scripted spawn. On an initialized deck the attach event then starts the
+//           track as soon as power and the tape are both there (Jeff's ruling, November 21,
+//           2026; test row T0-20 shows which path the engine takes). The deck has no store
+//           override (shared rules 6.3).
 // Actions : The four vanilla switch actions, Next and Previous in an in-hands and an on-ground
 //           form (T-6), and the two test-kit actions, Ruin and Delete (T-11). The action
 //           classes are in nimbytapes_actions.c; they call NimbyTapesServerNext,
@@ -242,6 +246,10 @@ class NimbyTapes_Deck : Inventory_Base
         m_NimbyTapesInAttach = true;
         super.EEItemAttached(item, slot_name);
         m_NimbyTapesInAttach = false;
+        if (NimbyTapesOnServer())
+        {
+            NimbyTapesServerAttachResume();
+        }
     }
 
     override void EEItemDetached(EntityAI item, string slot_name)
@@ -284,7 +292,7 @@ class NimbyTapes_Deck : Inventory_Base
             return;
         }
         string phase = NimbyTapesPhase();
-        if (!IsInitialized())
+        if (!IsInitialized() || m_NimbyTapesInAttach)
         {
             m_NimbyTapesWorkPending = true;
             NimbyTapesLog.Trace("defer deck=" + NimbyTapesId() + " " + NimbyTapesWorkFields(phase));
@@ -389,6 +397,40 @@ class NimbyTapes_Deck : Inventory_Base
     }
 
     // ---- server: playback state ---------------------------------------------------------------
+
+    // A start that OnWorkStart put off inside an attach event, on a deck that is already
+    // initialized: start once power and the tape are both there. Called after every attach.
+    // Before initialization AfterStoreLoad and DeferredInit do this instead. It only starts or
+    // waits; it never switches off.
+    protected void NimbyTapesServerAttachResume()
+    {
+        if (!m_NimbyTapesWorkPending)
+        {
+            return;
+        }
+        if (m_NimbyTapesPlaying)
+        {
+            return;
+        }
+        if (!IsInitialized())
+        {
+            return;
+        }
+        if (!HasEnergyManager() || !GetCompEM().IsSwitchedOn())
+        {
+            return;
+        }
+        if (!GetCompEM().CanWork())
+        {
+            return;
+        }
+        if (!NimbyTapesGetTape())
+        {
+            NimbyTapesLog.Trace("wait deck=" + NimbyTapesId() + " reason=no-tape-yet " + NimbyTapesWorkFields("attach"));
+            return;
+        }
+        NimbyTapesServerStart("attach", "attach");
+    }
 
     // The work that OnWorkStart put off. hard is true from AfterStoreLoad, where every child
     // has loaded and missing power or a missing tape is final; false from DeferredInit, which
