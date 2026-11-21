@@ -4,14 +4,15 @@
 // Plan: docs/plans/2026-11-09-music-plan.md (Plan 13, v0.3). Owner: Jeff Fabish.
 // Phase 0 step 3 (config): the tape slot, the deck, the tape base, the two Phase 0 tapes,
 // and one sound shader and one sound set per timing track. The script side (deck logic,
-// actions, hand pose, tape memory, test kit) is step 4; until it lands the classes below
-// are plain inventory items and the deck plays nothing.
-// Layers: 3_Game holds the engine-free rules and the self-test; 4_World the mission-start
-// hook and, from step 4, the deck, the tape, and the actions. No 5_Mission module and no
-// Inputs.xml: controls are action-menu entries only (T-3).
-// Content addon (shared rules 6.1 and 6.3): the deck and the tapes persist the vanilla way.
-// Nothing here touches a vanilla class.
-// File and line references are to vendor/dayz-1.30-scripts/ (build 1.30.164200).
+// actions, hand pose, tape memory, test kit) is step 4 and lives under Scripts\.
+// Layers: 3_Game holds the engine-free rules, the self-test, the log lines, and the wave
+// accessor; 4_World the mission-start hook, the deck, the tape, the actions, and the hand
+// pose; 5_Mission only the flag-gated test kit (T-11), which needs the server's connect
+// hook. No Inputs.xml: controls are action-menu entries only (T-3).
+// Content addon (shared rules 6.1 and 6.3): the deck and the tapes persist the vanilla way,
+// and the tape base saves one int of its own. No config class here patches a vanilla class.
+// File and line references are to vendor/dayz-1.30-scripts/ (build 1.30.164289; the
+// baseline record of November 10, 2026 found no cited line changed from 1.30.164200).
 // -----------------------------------------------------------------------------
 class CfgPatches
 {
@@ -32,7 +33,7 @@ class CfgMods
     class NimbyTapes
     {
         type = "mod";
-        dependencies[] = { "Game", "World" };
+        dependencies[] = { "Game", "World", "Mission" };
         class defs
         {
             class gameScriptModule
@@ -42,6 +43,10 @@ class CfgMods
             class worldScriptModule
             {
                 files[] = { "NimbyTapes/Scripts/4_World" };
+            };
+            class missionScriptModule
+            {
+                files[] = { "NimbyTapes/Scripts/5_Mission" };
             };
         };
     };

@@ -17,6 +17,17 @@ sound\ and are git-ignored (plan P4).
 
 Changes, newest first:
 
+- November 21, 2026 (Plan 13 Phase 0 step 4, rest): the tape saves its remembered track (T-5,
+  T-12): one store override on NimbyTapes_Tape_Base, save version 1 then one int, read behind
+  the version guard. Scripts\4_World\nimbytapes_actions.c adds Next track and Previous track
+  in hands and on the ground (T-6) and the two test-kit actions, Ruin and Delete (T-11).
+  Scripts\4_World\nimbytapes_register.c gives the deck the vanilla Radio hand profile and the
+  tapes the vanilla Cassette profile. Scripts\5_Mission\nimbytapes_missionserver.c hands a
+  connecting player the test kit while $profile:NimbyTapes\spawn-testkit exists on the server,
+  once per player per boot; config.cpp gains the 5_Mission script module for it. Vanilla
+  classes modded, all by methods only: EffectSound, ActionConstructor, ModItemRegisterCallbacks,
+  MissionBaseWorld, MissionServer. Own work, written from the plan, the vanilla 1.30 scripts,
+  and this repository's Tack and DPV addons; none of Zen's code.
 - November 21, 2026 (Plan 13 Phase 0 step 4, deck): Scripts\4_World\nimbytapes_deck.c is the
   deck: server play state taken from the clock, one packed net-synced int (T-10), the start
   put off during a storage load (T-9), client reconciliation with one EffectSound per deck that

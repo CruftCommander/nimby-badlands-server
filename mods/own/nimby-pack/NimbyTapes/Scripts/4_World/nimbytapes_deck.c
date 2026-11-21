@@ -11,8 +11,10 @@
 //           AfterStoreLoad starts the remembered track (T-9). DeferredInit covers a deck that
 //           was spawned already working; it starts only when the tape is there, so it cannot
 //           switch a loading deck off. The deck has no store override (shared rules 6.3).
-// Actions : The four vanilla switch actions only. Next and Previous (T-6), the test kit
-//           (T-11), and the hand pose are later parts of step 4.
+// Actions : The four vanilla switch actions, Next and Previous in an in-hands and an on-ground
+//           form (T-6), and the two test-kit actions, Ruin and Delete (T-11). The action
+//           classes are in nimbytapes_actions.c; they call NimbyTapesServerNext,
+//           NimbyTapesServerPrevious, and NimbyTapesIsPlaying here.
 // Debug   : [NIMBY][Tapes][Debug] lines only while $profile:NimbyTapes\debug exists. Server:
 //           start, advance, publish, stop, defer, wait. Client: create, delete, play, seek,
 //           sync, reparent, stop, ended, hold. No line names a player.
@@ -134,6 +136,25 @@ class NimbyTapes_Deck : Inventory_Base
         AddAction(ActionTurnOffWhileInHands);
         AddAction(ActionTurnOnWhileOnGround);
         AddAction(ActionTurnOffWhileOnGround);
+        AddAction(ActionNimbyTapesNextInHands);
+        AddAction(ActionNimbyTapesPreviousInHands);
+        AddAction(ActionNimbyTapesNextOnGround);
+        AddAction(ActionNimbyTapesPreviousOnGround);
+        AddAction(ActionNimbyTapesDebugRuin);
+        AddAction(ActionNimbyTapesDebugDelete);
+    }
+
+    // True while a track is published. Reads the synced state, so it answers on both sides;
+    // the skip actions show only while it is true (T-6: both do nothing while the deck is off).
+    bool NimbyTapesIsPlaying()
+    {
+        return !NimbyTapesRules.IsStopped(NimbyTapesRules.UnpackTrack(m_NimbyTapesState));
+    }
+
+    // The deck's id for a log line written outside this class.
+    string NimbyTapesLogId()
+    {
+        return NimbyTapesId();
     }
 
     // ---- shared helpers -----------------------------------------------------------------------
@@ -448,7 +469,8 @@ class NimbyTapes_Deck : Inventory_Base
     }
 
     // Starts one track from its beginning: a new generation, the clock mark, the tape's memory
-    // (T-5), and one publish. verb is start or advance.
+    // (T-5), and one publish. verb is start or advance; an advance carries the reason
+    // track-end, next, or previous.
     protected void NimbyTapesServerPlayTrack(NimbyTapes_Tape_Base tape, int track, string verb, string reason)
     {
         m_NimbyTapesTrack = track;
@@ -503,14 +525,7 @@ class NimbyTapes_Deck : Inventory_Base
             int following = NimbyTapesRules.NextTrack(m_NimbyTapesTrack, m_NimbyTapesSeconds.Count());
             if (NimbyTapesRules.IsStopped(following))
             {
-                // T-6 and T-5: after the last track the deck switches off and the tape's memory
-                // returns to the first track.
-                tape.NimbyTapesSetRememberedTrack(0);
-                NimbyTapesServerStop("end-of-tape");
-                if (HasEnergyManager() && GetCompEM().IsSwitchedOn())
-                {
-                    GetCompEM().SwitchOff();
-                }
+                NimbyTapesServerEndTape(tape);
                 return;
             }
             NimbyTapesServerPlayTrack(tape, following, "advance", "track-end");
@@ -522,6 +537,89 @@ class NimbyTapes_Deck : Inventory_Base
         {
             NimbyTapesLog.Trace("publish " + NimbyTapesFields(m_NimbyTapesGeneration, m_NimbyTapesTrack, whole));
         }
+    }
+
+    // T-6 and T-5: after the last track the deck switches off and the tape's memory returns to
+    // the first track.
+    protected void NimbyTapesServerEndTape(NimbyTapes_Tape_Base tape)
+    {
+        if (tape)
+        {
+            tape.NimbyTapesSetRememberedTrack(0);
+        }
+        NimbyTapesServerStop("end-of-tape");
+        if (HasEnergyManager() && GetCompEM().IsSwitchedOn())
+        {
+            GetCompEM().SwitchOff();
+        }
+    }
+
+    // ---- server: skip (T-6) -------------------------------------------------------------------
+
+    // The server-side check every skip repeats at execution: the deck is whole, switched on,
+    // playing, and still holds the tape it started from.
+    protected bool NimbyTapesServerCanSkip()
+    {
+        if (!NimbyTapesOnServer())
+        {
+            return false;
+        }
+        if (IsRuined())
+        {
+            return false;
+        }
+        if (!m_NimbyTapesPlaying)
+        {
+            return false;
+        }
+        if (!HasEnergyManager() || !GetCompEM().IsSwitchedOn())
+        {
+            return false;
+        }
+        if (!NimbyTapesGetTape())
+        {
+            return false;
+        }
+        if (!m_NimbyTapesSeconds || m_NimbyTapesTrack < 0 || m_NimbyTapesTrack >= m_NimbyTapesSeconds.Count())
+        {
+            return false;
+        }
+        return true;
+    }
+
+    // Next: the following track from its beginning, or the end of the tape on the last track.
+    void NimbyTapesServerNext()
+    {
+        if (!NimbyTapesServerCanSkip())
+        {
+            return;
+        }
+        NimbyTapes_Tape_Base tape = NimbyTapesGetTape();
+        int following = NimbyTapesRules.NextTrack(m_NimbyTapesTrack, m_NimbyTapesSeconds.Count());
+        if (NimbyTapesRules.IsStopped(following))
+        {
+            NimbyTapesServerEndTape(tape);
+            return;
+        }
+        NimbyTapesServerPlayTrack(tape, following, "advance", "next");
+    }
+
+    // Previous: the same track from its beginning when more than 3 seconds in, otherwise the
+    // one before it. The elapsed time is taken unrounded (rules, PreviousTrack).
+    void NimbyTapesServerPrevious()
+    {
+        if (!NimbyTapesServerCanSkip())
+        {
+            return;
+        }
+        NimbyTapes_Tape_Base tape = NimbyTapesGetTape();
+        float elapsed = GetGame().GetTickTime() - m_NimbyTapesTrackStart;
+        int target = NimbyTapesRules.PreviousTrack(m_NimbyTapesTrack, elapsed);
+        if (NimbyTapesRules.IsStopped(target))
+        {
+            return;
+        }
+        NimbyTapesServerPlayTrack(tape, target, "advance", "previous");
     }
 
     // Stops the timer and publishes stopped. Does nothing when nothing plays.

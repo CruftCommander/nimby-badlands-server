@@ -5,6 +5,8 @@
 // Flag    : Read at mission start (the MissionBaseWorld hook calls ReadFlags) and, because the
 //           storage load creates decks before the mission's OnInit runs, on the first question
 //           before that. Test row T0-20 needs the load-time lines.
+// Test kit: IsTestKit() is true while $profile:NimbyTapes\spawn-testkit exists (T-11). It is
+//           read with the debug flag. The flag never exists on the live server.
 // Probe   : A line "offset <value>" in the debug file makes every client start pass <value>
 //           to SetStartOffset instead of the computed share. It exists for the unit probe of
 //           the recon (Question 3: "offset 0.5", then "offset 120") and for nothing else.
@@ -18,12 +20,14 @@ class NimbyTapesLog
 {
     protected static bool s_Read;
     protected static bool s_Debug;
+    protected static bool s_TestKit;
     protected static float s_ProbeOffset;
 
     static void ReadFlags()
     {
         s_Read = true;
         s_ProbeOffset = -1;
+        s_TestKit = FileExist(NimbyTapesRules.FILE_TESTKIT);
         s_Debug = FileExist(NimbyTapesRules.FILE_DEBUG);
         if (!s_Debug)
         {
@@ -56,6 +60,15 @@ class NimbyTapesLog
             ReadFlags();
         }
         return s_Debug;
+    }
+
+    static bool IsTestKit()
+    {
+        if (!s_Read)
+        {
+            ReadFlags();
+        }
+        return s_TestKit;
     }
 
     // The start offset forced by the debug file, or a negative value when there is none.
